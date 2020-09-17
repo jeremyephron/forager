@@ -1,0 +1,38 @@
+# This is a sample configuration file for an index
+d: 1024
+n_centroids: 32
+n_probes: 4
+vectors_per_index: 5000
+tempdir: /tmp/
+use_gpu: true
+use_float16: true
+use_float16_quantizer: true
+use_precomputed_codes: false
+
+# {None, PCA, ITQ}
+# None: no transformation
+# PCA: applies a PCA transform to reduce the number of dimensions
+# ITQ: applies an iterative quantization transformation
+transform: 
+transform_args:
+    # None: no arguments
+    # PCA: number of output dimensions
+    # - 64
+    # ITQ: number of output dimensions (nothing for d)
+    # - 256
+
+# {Flat, SQ, PQ, LSH}
+# Flat: no encoding
+# SQ: scalar quantization
+# PQ: product quantization
+# LSH: locality sensitive hashing
+encoding: Flat
+encoding_args:
+    # Flat: no arguments
+    # SQ: bit length of encoding
+    # - 8
+    # PQ: number of subquantizers (can do multiple layers)
+    # - 8
+    # - 16
+    # LSH: whether to rotate vectors prior to binarization
+    # - rotate
