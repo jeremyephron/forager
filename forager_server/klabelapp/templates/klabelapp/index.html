@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<h2>Dataset labeler</h2>
+<div>
+  <a href="{% url 'klabelapp:new_dataset' %}"><button>Create new dataset</button></a>
+<div>
+<div>
+  <a href="{% url 'klabelapp:label' %}"><button>Label a dataset</button></a>
+<div>
+{% endblock %}
+
+{% block javascript %}
+{% endblock %}

@@ -1,0 +1,227 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %} KLabeler {% endblock %}
+
+{% block stylesheet %}
+<style>
+	body {
+		font-family: Helvetica, Arial, sans-seris;
+		font-size: 10pt;
+		color: #c0c0c0;
+		background: #404040;
+	}
+
+	body a {
+		color: #d0d0d0;
+	}
+
+	.bold_text {
+		font-weight: bold;
+	}
+
+</style>
+{% endblock %}
+
+{% block content %}
+<body onload="handle_onload()">
+
+<div id="labeled_div">
+	<canvas id="main_canvas" width="960" height="500" style="border: 8px solid #c0c0c0;" ></canvas>
+</div>
+
+<div>
+	Mode:
+	<select id="select_annotation_mode" onchange="handle_mode_change()">
+       <option value="box_extreme_points">Box (via extreme points)</option>
+       <option value="box_two_points">Box (via two corner clicks)</option>
+       <option value="point">Point</option>
+       <option value="per_frame">Per Frame</option>
+    </select>
+    <button id="clear_button" type="button" onclick="handle_clear_boxes()">Clear Annotations</button> --- 
+
+	<button id="toggle_pt_viz_button" type="button" onclick="toggle_extreme_points_display()">Hide Extreme Points</button>
+	<button id="toggle_sound_button" type="button" onclick="toggle_sound()">Turn Sound On</button>
+	<button id="toggle_letterbox_button" type="button" onclick="toggle_letterbox()">Use Scaled View</button> ---
+	<button id="get_annotations" type="button" onclick="handle_get_annotations()">Print Annotations (to console)</button>
+</div>
+
+<p style="width: 960px; border-top: 1px solid #606060; padding-top: 10px;">
+<div class="bold_text">Annotation:</div>
+<table cellpadding="0" cellspacing="0" border="0">
+<tr>
+	<td width="175">Extreme points box mode:</td>
+	<td>Click four times to draw a box.  (Use the <a href="https://arxiv.org/abs/1708.02750" target="_blank">extreme clicking</a> technique: leftmost, topmost, rightmost, bottommost)</td>
+</tr>
+<tr>
+	<td>Two-point box mode:</td>
+	<td>Two clicks to define the corners of the bounding box.</td>
+</tr> 
+<tr>
+	<td>Point mode:</td>
+	<td>Single click to define a point</td>
+</tr>
+<tr>
+	<td>Per-frame mode:</td>
+	<td>Single click anywhere to mark/unmark the frame. (spacebar also works)</td>
+</tr>
+</table>
+<div>Press 'ESC' to abort current box.</div>
+
+<p>
+<div class="bold_text">Selection:</div>	
+<div>Hover over boxes/points to select them. Press DEL to delete the selected item. (Selection picks the smallest area box containing the cursor.)</div>
+</p>
+<p>
+<div class="bold_text">Zooming:</div>
+<div>Hold 'z' and draw a two-point box to zoom the view to that box.</div>
+<div>Press 'r' to reset zoom state (zoom all the way out)</div>
+</p>
+
+<p>
+<div class="bold_text">Image Stack Navigation:</div>
+<div>Left/right arrow keys move from frame to frame in the current batch of frames.</div>
+</p>
+{% endblock %}
+
+{% block javascript %}
+<script src="{% static 'klabelapp/js/kmath.js' %}"></script>
+<script src="{% static 'klabelapp/js/klabel.js' %}"></script>
+
+<script>
+ var audio_click_sound = new Audio("{% static 'klabelapp/audio/click_sound2.mp3' %}");
+ var audio_box_done_sound = new Audio("{% static 'klabelapp/audio/click_sound3.mp3' %}");
+
+	var main_canvas_id = 'main_canvas';   // this is the DOM canvas element 
+	var labeler = new ImageLabeler;
+    labeler.audio_click_sound = audio_click_sound;
+    labeler.audio_box_done_sound = audio_box_done_sound;
+
+	function handle_onload() {
+
+		var main_canvas = document.getElementById(main_canvas_id);
+		labeler.init(main_canvas);
+
+		// set the data source
+		var filenames = ["media/00001227.jpg",
+				 		 "media/00001228.jpg",
+						 "media/00001229.jpg",
+				 		 "media/00001230.jpg",
+						 "media/00001231.jpg",
+				 		 "media/00001232.jpg",
+						 "media/00001233.jpg",
+				 		 "media/00001234.jpg",
+						 "media/00001235.jpg",
+						 "media/00001236.jpg",
+						 "media/00001237.jpg",
+						 "media/00001238.jpg",
+						 "media/00001239.jpg",
+						 "media/00001240.jpg",
+						 "media/00001241.jpg",
+						 "media/00001242.jpg",
+						 ];
+
+		var image_data = [];
+
+		for (var i=0; i<filenames.length; i++) {
+			var data = new ImageData;
+			data.source_url = filenames[i];
+			image_data.push(data);
+		}
+		
+		labeler.load_image_stack(image_data);
+
+		labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX);
+		
+		var button = document.getElementById("toggle_pt_viz_button");
+		button.toggle_status = true;
+		labeler.set_extreme_points_viz(button.toggle_status);
+
+		button = document.getElementById("toggle_sound_button");
+		button.toggle_status = false;
+		labeler.set_play_audio(button.toggle_status);
+
+		button = document.getElementById("toggle_letterbox_button");
+		button.toggle_status = true;
+		labeler.set_letterbox(button.toggle_status);
+
+		// HACK(kayvonf): intercept all key events and send them to the labeler
+		// There's likely a much better way to do this.
+		// The problem is that the Klabeler canvas DOM element needs to have keyboard focus in order to accept key events.
+		// I'm not certain I want to do that right now, since other elements of the HTML page might want keyboard focus,
+		// so for now I'm going to send all key events on the page to the KLabeler cnavas.
+		window.addEventListener("keydown", function(e) {
+			e.preventDefault();
+			labeler.handle_keydown(e);
+		});
+
+		window.addEventListener("keyup", function(e) {
+			e.preventDefault();
+			labeler.handle_keyup(e);
+		});
+	}
+
+	function handle_clear_boxes() {
+		labeler.clear_boxes();
+	}
+
+	function toggle_extreme_points_display() {
+		var button = document.getElementById("toggle_pt_viz_button");
+		var new_status = !button.toggle_status;
+		labeler.set_extreme_points_viz(new_status);
+		button.toggle_status = new_status;
+
+		if (new_status == false) {
+			button.innerHTML = 'Show Extreme Points';
+		} else {
+			button.innerHTML = 'Hide Extreme Points';
+		}
+	}
+
+	function toggle_sound() {
+		var button = document.getElementById("toggle_sound_button");
+		var new_status = !button.toggle_status;
+		labeler.set_play_audio(new_status);
+		button.toggle_status = new_status;
+
+		if (new_status == false) {
+			button.innerHTML = 'Turn Sound On';
+		} else {
+			button.innerHTML = 'Turn Sound Off';
+		}		
+	}
+
+	function toggle_letterbox() {
+		var button = document.getElementById("toggle_letterbox_button");
+		var new_status = !button.toggle_status;	
+		labeler.set_letterbox(new_status);
+		button.toggle_status = new_status;
+
+		if (new_status == false) {
+			button.innerHTML = 'Use Letterbox View';
+		} else {
+			button.innerHTML = 'Use Scaled View';
+		}
+	}
+
+	function handle_mode_change() {
+		var select = document.getElementById("select_annotation_mode");
+		if (select.value.localeCompare("box_extreme_points") == 0) {
+			labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX);
+		} else if (select.value.localeCompare("box_two_points") == 0) {
+			labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX);
+		} else if (select.value.localeCompare("point") == 0) {
+			labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_POINT);
+		} else if (select.value.localeCompare("per_frame") == 0) {
+			labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY);
+			labeler.set_categories( { true: { idx: 1, color: "#67bf5c" }, false: {idx:2, color: "#ed665d"} } );
+		}
+	}
+
+	function handle_get_annotations() {
+		var results = labeler.get_annotations();
+		console.log(results);
+	}
+
+</script>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div>
+  <h2> Create a new dataset </h2>
+  <form enctype="multipart/form-data" action="{% url 'klabelapp:do_new_dataset' %}" method="post">
+    <!-- Dataset name -->
+    <p>
+      <div>
+        Name
+      </div>
+      <div>
+        <input type="input" name="name">
+      </div>
+    </p>
+    <!-- Dataset directory -->
+    <p>
+      <div>
+        Directory (full path to GCS bucket folder)
+      </div>
+      <div>
+        <input type="input" name="directory">
+      </div>
+    </p>
+    <p>
+     <div class="overview_main_item form_submit_button"><button type="submit">Create dataset</button></div>
+    </p>
+    <!--  -->
+  </div>
+</div>
+{% endblock %}
+
+{% block javascript %}
+{% endblock %}
