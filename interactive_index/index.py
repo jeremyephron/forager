@@ -268,7 +268,7 @@ class InteractiveIndex:
         TODO: docstring
 
         """
-        print('hi')
+
         transform_str = transform if transform else ''
         if transform_args:
             if transform in ['PCA', 'ITQ']:
@@ -285,9 +285,9 @@ class InteractiveIndex:
 
                 if encoding == 'PQ':
                     dim_per_subq = self.d / encoding_args[0]
-                    print(dim_per_subq)
                     if dim_per_subq not in self.SUPPORTED_DIM_PER_SUBQ:
                         self.use_precomputed_codes = True
+
             elif encoding in ['LSH']:
                 assert isinstance(encoding_args[0], str)
 
