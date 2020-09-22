@@ -4,7 +4,7 @@ TODO: docstring
 """
 
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Sequence
 import warnings
 
 import faiss
@@ -127,7 +127,11 @@ class InteractiveIndex:
 
         self.is_trained = True
 
-    def add(self, xb_src: Union[str, np.ndarray, List[float]]) -> None:
+    def add(
+        self,
+        xb_src: Union[str, np.ndarray, List[float]],
+        ids: Optional[Sequence[int]] = None
+    ) -> None:
         """
         TODO: docstring
 
@@ -135,7 +139,7 @@ class InteractiveIndex:
 
         if not self.is_trained:
             raise RuntimeError('Cannot add to untrained index.')
-
+        
         xb = self._convert_src_to_numpy(xb_src)
 
         if self.n_vectors % self.vectors_per_index == 0:
@@ -158,11 +162,13 @@ class InteractiveIndex:
             self.vectors_per_index - (self.n_vectors % self.vectors_per_index),
             xb.shape[0]
         )
+        
+        if ids is None:
+            ids = np.arange(self.n_vectors, self.n_vectors + end_idx)
+        else:
+            ids = np.array(ids)
 
-        index.add_with_ids(
-            xb[:end_idx], np.arange(self.n_vectors, self.n_vectors + end_idx)
-        )
-
+        index.add_with_ids(xb[:end_idx], ids)
         self.n_vectors += end_idx
 
         faiss.write_index(
