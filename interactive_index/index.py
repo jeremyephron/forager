@@ -11,7 +11,10 @@ import faiss
 import numpy as np
 
 from interactive_index.config import read_config, CONFIG_DEFAULTS
-from interactive_index.utils import merge_on_disk, to_all_gpus
+from interactive_index.utils import (merge_on_disk, 
+                                     to_all_gpus,
+                                     cantor_pairing,
+                                     invert_cantor_pairing)
 
 
 class InteractiveIndex:
@@ -35,6 +38,8 @@ class InteractiveIndex:
     MERGED_INDEX_NAME = 'merged.index'
 
     SUPPORTED_DIM_PER_SUBQ = [1, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24, 28, 32]
+
+    _invert_cantor_pairing_vec = np.vectorize(invert_cantor_pairing)
     
     def __init__(self, config_fpath: str = None, **kwargs) -> None:
         """
@@ -81,6 +86,8 @@ class InteractiveIndex:
             )
         else:
             self.co = None
+
+        self.multi_id = self.cfg['multi_id']
 
         # TODO: get from index_str
         self.requires_training = True
@@ -130,7 +137,8 @@ class InteractiveIndex:
     def add(
         self,
         xb_src: Union[str, np.ndarray, List[float]],
-        ids: Optional[Sequence[int]] = None
+        ids: Optional[Sequence[int]] = None,
+        ids_extra: Optional[Union[Sequence[int], int]] = 0
     ) -> None:
         """
         TODO: docstring
@@ -167,6 +175,16 @@ class InteractiveIndex:
             ids = np.arange(self.n_vectors, self.n_vectors + end_idx)
         else:
             ids = np.array(ids)
+
+        if self.multi_id:
+            if isinstance(ids_extra, int):
+                ids_extra = np.full(len(ids), ids_extra)
+            else:
+                ids_extra = np.array(ids_extra)
+            
+            ids = np.array([
+                cantor_pairing(ids[i], ids_extra[i]) for i in range(len(ids))
+            ])
 
         index.add_with_ids(xb[:end_idx], ids)
         self.n_vectors += end_idx
@@ -215,6 +233,9 @@ class InteractiveIndex:
         index = faiss.read_index(str(self.tempdir/self.MERGED_INDEX_NAME))
         index.nprobe = n_probes if n_probes else self.n_probes
         dists, inds = index.search(xq, k)
+        
+        if self.multi_id:
+            inds = self._invert_cantor_pairing_vec(inds)
 
         return dists, inds
 
