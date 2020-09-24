@@ -1,3 +1,5 @@
+import os.path
+
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from google.cloud import storage
@@ -6,11 +8,13 @@ from django.urls import reverse
 from django.shortcuts import render, get_object_or_404, get_list_or_404
 
 from .forms import CreateDatasetForm
-from .models import Dataset
+from .models import Dataset, DatasetItem
 
 # Create your views here.
 def index(request):
     datasets = Dataset.objects.filter()
+    for dataset in datasets:
+        print(dir(dataset))
     return render(request, 'klabelapp/index.html', {'datasets': datasets})
 
 
@@ -36,17 +40,26 @@ def do_new_dataset(request):
 
         split_dir = data_directory[len('gs://'):].split('/')
         bucket_name = split_dir[0]
-        bucket_path = split_dir[1:]
+        bucket_path = '/'.join(split_dir[1:])
 
-        #client = storage.Client()
-        #bucket = storage.Bucket(bucket_name)
-
-        # Create all the DatasetItems for this dataset
-
-        # Start background job to start processing dataset
+        client = storage.Client()
+        bucket = client.get_bucket(bucket_name)
+        all_blobs = client.list_blobs(bucket, prefix=bucket_path)
 
         dataset = Dataset(name=name, directory=data_directory)
         dataset.save()
+
+        # Create all the DatasetItems for this dataset
+        paths = [blob.name for blob in all_blobs]
+        items = [
+            DatasetItem(dataset=dataset, identifier=os.path.basename(path).split('.')[0], path=path)
+            for path in paths
+        ]
+        print('num paths', len(paths))
+        DatasetItem.objects.bulk_create(items)
+
+        # Start background job to start processing dataset
+        # TODO(fpoms): implement background job
 
         return HttpResponseRedirect(reverse('klabelapp:index') + "?created=true")
     except ValidationError:
@@ -60,4 +73,19 @@ def dataset(request):
 
 def label(request, dataset_name):
     dataset = get_object_or_404(Dataset, name=dataset_name)
-    return render(request, 'klabelapp/klabel.html', {'dataset': dataset})
+
+    bucket_name = dataset.directory[len('gs://'):].split('/')[0]
+    path_template = '"https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}"'
+    dataset_items = DatasetItem.objects.filter(dataset=dataset)[:100]
+    dataset_item_paths = [di.path for di in dataset_items]
+    dataset_item_paths_str = '[{:s}]'.format(
+        ','.join(
+            [path_template.format(path) for path in dataset_item_paths]))
+    dataset_item_identifiers = [di.identifier for di in dataset_items]
+    dataset_item_identifiers_str = '[{:s}]'.format(
+        ','.join(
+            ['"{:s}"'.format(path) for path in dataset_item_identifiers]))
+    return render(request, 'klabelapp/klabel.html',
+                  {'dataset': dataset,
+                   'paths_str': dataset_item_paths_str,
+                   'identifiers_str': dataset_item_identifiers_str})

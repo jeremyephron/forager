@@ -20,7 +20,7 @@ from django.views.static import serve
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('label/', include('klabelapp.urls')),
+    path('', include('klabelapp.urls')),
 ]
 
 if settings.DEBUG:

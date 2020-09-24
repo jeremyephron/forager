@@ -105,23 +105,8 @@
 		labeler.init(main_canvas);
 
 		// set the data source
-		var filenames = ["media/00001227.jpg",
-				 		 "media/00001228.jpg",
-						 "media/00001229.jpg",
-				 		 "media/00001230.jpg",
-						 "media/00001231.jpg",
-				 		 "media/00001232.jpg",
-						 "media/00001233.jpg",
-				 		 "media/00001234.jpg",
-						 "media/00001235.jpg",
-						 "media/00001236.jpg",
-						 "media/00001237.jpg",
-						 "media/00001238.jpg",
-						 "media/00001239.jpg",
-						 "media/00001240.jpg",
-						 "media/00001241.jpg",
-						 "media/00001242.jpg",
-						 ];
+		var filenames = {{paths_str | safe}}
+		var identifiers = {{identifiers_str | safe}}
 
 		var image_data = [];
 
@@ -225,5 +210,6 @@
 		console.log(results);
 	}
 
+ document.addEventListener("DOMContentLoaded", handle_onload());
 </script>
 {% endblock %}

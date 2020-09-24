@@ -2,7 +2,7 @@ from django.db import models
 
 
 class Dataset(models.Model):
-    name = models.SlugField()
+    name = models.SlugField(unique=True)
     directory = models.CharField(max_length=600)
 
 
