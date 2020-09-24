@@ -12,18 +12,30 @@
       <th></th>
     </tr>
   </thead>
+  {% if datasets %}
   {% for dataset in datasets %}
   <tbody>
     <tr>
       <td>{{dataset.name}}</td>
-      <td>{{dataset.dataset_item_set.count}}</td>
-      <td>{{dataset.dataset_item_set.label_set.count}}</td>
+      <td>{{dataset.datasetitem_set.count}}</td>
+      <td>{{dataset.datasetitem_set.label_set.count | default:0}}</td>
       <td>N/A</td>
       <td><a href="{% url 'klabelapp:label' dataset.name %}"><button>Label</button></a></td>
     </tr>
   </tbody>
-  <div>
   {% endfor %}
+  {% else %}
+  <tbody>
+    <tr>
+      <td>No datasets.</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody  
+  {% endif %}
+  <div>
 </table>
 <div>
   <a href="{% url 'klabelapp:new_dataset' %}"><button>Create new dataset</button></a>
