@@ -2,12 +2,31 @@
 {% load static %}
 
 {% block content %}
-<h2>Dataset labeler</h2>
+<table class="">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th># images</th>
+      <th># labels</th>
+      <th>Last labeled</th>
+      <th></th>
+    </tr>
+  </thead>
+  {% for dataset in datasets %}
+  <tbody>
+    <tr>
+      <td>{{dataset.name}}</td>
+      <td>{{dataset.dataset_item_set.count}}</td>
+      <td>{{dataset.dataset_item_set.label_set.count}}</td>
+      <td>N/A</td>
+      <td><a href="{% url 'klabelapp:label' dataset.name %}"><button>Label</button></a></td>
+    </tr>
+  </tbody>
+  <div>
+  {% endfor %}
+</table>
 <div>
   <a href="{% url 'klabelapp:new_dataset' %}"><button>Create new dataset</button></a>
-<div>
-<div>
-  <a href="{% url 'klabelapp:label' %}"><button>Label a dataset</button></a>
 <div>
 {% endblock %}
 

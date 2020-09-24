@@ -24,7 +24,8 @@
 {% endblock %}
 
 {% block content %}
-<body onload="handle_onload()">
+<div class="klabel_container">
+<h2> Labeling: {{dataset.name}} </h2>
 
 <div id="labeled_div">
 	<canvas id="main_canvas" width="960" height="500" style="border: 8px solid #c0c0c0;" ></canvas>
@@ -82,6 +83,7 @@
 <div class="bold_text">Image Stack Navigation:</div>
 <div>Left/right arrow keys move from frame to frame in the current batch of frames.</div>
 </p>
+</div>
 {% endblock %}
 
 {% block javascript %}

@@ -1,0 +1,32 @@
+{% load static %}
+
+<!--<link rel="icon" href="<?=base_url()?>assets/images/favicon/dragon.png" type="image/png"> -->
+<?php
+   $page_title = $page_name;
+   if (strlen($page_name) == 0)
+       $page_title = $course_name;
+   else
+       $page_title = $page_name . ' : ' . $course_name; 
+?>
+<title>{{page_title}}</title>
+
+<script src="http://use.edgefonts.net/open-sans:n3,i3,n4,i4,n6,i6,n7,i7,n8,i8.js"></script>
+<script src="http://use.edgefonts.net/open-sans-condensed:n3,i3,n7.js"></script>
+
+<script type="text/javascript"
+  src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+</script>
+
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+  skipStartupTypeset: true,
+  showProcessingMessages: false,
+  tex2jax: {
+    inlineMath: [['$','$'], ['\\(','\\)']],
+    processEscapes: true
+  }
+});
+</script>
+
+<!-- NOTE(kayvonf): place at end to override 3rd party tools -->
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
