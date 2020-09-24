@@ -100,7 +100,10 @@ class InteractiveIndex:
     
     def create(self, index_str: str) -> None:
         """
-        TODO: docstring
+        Creates the empty index specified by index_str and writes to disk.
+
+        Args:
+            index_str: The FAISS index factory string specification.
 
         """
 
@@ -109,13 +112,20 @@ class InteractiveIndex:
 
     def train(self, xt_src: Union[str, np.ndarray, List[float]]) -> None:
         """
-        TODO: docstring
+        Trains the clustering layer of the index.
+
+        Args:
+            xt_src: The source of the training vectors. Can be the name of a 
+                file output by np.ndarray.tofile(), a numpy array, or a list 
+                of floats.
 
         """
 
         if not self.requires_training:
-            warnings.warn('`train()` was called on a non-trainable index.',
-                          RuntimeWarning)
+            warnings.warn(
+                '`train()` was called on a non-trainable index.',
+                RuntimeWarning
+            )
             return
 
         xt = self._convert_src_to_numpy(xt_src)
@@ -123,6 +133,7 @@ class InteractiveIndex:
         index = faiss.read_index(str(self.tempdir/self.TRAINED_INDEX_NAME))
 
         if self.use_gpu:
+            # TODO: perhaps add memory check for training on GPU?
             index = to_all_gpus(index, self.co)
 
         index.train(xt)
@@ -141,7 +152,21 @@ class InteractiveIndex:
         ids_extra: Optional[Union[Sequence[int], int]] = 0
     ) -> None:
         """
-        TODO: docstring
+        Adds the given vectors to the index.
+
+        Args:
+            xb_src: The source of the vectors to add to the partial indexes. 
+                Can be the name of a file output by np.ndarray.tofile(), a 
+                numpy array, or a list of floats.
+            ids: The integer IDs used to identify each vector added. If not 
+                specified will just increment sequentially starting from the 
+                the number of vectors in the index.
+            ids_extra: The extra id field if multi_id is True. This allows you 
+                to identify a vector through two different fields.
+
+                E.g., you might have two embeddings for each image, so you 
+                could make the ID the image number, and the ID extra a 0 or 1 
+                for each embedding.
 
         """
 
