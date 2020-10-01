@@ -24,7 +24,8 @@
 {% endblock %}
 
 {% block content %}
-<body onload="handle_onload()">
+<div class="klabel_container">
+<h2> Labeling: {{dataset.name}} </h2>
 
 <div id="labeled_div">
 	<canvas id="main_canvas" width="960" height="500" style="border: 8px solid #c0c0c0;" ></canvas>
@@ -82,6 +83,7 @@
 <div class="bold_text">Image Stack Navigation:</div>
 <div>Left/right arrow keys move from frame to frame in the current batch of frames.</div>
 </p>
+</div>
 {% endblock %}
 
 {% block javascript %}
@@ -103,23 +105,8 @@
 		labeler.init(main_canvas);
 
 		// set the data source
-		var filenames = ["media/00001227.jpg",
-				 		 "media/00001228.jpg",
-						 "media/00001229.jpg",
-				 		 "media/00001230.jpg",
-						 "media/00001231.jpg",
-				 		 "media/00001232.jpg",
-						 "media/00001233.jpg",
-				 		 "media/00001234.jpg",
-						 "media/00001235.jpg",
-						 "media/00001236.jpg",
-						 "media/00001237.jpg",
-						 "media/00001238.jpg",
-						 "media/00001239.jpg",
-						 "media/00001240.jpg",
-						 "media/00001241.jpg",
-						 "media/00001242.jpg",
-						 ];
+		var filenames = {{paths_str | safe}}
+		var identifiers = {{identifiers_str | safe}}
 
 		var image_data = [];
 
@@ -223,5 +210,6 @@
 		console.log(results);
 	}
 
+ document.addEventListener("DOMContentLoaded", handle_onload());
 </script>
 {% endblock %}

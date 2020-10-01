@@ -36,3 +36,8 @@ encoding_args:
     # - 16
     # LSH: whether to rotate vectors prior to binarization
     # - rotate
+
+# Whether to write ids as tuples of (<id>, <unique>) where <unique> is some 
+# unique extra number associated with the vector, which could be a sequence of
+# insertion like 1, 2, ...
+multi_id: false

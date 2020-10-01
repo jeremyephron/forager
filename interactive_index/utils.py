@@ -6,7 +6,8 @@ functions should likely not be called manually.
 
 """
 
-from typing import List, Optional
+import math
+from typing import List, Optional, Tuple
 
 import faiss
 
@@ -66,8 +67,36 @@ def to_all_gpus(
     cpu_index: faiss.Index,
     co: Optional[faiss.GpuMultipleClonerOptions] = None
 ) -> faiss.Index:
+    """
+    TODO: docstring
+
+    """
+
     n_gpus = faiss.get_num_gpus()
     assert n_gpus != 0, 'Attempting to move index to GPU without any GPUs'
 
     gpu_index = faiss.index_cpu_to_all_gpus(cpu_index, co=co)
     return gpu_index
+
+
+def cantor_pairing(a: int, b: int) -> int:
+    """
+    TODO: docstring
+
+    """
+
+    c = a + b
+    return (c * (c + 1)) // 2 + b
+
+
+def invert_cantor_pairing(z: int) -> Tuple[int, int]:
+    """
+    TODO: docstring
+
+    """
+
+    w = math.floor((math.sqrt(8 * z + 1) - 1) / 2)
+    t = (w**2 + w) / 2
+    y = int(z - t)
+    x = int(w - y)
+    return x, y

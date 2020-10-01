@@ -11,7 +11,10 @@ import faiss
 import numpy as np
 
 from interactive_index.config import read_config, CONFIG_DEFAULTS
-from interactive_index.utils import merge_on_disk, to_all_gpus
+from interactive_index.utils import (merge_on_disk, 
+                                     to_all_gpus,
+                                     cantor_pairing,
+                                     invert_cantor_pairing)
 
 
 class InteractiveIndex:
@@ -35,6 +38,8 @@ class InteractiveIndex:
     MERGED_INDEX_NAME = 'merged.index'
 
     SUPPORTED_DIM_PER_SUBQ = [1, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24, 28, 32]
+
+    _invert_cantor_pairing_vec = np.vectorize(invert_cantor_pairing)
     
     def __init__(self, config_fpath: str = None, **kwargs) -> None:
         """
@@ -82,6 +87,8 @@ class InteractiveIndex:
         else:
             self.co = None
 
+        self.multi_id = self.cfg['multi_id']
+
         # TODO: get from index_str
         self.requires_training = True
         self.is_trained = False
@@ -93,7 +100,10 @@ class InteractiveIndex:
     
     def create(self, index_str: str) -> None:
         """
-        TODO: docstring
+        Creates the empty index specified by index_str and writes to disk.
+
+        Args:
+            index_str: The FAISS index factory string specification.
 
         """
 
@@ -102,13 +112,20 @@ class InteractiveIndex:
 
     def train(self, xt_src: Union[str, np.ndarray, List[float]]) -> None:
         """
-        TODO: docstring
+        Trains the clustering layer of the index.
+
+        Args:
+            xt_src: The source of the training vectors. Can be the name of a 
+                file output by np.ndarray.tofile(), a numpy array, or a list 
+                of floats.
 
         """
 
         if not self.requires_training:
-            warnings.warn('`train()` was called on a non-trainable index.',
-                          RuntimeWarning)
+            warnings.warn(
+                '`train()` was called on a non-trainable index.',
+                RuntimeWarning
+            )
             return
 
         xt = self._convert_src_to_numpy(xt_src)
@@ -116,6 +133,7 @@ class InteractiveIndex:
         index = faiss.read_index(str(self.tempdir/self.TRAINED_INDEX_NAME))
 
         if self.use_gpu:
+            # TODO: perhaps add memory check for training on GPU?
             index = to_all_gpus(index, self.co)
 
         index.train(xt)
@@ -130,10 +148,25 @@ class InteractiveIndex:
     def add(
         self,
         xb_src: Union[str, np.ndarray, List[float]],
-        ids: Optional[Sequence[int]] = None
+        ids: Optional[Sequence[int]] = None,
+        ids_extra: Optional[Union[Sequence[int], int]] = 0
     ) -> None:
         """
-        TODO: docstring
+        Adds the given vectors to the index.
+
+        Args:
+            xb_src: The source of the vectors to add to the partial indexes. 
+                Can be the name of a file output by np.ndarray.tofile(), a 
+                numpy array, or a list of floats.
+            ids: The integer IDs used to identify each vector added. If not 
+                specified will just increment sequentially starting from the 
+                the number of vectors in the index.
+            ids_extra: The extra id field if multi_id is True. This allows you 
+                to identify a vector through two different fields.
+
+                E.g., you might have two embeddings for each image, so you 
+                could make the ID the image number, and the ID extra a 0 or 1 
+                for each embedding.
 
         """
 
@@ -167,6 +200,16 @@ class InteractiveIndex:
             ids = np.arange(self.n_vectors, self.n_vectors + end_idx)
         else:
             ids = np.array(ids)
+
+        if self.multi_id:
+            if isinstance(ids_extra, int):
+                ids_extra = np.full(len(ids), ids_extra)
+            else:
+                ids_extra = np.array(ids_extra)
+            
+            ids = np.array([
+                cantor_pairing(ids[i], ids_extra[i]) for i in range(len(ids))
+            ])
 
         index.add_with_ids(xb[:end_idx], ids)
         self.n_vectors += end_idx
@@ -215,6 +258,9 @@ class InteractiveIndex:
         index = faiss.read_index(str(self.tempdir/self.MERGED_INDEX_NAME))
         index.nprobe = n_probes if n_probes else self.n_probes
         dists, inds = index.search(xq, k)
+        
+        if self.multi_id:
+            inds = self._invert_cantor_pairing_vec(inds)
 
         return dists, inds
 

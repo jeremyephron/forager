@@ -5,13 +5,17 @@
 <div>
   <h2> Create a new dataset </h2>
   <form enctype="multipart/form-data" action="{% url 'klabelapp:do_new_dataset' %}" method="post">
+    {% csrf_token %}
     <!-- Dataset name -->
     <p>
       <div>
         Name
       </div>
       <div>
-        <input type="input" name="name">
+      {{form.name.errors}}
+      </div>
+      <div>
+        {{form.name}}
       </div>
     </p>
     <!-- Dataset directory -->
@@ -20,7 +24,10 @@
         Directory (full path to GCS bucket folder)
       </div>
       <div>
-        <input type="input" name="directory">
+      {{form.directory.errors}}
+      </div>
+      <div>
+        {{form.directory}}
       </div>
     </p>
     <p>

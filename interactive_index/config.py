@@ -28,7 +28,10 @@ CONFIG_DEFAULTS = {
 
     # Encoding
     'encoding': 'Flat',
-    'encoding_args': None
+    'encoding_args': None,
+
+    # Misc
+    'multi_id': False
 }
 
 

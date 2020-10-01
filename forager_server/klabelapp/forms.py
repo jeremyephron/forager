@@ -11,4 +11,4 @@ class StyledForm(forms.Form):
 
 class CreateDatasetForm(StyledForm):
     name = forms.CharField(max_length=300)
-    path = forms.CharField(max_length=1000)
+    directory = forms.CharField(max_length=1000)

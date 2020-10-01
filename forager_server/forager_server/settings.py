@@ -60,7 +60,6 @@ ROOT_URLCONF = 'forager_server.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
         'DIRS': [BASE_DIR / 'forager_server' / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
