@@ -9,6 +9,7 @@ import aiohttp
 from runstats import Statistics
 
 from knn import utils
+from knn.clusters import GKECluster
 from knn.utils import JSONType
 from knn.reducers import Reducer
 
@@ -34,7 +35,7 @@ resource.setrlimit(resource.RLIMIT_NOFILE, (new_soft, hard))
 class MapReduceJob:
     def __init__(
         self,
-        mapper_url: str,
+        mapper_container: str,
         reducer: Reducer,
         mapper_args: JSONType = {},
         *,
@@ -49,7 +50,7 @@ class MapReduceJob:
         self.n_mappers = n_mappers
         self.n_retries = n_retries
         self.chunk_size = chunk_size
-        self.mapper_url = mapper_url
+        self.mapper_container = mapper_container
         self.mapper_args = mapper_args
 
         self.reducer = reducer
@@ -70,12 +71,13 @@ class MapReduceJob:
 
     async def start(
         self,
+        cluster: GKECluster,
         iterable: Iterable[JSONType],
         callback: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> None:
         async def task():
             try:
-                result = await self.run_until_complete(iterable)
+                result = await self.run_until_complete(cluster, iterable)
             except asyncio.CancelledError:
                 pass
             else:
@@ -84,12 +86,16 @@ class MapReduceJob:
 
         self.task = asyncio.create_task(task())
 
-    async def run_until_complete(self, iterable: Iterable[JSONType]) -> Dict[str, Any]:
+    async def run_until_complete(
+        self, cluster: GKECluster, iterable: Iterable[JSONType]
+    ) -> Dict[str, Any]:
         assert self._start_time is None  # can't reuse Job instances
         self.start_time = time.time()
 
+        # Prepare iterable
+
         try:
-            self._n_total = len(iterable)
+            self._n_total = len(iterable)  # type: ignore
         except Exception:
             pass
 
@@ -111,12 +117,23 @@ class MapReduceJob:
         else:
             chunked = utils.chunk(iterable, self.chunk_size)
 
-        connector = aiohttp.TCPConnector(limit=0)
-        async with aiohttp.ClientSession(connector=connector) as session:
-            for response_tuple in utils.limited_as_completed(
-                (self._request(session, chunk) for chunk in chunked), self.n_mappers,
-            ):
-                self._handle_chunk_result(*(await response_tuple))
+        try:
+            # Start Kubernetes service
+            deployment_id, mapper_url = await cluster.create_deployment(
+                self.mapper_container, self.n_mappers
+            )
+
+            # Run job
+            connector = aiohttp.TCPConnector(limit=0)
+            async with aiohttp.ClientSession(connector=connector) as session:
+                for response_tuple in utils.limited_as_completed(
+                    (self._request(session, mapper_url, chunk) for chunk in chunked),
+                    self.n_mappers,
+                ):
+                    self._handle_chunk_result(*(await response_tuple))
+        finally:
+            # Stop Kubernetes service
+            await cluster.delete_deployment(deployment_id)
 
         if self._n_total is None:
             self._n_total = self._n_successful + self._n_failed
@@ -167,14 +184,7 @@ class MapReduceJob:
 
     @property
     def cost(self) -> float:
-        total_billed_time = self._profiling["billed_time"].mean() * len(
-            self._profiling["billed_time"]
-        )
-        return (
-            0.00002400 * total_billed_time
-            + 2 * 0.00000250 * total_billed_time
-            + 0.40 / 1000000 * self._n_requests
-        )
+        return 0  # not implemented for GKE
 
     # INTERNAL
 
@@ -186,7 +196,7 @@ class MapReduceJob:
         }
 
     async def _request(
-        self, session: aiohttp.ClientSession, chunk: List[JSONType]
+        self, session: aiohttp.ClientSession, mapper_url: str, chunk: List[JSONType]
     ) -> Tuple[JSONType, Optional[JSONType], float]:
         result = None
         start_time = 0.0
@@ -199,7 +209,7 @@ class MapReduceJob:
             end_time = start_time
 
             try:
-                async with session.post(self.mapper_url, json=request) as response:
+                async with session.post(mapper_url, json=request) as response:
                     end_time = time.time()
                     if response.status == 200:
                         result = await response.json()

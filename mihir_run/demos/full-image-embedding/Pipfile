@@ -8,6 +8,7 @@ verify_ssl = true
 [packages]
 knn = {editable = true,path = "./../.."}
 jupyter = "*"
+tqdm = "*"
 
 [requires]
 python_version = "3.8"

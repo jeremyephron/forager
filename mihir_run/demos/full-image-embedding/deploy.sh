@@ -13,6 +13,3 @@ gcloud config set builds/use_kaniko True
 
 # Remove shared resources
 rm -rf $folder/knn
-
-# Deploy Cloud Run handler
-gcloud run deploy $name --image gcr.io/$project/$name --platform managed --concurrency 1 --cpu 1 --max-instances 1000 --memory 2Gi --timeout 900 --region us-central1 --allow-unauthenticated

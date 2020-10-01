@@ -62,5 +62,4 @@ class ResNetBackboneMapper(Mapper):
 
         # Perform inference
         with self.profiler(request_id, "compute_time"):
-            result = self.model(image.unsqueeze(dim=0))
-            return result
+            return self.model(image.unsqueeze(dim=0))
