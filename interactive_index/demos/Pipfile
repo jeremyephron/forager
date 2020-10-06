@@ -9,7 +9,7 @@ matplotlib = "*"
 pandas = "*"
 
 [packages]
-forager = {editable = true, path = "."}
+forager = {editable = true, path = "./.."}
 
 [requires]
 python_version = "3.8"
