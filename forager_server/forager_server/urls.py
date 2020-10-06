@@ -14,18 +14,14 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include, re_path
-from django.conf import settings
-from django.views.static import serve
+from django.urls import path
+
+from forager_server_api import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', include('klabelapp.urls')),
+    path('api/get_datasets', views.get_datasets, name='get_datasets'),
+    path('api/create_dataset', views.create_dataset, name='create_dataset'),
+    path('api/dataset/<slug:dataset_name>', views.get_dataset_info, name='get_dataset_info'),
+    path('api/get_results/<slug:dataset_name>', views.get_results, name='get_results')
 ]
-
-if settings.DEBUG:
-    urlpatterns += [
-        re_path(r'^media/(?P<path>.*)$', serve, {
-            'document_root': settings.MEDIA_ROOT,
-        }),
-    ]
