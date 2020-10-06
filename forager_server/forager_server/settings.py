@@ -16,16 +16,11 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-CONFIG = {
-    'static_root': BASE_DIR / "dev_static/"
-}
-
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = '!!_etg2q56fn$twxlk!nl(ku(k$_0y2s^v^_x3ouvaxtr)$(lo'
+SECRET_KEY = 's&*+2lskkfm0l&ni9rd873xhy3tdb_04*w3cpon9*)1m8ehtib'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -36,13 +31,14 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
-    'klabelapp.apps.KlabelappConfig',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
+    'forager_server_api.apps.ForagerServerApiConfig',
 ]
 
 MIDDLEWARE = [
@@ -53,6 +49,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
 ]
 
 ROOT_URLCONF = 'forager_server.urls'
@@ -60,7 +57,7 @@ ROOT_URLCONF = 'forager_server.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'forager_server' / 'templates'],
+        'DIRS': [],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -124,8 +121,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/3.1/howto/static-files/
 
 STATIC_URL = '/static/'
-STATIC_ROOT = CONFIG['static_root']
 
-STATICFILES_DIRS = [
-    BASE_DIR / "forager_server" / "static",
-]
+CORS_ORIGIN_WHITELIST = ['http://127.0.0.1:3000', 'http://localhost:3000'] # source of the frontend req.
+CSRF_TRUSTED_ORIGINS  = ['127.0.0.1', 'localhost'] # source of the frontend req.
+
