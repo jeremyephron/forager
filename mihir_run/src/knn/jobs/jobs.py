@@ -32,25 +32,61 @@ new_soft = max(min(defaults.DESIRED_ULIMIT, hard), soft)
 resource.setrlimit(resource.RLIMIT_NOFILE, (new_soft, hard))
 
 
+class MapperSpec:
+    def __init__(
+        self,
+        *,
+        url: Optional[str] = None,
+        container: Optional[str] = None,
+        cluster: Optional[GKECluster] = None,
+        n_mappers: int = defaults.N_MAPPERS,
+    ):
+        assert n_mappers < new_soft
+        assert (url and not any((container, cluster))) or (
+            not url and all((container, cluster))
+        )
+
+        self.url = url
+        self.container = container
+        self.cluster = cluster
+
+        self.n_mappers = n_mappers
+
+        # Will be initialized on enter
+        self._deployment_id: Optional[str] = None
+
+    async def __aenter__(self) -> str:  # returns endpoint
+        if self.url:
+            return self.url
+        else:
+            # Start Kubernetes service
+            assert self.cluster and self.container
+            self._deployment_id, url = await self.cluster.create_deployment(
+                self.container, self.n_mappers
+            )
+            return url
+
+    async def __aexit__(self, type, value, traceback):
+        if not self.url:
+            # Stop Kubernetes service
+            await self.cluster.delete_deployment(self._deployment_id)
+
+
 class MapReduceJob:
     def __init__(
         self,
-        mapper_container: str,
+        mapper: MapperSpec,
         reducer: Reducer,
         mapper_args: JSONType = {},
         *,
-        n_mappers: int = defaults.N_MAPPERS,
         n_retries: int = defaults.N_RETRIES,
         chunk_size: int = defaults.CHUNK_SIZE,
     ) -> None:
-        assert n_mappers < new_soft
-
         self.job_id = str(uuid.uuid4())
 
-        self.n_mappers = n_mappers
         self.n_retries = n_retries
         self.chunk_size = chunk_size
-        self.mapper_container = mapper_container
+        self.mapper = mapper
         self.mapper_args = mapper_args
 
         self.reducer = reducer
@@ -71,13 +107,12 @@ class MapReduceJob:
 
     async def start(
         self,
-        cluster: GKECluster,
         iterable: Iterable[JSONType],
         callback: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> None:
         async def task():
             try:
-                result = await self.run_until_complete(cluster, iterable)
+                result = await self.run_until_complete(iterable)
             except asyncio.CancelledError:
                 pass
             else:
@@ -86,14 +121,11 @@ class MapReduceJob:
 
         self.task = asyncio.create_task(task())
 
-    async def run_until_complete(
-        self, cluster: GKECluster, iterable: Iterable[JSONType]
-    ) -> Dict[str, Any]:
+    async def run_until_complete(self, iterable: Iterable[JSONType]) -> Dict[str, Any]:
         assert self._start_time is None  # can't reuse Job instances
         self.start_time = time.time()
 
         # Prepare iterable
-
         try:
             self._n_total = len(iterable)  # type: ignore
         except Exception:
@@ -104,36 +136,27 @@ class MapReduceJob:
         if self.chunk_size == 15:
             print("Using chunk size schedule 1 -> 5")
             chunked = itertools.chain(
-                utils.chunk(iterable, 1, until=2 * self.n_mappers),
+                utils.chunk(iterable, 1, until=2 * self.mapper.n_mappers),
                 utils.chunk(iterable, 5),
             )
         elif self.chunk_size == 135:
             print("Using chunk size schedule 1 -> 3 -> 5")
             chunked = itertools.chain(
-                utils.chunk(iterable, 1, until=2 * self.n_mappers),
-                utils.chunk(iterable, 3, until=2 * self.n_mappers),
+                utils.chunk(iterable, 1, until=2 * self.mapper.n_mappers),
+                utils.chunk(iterable, 3, until=2 * self.mapper.n_mappers),
                 utils.chunk(iterable, 5),
             )
         else:
             chunked = utils.chunk(iterable, self.chunk_size)
 
-        try:
-            # Start Kubernetes service
-            deployment_id, mapper_url = await cluster.create_deployment(
-                self.mapper_container, self.n_mappers
-            )
-
-            # Run job
+        async with self.mapper as mapper_url:
             connector = aiohttp.TCPConnector(limit=0)
             async with aiohttp.ClientSession(connector=connector) as session:
                 for response_tuple in utils.limited_as_completed(
                     (self._request(session, mapper_url, chunk) for chunk in chunked),
-                    self.n_mappers,
+                    self.mapper.n_mappers,
                 ):
                     self._handle_chunk_result(*(await response_tuple))
-        finally:
-            # Stop Kubernetes service
-            await cluster.delete_deployment(deployment_id)
 
         if self._n_total is None:
             self._n_total = self._n_successful + self._n_failed

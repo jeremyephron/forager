@@ -1,1 +1,1 @@
-from .jobs import MapReduceJob
+from .jobs import MapReduceJob, MapperSpec
