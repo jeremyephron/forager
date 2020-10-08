@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 
 import { colors } from "../../Constants";
-import { MainCanvas, ImageColumn } from "./Components";
+import { MainCanvas, ImageGrid } from "./Components";
 import { ImageLabeler, ImageData, Annotation } from "../../assets/js/klabel.js";
 import { Button, Select } from "../../Components";
 
@@ -21,7 +21,7 @@ const SubContainer = styled.div`
   margin-top: 3vh;
 `;
 
-const ImageColumnContainer = styled.div`
+const ImageGridContainer = styled.div`
   width: 100%;
   height: 75vh;
   margin-top: 2vh;
@@ -184,9 +184,9 @@ function LabelingPage() {
       </SubContainer>
       <SubContainer>
         <MainCanvas/>
-        <ImageColumnContainer>
-          <ImageColumn datasetName={datasetName} onImageClick={onImageClick} />
-        </ImageColumnContainer>
+        <ImageGridContainer>
+          <ImageGrid datasetName={datasetName} onImageClick={onImageClick} />
+        </ImageGridContainer>
       </SubContainer>
     </Container>
   );

@@ -3,6 +3,7 @@ import styled from "styled-components";
 
 const Image = styled.img`
   margin-top: 10px;
+  margin-right: 10px;
   width: 150px;
   object-fit: contain;
   box-shadow: 0 2px 3px -1px rgba(0,0,0,0.5);
@@ -15,7 +16,7 @@ const Image = styled.img`
   }
 `;
 
-const Column = styled.div`
+const Grid = styled.div`
   width: 100%;
   display: flex;
   flex-wrap: wrap;
@@ -28,7 +29,10 @@ const Column = styled.div`
   }
 `;
 
-const ImageColumn = ({ datasetName, onImageClick }) => {
+const ImageGrid = ({
+  datasetName,
+  onImageClick
+}) => {
   const imagesUrl = "http://127.0.0.1:8000/api/get_results/" + datasetName;
   // const [loading, setLoading] = useState(false);
   const [images, setImages] = useState([]);
@@ -49,10 +53,10 @@ const ImageColumn = ({ datasetName, onImageClick }) => {
   // }
 
   return (
-    <Column>
+    <Grid>
       {images.map(img => <Image key={img.idx} src={img.path} onClick={() => onImageClick(img.idx)} />)}
-    </Column>
+    </Grid>
   );
 }
 
-export default ImageColumn;
+export default ImageGrid;
