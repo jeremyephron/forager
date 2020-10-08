@@ -203,9 +203,10 @@ async def create_index(request):
 @app.route("/query_index", methods=["POST"])
 async def query_index(request):
     cluster_id = request.form["cluster_id"]
-    image_path = request.form["path"]
+    image_paths = request.form["paths"]
     bucket = request.form["bucket"]
-    patch = [float(request.form[k]) for k in ("x1", "y1", "x2", "y2")]  # [0, 1]^2
+    patches = [[float(patch[k]) for k in ("x1", "y1", "x2", "y2")]
+               for patch in request.form['patches']]  # [0, 1]^2
     index_id = request.form["index_id"]
     num_results = int(request.form["num_results"])
 
@@ -220,9 +221,8 @@ async def query_index(request):
         n_retries=config.N_RETRIES,
     )
     query_vector_dict = await job.run_until_complete(
-        [{"image": image_path, "patch": patch}]
-    )
-    assert len(query_vector_dict) == 1
+        [{"image": image_path, "patch": patch}
+         for image_path, patch in zip(image_paths, patches)])
     query_vector = next(iter(query_vector_dict.values()))
 
     # Run query and return results
