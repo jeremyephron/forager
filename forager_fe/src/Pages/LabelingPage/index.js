@@ -43,6 +43,13 @@ const OptionsSelect = styled(Select)`
   padding: 0 5px;
 `;
 
+const Slider = styled.input`
+  width: 20%; /* Full-width */
+  height: 25px; /* Specified height */
+  border-radius: 5px;
+  margin-left: 20px;
+`;
+
 function LabelingPage() {
   const location = useLocation();
   const datasetName = location.state.datasetName;
@@ -55,6 +62,7 @@ function LabelingPage() {
 
   // Annotating vs Exploring
   var forager_mode = 'forager_annotate';
+  var image_size = 150;
 
   const image_data = [];
   for (let i=0; i<paths.length; i++) {
@@ -116,6 +124,14 @@ function LabelingPage() {
       const results = labeler.get_annotations();
       console.log(results);
     }
+    
+    const handle_image_size = () => {
+      image_size = document.getElementById("image_size").value;
+      var toChange = document.querySelectorAll(".grid_item");
+      for (var i = 0; i < toChange.length; i++) {
+        toChange[i].style.height = image_size + "px"
+      }
+    }
 
     const main_canvas = document.getElementById(main_canvas_id);
     labeler.init(main_canvas);
@@ -162,6 +178,9 @@ function LabelingPage() {
     select = document.getElementById("select_forager_mode")
     select.onchange = handle_forager_change;
 
+    let image_size = document.getElementById("image_size")
+    image_size.oninput = handle_image_size;
+
     window.addEventListener("keydown", function(e) {
       e.preventDefault();
       labeler.handle_keydown(e);
@@ -181,11 +200,14 @@ function LabelingPage() {
           <option value="forager_annotate">Annotate</option>
           <option value="forager_explore">Explore</option>
         </OptionsSelect>
+
+        <label style={{"fontSize": '25px',"marginLeft": "260px"}}>Image Size</label>
+        <Slider type="range" min="50" max="300" defaultValue="100" id="image_size"></Slider>
       </SubContainer>
       <SubContainer>
         <MainCanvas/>
         <ImageGridContainer>
-          <ImageGrid datasetName={datasetName} onImageClick={onImageClick} />
+          <ImageGrid datasetName={datasetName} onImageClick={onImageClick} imageHeight={image_size}/>
         </ImageGridContainer>
       </SubContainer>
     </Container>

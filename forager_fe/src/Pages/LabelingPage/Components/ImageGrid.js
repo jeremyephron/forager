@@ -4,7 +4,6 @@ import styled from "styled-components";
 const Image = styled.img`
   margin-top: 10px;
   margin-right: 10px;
-  height: 150px;
   object-fit: contain;
   box-shadow: 0 2px 3px -1px rgba(0,0,0,0.5);
   cursor: pointer;
@@ -27,7 +26,8 @@ const Grid = styled.div`
 
 const ImageGrid = ({
   datasetName,
-  onImageClick
+  onImageClick,
+  imageHeight
 }) => {
   const imagesUrl = "http://127.0.0.1:8000/api/get_results/" + datasetName;
   // const [loading, setLoading] = useState(false);
@@ -44,8 +44,8 @@ const ImageGrid = ({
     fetchImages()
   }, [imagesUrl, setImages])
 
-  return (<Grid>
-    {images.map(img => <Image key={img.idx} className="grid-item" src={img.path} onClick={() => onImageClick(img.idx)} />)}
+  return (<Grid id="image_grid">
+    {images.map(img => <Image key={img.idx} style={{height: imageHeight + 'px'}} className="grid_item" src={img.path} onClick={() => onImageClick(img.idx)} />)}
   </Grid>);
 }
 
