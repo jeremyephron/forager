@@ -3,7 +3,8 @@ import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 
 import { colors } from "../../Constants";
-import { MainCanvas, ImageColumn } from "./Components";
+import { MainCanvas, ImageGrid } from "./Components";
+import { Button, Select } from "../../Components";
 import {
   BBox2D,
 } from "../../assets/js/kmath.js";
@@ -19,23 +20,22 @@ import {
 
 const Container = styled.div`
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   background-color: white;
 `;
 
 const SubContainer = styled.div`
-  flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   background-color: white;
   margin-left: 3vw;
   margin-top: 3vh;
 `;
 
-const ImageColumnContainer = styled.div`
+const ImageGridContainer = styled.div`
   width: 100%;
   height: 75vh;
-  margin-top: 9vh;
+  margin-top: 2vh;
   margin-right: 3vw;
   margin-left: 3vw;
   border-radius: 5px;
@@ -45,6 +45,20 @@ const TitleHeader = styled.h1`
   font-family: "AirBnbCereal-Medium";
   font-size: 24px;
   color: ${colors.primary};
+  padding-right: 20px;
+`;
+
+const OptionsSelect = styled(Select)`
+  font-size: 13px;
+  height: 28px;
+  padding: 0 5px;
+`;
+
+const Slider = styled.input`
+  width: 20%; /* Full-width */
+  height: 25px; /* Specified height */
+  border-radius: 5px;
+  margin-left: 20px;
 `;
 
 function LabelingPage() {
@@ -52,6 +66,7 @@ function LabelingPage() {
   const datasetName = location.state.datasetName;
   const [paths, setPaths] = useState(location.state.paths);
   const [identifiers, setIdentifiers] = useState(location.state.identifiers);
+  const [imageSize, setImageSize] = useState(150);
 
   const getAnnotationsUrl = "http://127.0.0.1:8000/api/get_annotations/" + datasetName;
   const addAnnotationUrl = "http://127.0.0.1:8000/api/add_annotation/" + datasetName;
@@ -61,6 +76,16 @@ function LabelingPage() {
   /* Klabel stuff */
   const labeler = useMemo(() => new ImageLabeler(), []);
   const main_canvas_id = 'main_canvas';
+
+  // Annotating vs Exploring
+  var forager_mode = 'forager_annotate';
+
+  const image_data = [];
+  for (let i=0; i<paths.length; i++) {
+    const data = new ImageData();
+    data.source_url = paths[i];
+    image_data.push(data);
+  }
 
   const onImageClick = (idx) => {
     labeler.set_current_frame_num(idx);
@@ -182,6 +207,18 @@ function LabelingPage() {
         }
       });
     }
+    
+    const handle_forager_change = () => {
+      const select = document.getElementById("select_forager_mode");
+      const klabeldiv = document.getElementById("klabel_wrapper");
+      if (select.value.localeCompare("forager_annotate") === 0) {
+        forager_mode = "forager_annotate"
+        klabeldiv.style.display = "flex"
+      } else if (select.value.localeCompare("forager_explore") === 0) {
+        forager_mode = "forager_explore"
+        klabeldiv.style.display = "none"
+      } 
+    }
 
     const klabelRun = async () => {
       const main_canvas = document.getElementById(main_canvas_id);
@@ -239,20 +276,22 @@ function LabelingPage() {
 
       button = document.getElementById("clear_button");
       button.onclick = handle_clear_boxes;
-
       button = document.getElementById("get_annotations");
       button.onclick = handle_get_annotations;
 
-      const select = document.getElementById("select_annotation_mode")
+      let select = document.getElementById("select_annotation_mode")
       select.onchange = handle_mode_change;
 
+      select = document.getElementById("select_forager_mode")
+      select.onchange = handle_forager_change;
+
       window.addEventListener("keydown", function(e) {
-        // e.preventDefault();
+        e.preventDefault();
         labeler.handle_keydown(e);
       });
 
       window.addEventListener("keyup", function(e) {
-        // e.preventDefault();
+        e.preventDefault();
         labeler.handle_keyup(e);
       });
     }
@@ -263,12 +302,20 @@ function LabelingPage() {
   return (
     <Container>
       <SubContainer>
-      <TitleHeader>Labeling: {datasetName}</TitleHeader>
-      <MainCanvas tabindex={0} />
+        <TitleHeader>Labeling: {datasetName}</TitleHeader>
+        <OptionsSelect alt="true" id="select_forager_mode">
+          <option value="forager_annotate">Annotate</option>
+          <option value="forager_explore">Explore</option>
+        </OptionsSelect>
+        <label style={{"fontSize": '25px',"marginLeft": "260px"}}>Image Size</label>
+        <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
       </SubContainer>
-      <ImageColumnContainer>
-        <ImageColumn datasetName={datasetName} onImageClick={onImageClick} imagePaths={paths} />
-      </ImageColumnContainer>
+      <SubContainer>
+        <MainCanvas/>
+        <ImageGridContainer>
+          <ImageGrid datasetName={datasetName} onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} />
+        </ImageGridContainer>
+      </SubContainer>
     </Container>
   );
 };

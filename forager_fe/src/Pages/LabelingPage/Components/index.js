@@ -1,2 +1,2 @@
 export { default as MainCanvas } from "./MainCanvas.js";
-export { default as ImageColumn } from "./ImageColumn.js";
+export { default as ImageGrid } from "./ImageGrid.js";

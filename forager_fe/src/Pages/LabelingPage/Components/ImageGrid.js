@@ -3,7 +3,8 @@ import styled from "styled-components";
 
 const Image = styled.img`
   margin-top: 10px;
-  width: 100%;
+  margin-right: 10px;
+  object-fit: contain;
   box-shadow: 0 2px 3px -1px rgba(0,0,0,0.5);
   cursor: pointer;
   transition: background 0.2s ease, opacity 0.2s ease;
@@ -14,20 +15,25 @@ const Image = styled.img`
   }
 `;
 
-const Column = styled.div`
-  width: 200px;
+const Grid = styled.div`
+  width: 100%;
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   height: 100%;
   overflow-y: scroll;
-  box-shadow: 0 2px 3px -3px rgba(0,0,0,0.5);
+  justify-content: space-evenly;
 
   img:first-child {
       margin-top: 0;
   }
 `;
 
-const ImageColumn = ({ datasetName, imagePaths, onImageClick }) => {
+const ImageGrid = ({
+  datasetName,
+  onImageClick,
+  imagePaths,
+  imageHeight
+}) => {
   // const imagesUrl = "http://127.0.0.1:8000/api/get_results/" + datasetName;
   // const [loading, setLoading] = useState(false);
   // const [images, setImages] = useState(images);
@@ -48,10 +54,10 @@ const ImageColumn = ({ datasetName, imagePaths, onImageClick }) => {
   // }
 
   return (
-    <Column>
-      {imagePaths.map((path, idx) => <Image key={idx} src={path} onClick={() => onImageClick(idx)} />)}
-    </Column>
+    <Grid>
+      {imagePaths.map((path, idx) => <Image key={idx} src={path} onClick={() => onImageClick(idx)} style={{ height: imageHeight + 'px' }}/>)}
+    </Grid>
   );
 }
 
-export default ImageColumn;
+export default ImageGrid;
