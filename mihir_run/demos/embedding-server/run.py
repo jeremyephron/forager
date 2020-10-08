@@ -43,7 +43,7 @@ jinja = Environment(
     autoescape=select_autoescape(["html"]),
 )
 
-current_clusters = {}  # type: Dict[str, GKECluster]
+current_clusters = {}  # type: Dict[str, Dict[str, Any]]
 current_queries = {}  # type: Dict[str, MapReduceJob]
 
 
@@ -60,28 +60,37 @@ async def homepage(request):
 
 @app.route("/start_cluster", methods=["POST"])
 async def start_cluster(request):
-    n_nodes = int(request.form["n_nodes"])
+    n_nodes = int(request.form["n_nodes"][0])
 
     gke_cluster = GKECluster(
         config.GCP_PROJECT, config.GCP_ZONE, config.GCP_MACHINE_TYPE, n_nodes
     )
 
-    await gke_cluster.start()
-    current_clusters[gke_cluster.cluster_id] = gke_cluster
+    async def run_after_start(start_task):
+        await start_task
+        return await gke_cluster.create_deployment(
+            container=config.MAPPER_CONTAINER,
+            num_replicas=n_nodes
+        )
 
-    # Create deployment
-    deployment_id, service_url = await gke_cluster.create_deployment(
-        container=config.MAPPER_CONTAINER, num_replicas=n_nodes
-    )
+    start_task = asyncio.create_task(gke_cluster.start())
+    deployment_task = asyncio.create_task(run_after_start(start_task))
+
+    current_clusters[gke_cluster.cluster_id] = {
+        'cluster': gke_cluster,
+        'deployment_task': deployment_task,
+        'deployment_id': None,
+        'service_url': None
+    }
 
     return json({"cluster_id": gke_cluster.cluster_id})
 
 
 @app.route("/stop_cluster", methods=["POST"])
 async def stop_cluster(request):
-    cluster_id = request.form["cluster_id"]
+    cluster_id = request.form["cluster_id"][0]
 
-    gke_cluster = current_clusters[cluster_id]
+    gke_cluster = current_clusters[cluster_id]['cluster']
     await gke_cluster.stop()
     del current_clusters[cluster_id]
 
@@ -90,20 +99,25 @@ async def stop_cluster(request):
 
 @app.route("/start", methods=["POST"])
 async def start(request):
-    cluster_id = request.form["cluster_id"]
-    n_mappers = request.form["n_mappers"]
-    bucket = request.form["bucket"]
-    paths = request.form["paths"]
+    cluster_id = request.form["cluster_id"][0]
+    n_mappers = int(request.form["n_mappers"][0])
+    bucket = request.form["bucket"][0]
+    paths = request.form["paths"][0]
 
-    print("cluster_id", cluster_id)
-    cluster = current_clusters[cluster_id]
+    cluster_data = current_clusters[cluster_id]
+    cluster = cluster_data['cluster']
+    service_url = cluster_data['service_url']
+    if service_url is None:
+        deployment_id, service_url = await cluster_data['deployment_task']
+        cluster_data['service_url'] = service_url
+        cluster_data['deployment_id'] = deployment_id
 
     # Get template
     job = MapReduceJob(
         MapperSpec(url=service_url),
         EmbeddingDictReducer(config.EMBEDDING_LAYER),
         {"input_bucket": bucket},
-        n_retries=N_RETRIES,
+        n_retries=config.N_RETRIES,
     )
 
     query_id = job.job_id
@@ -112,9 +126,12 @@ async def start(request):
     # Get list of paths
     iterable = paths
 
-    cleanup_func = functools.partial(cleanup_query, query_id=query_id, dataset=iterable)
+    cleanup_func = functools.partial(
+        cleanup_query,
+        query_id=query_id,
+        dataset=iterable)
 
-    await job.start(iterable, iterable.close)
+    await job.start(iterable, cleanup_func)
 
     return json({"query_id": query_id})
 
@@ -143,7 +160,6 @@ async def stop(request):
 
 
 def cleanup_query(_, query_id: str, dataset: FileListIterator):
-    dataset.close()
     asyncio.create_task(final_query_cleanup(query_id))
 
 
@@ -153,8 +169,6 @@ async def final_query_cleanup(query_id: str):
 
 
 # INDEX MANAGEMENT
-
-
 class LabeledIndex:
     def __init__(self, embedding_dict, **kwargs):
         self.labels = list(embedding_dict.keys())
@@ -196,6 +210,7 @@ async def create_index(request):
         d=config.EMBEDDING_DIM,
         n_centroids=config.INDEX_NUM_CENTROIDS,
         vectors_per_index=config.INDEX_SUBINDEX_SIZE,
+        use_gpu=config.INDEX_USE_GPU,
     )
     return json({"index_id": index_id})
 

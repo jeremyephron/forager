@@ -12,8 +12,9 @@ from django.shortcuts import  get_object_or_404, get_list_or_404
 from django.conf import settings
 from rest_framework import status
 from rest_framework.decorators import api_view
+from collections import defaultdict
 
-from .models import Dataset, DatasetItem
+from .models import Dataset, DatasetItem, Annotation
 
 @api_view(['GET'])
 @csrf_exempt
@@ -23,11 +24,11 @@ def get_datasets(request):
     def serialize(dataset):
         # JEB: probably should make a real serializer
         n_labels = 0
-        if getattr(dataset.datasetitem_set, 'label_set', None):
-            n_labels = dataset.datasetitem_set.label_set.count()
+        if getattr(dataset.datasetitem_set, 'annotation_set', None):
+            n_labels = dataset.datasetitem_set.annotation_set.count()
 
         return {
-            'name': dataset.name, 
+            'name': dataset.name,
             'size': dataset.datasetitem_set.count(),
             'n_labels': n_labels,
             'last_labeled': 'N/A'
@@ -65,7 +66,9 @@ def create_dataset(request):
         # Create all the DatasetItems for this dataset
         paths = [blob.name for blob in all_blobs]
         items = [
-            DatasetItem(dataset=dataset, identifier=os.path.basename(path).split('.')[0], path=path)
+            DatasetItem(dataset=dataset,
+                        identifier=os.path.basename(path).split('.')[0],
+                        path=path)
             for path in paths
         ]
         DatasetItem.objects.bulk_create(items)
@@ -85,7 +88,6 @@ def create_dataset(request):
             print(response_data)
             request.session['cluster_id'] = response_data['cluster_id']
         # Initiate embedding computation
-        print('session cluster id', request.session['cluster_id'])
         params = urllib.parse.urlencode(
             {'cluster_id': request.session['cluster_id'],
              'n_mappers': settings.EMBEDDING_MAPPERS,
@@ -122,7 +124,7 @@ def get_dataset_info(request, dataset_name, dataset=None):
     path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
     dataset_items = DatasetItem.objects.filter(dataset=dataset)[:100]
     dataset_item_paths = [path_template.format(di.path) for di in dataset_items]
-    dataset_item_identifiers = [di.identifier for di in dataset_items]
+    dataset_item_identifiers = [di.pk for di in dataset_items]
 
     return JsonResponse({
         'status': 'success',
@@ -141,10 +143,11 @@ def get_results(request, dataset_name):
     path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
     dataset_items = DatasetItem.objects.filter(dataset=dataset)[:100]
     dataset_item_paths = [path_template.format(di.path) for di in dataset_items]
-    dataset_item_identifiers = [di.identifier for di in dataset_items]
+    dataset_item_identifiers = [di.pk for di in dataset_items]
 
     return JsonResponse([
-        {'path': p, 'idx': i} for i, p in list(enumerate(dataset_item_paths))[50:100]
+        {'path': p, 'idx': i}
+        for i, p in list(enumerate(dataset_item_paths))[50:100]
     ], safe=False)
 
 
@@ -152,11 +155,16 @@ def get_results(request, dataset_name):
 @csrf_exempt
 def get_annotations(request, dataset_name):
     image_identifiers = request.GET['identifiers'].split(',')
-    print(image_identifiers)
+    dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
+    anns = Annotation.objects.filter(dataset_item__in=dataset_items)
 
-    return JsonResponse({
-        '000000000009': [{'type': 2, 'bbox': {'bmin': {'x': 0.2, 'y': 0.5}, 'bmax': {'x': 0.5, 'y': 0.7}}}]
-    })
+    data = defaultdict(list)
+    for ann in anns:
+        label_data = json.loads(ann.label_data)
+        label_data['identifier'] = ann.pk
+        data[ann.dataset_item.pk].append(label_data)
+
+    return JsonResponse(data)
 
 
 @api_view(['POST'])
@@ -164,26 +172,36 @@ def get_annotations(request, dataset_name):
 def add_annotation(request, dataset_name, image_identifier):
     # body is the JSON of a single annotation
     # {
-    #   'type': 2, 
+    #   'type': 2,
     #   'bbox': {'bmin': {'x': 0.2, 'y': 0.5}, 'bmax': {'x': 0.5, 'y': 0.7}}
     # }
-    annotation = json.loads(request.body)
+    annotation = request.body.decode('utf-8')
 
-    # TODO (Fait): create an annotation object and return it's identifier
+    dataset_item = DatasetItem.objects.get(pk=image_identifier)
+    ann = Annotation(
+        dataset_item=dataset_item,
+        label_function='user',
+        label_type='klabel',
+        label_data=annotation)
+    ann.save()
 
-    ann_identifier = '0'  # TODO: change me!
+    ann_identifier = ann.pk
     return HttpResponse(ann_identifier)
 
 
 @api_view(['DELETE'])
 @csrf_exempt
 def delete_annotation(request, dataset_name, image_identifier, ann_identifier):
-    # TODO (Fait): delete the annotation
-
-    return HttpResponse(status=status.HTTP_204_NO_CONTENT)
-
-    # if annotation doesn't exist:
-    #     return JsonResponse({'error': str(e)}, safe=False, status=status=status.HTTP_404_NOT_FOUND)
-    # if other error:
-    #     return JsonResponse({'error': str(e)}, safe=False, status=status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+    try:
+        Annotation.objects.get(pk=ann_identifier).delete()
+        return HttpResponse(status=status.HTTP_204_NO_CONTENT)
+    except ObjectDoesNotExist as e:
+        return JsonResponse(
+            {'error': str(e)},
+            safe=False,
+            status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return JsonResponse(
+            {'error': str(e)},
+            safe=False,
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR)
