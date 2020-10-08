@@ -130,6 +130,7 @@ dmypy.json
 
 # Django
 migrations/
+gcloud-credentials.json
 
 # React
 node_modules/
