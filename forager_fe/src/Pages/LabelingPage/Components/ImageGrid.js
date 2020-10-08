@@ -41,11 +41,10 @@ const ImageGrid = ({
   // useEffect(() => {
   //   const fetchImages = async () => {
   //     // setLoading(true)
-  //     const newImages = await fetch(imagesUrl).then(results => results.json());
+  //     const newImages = await fetch(imagesUrl, {credentials: 'include'}).then(results => results.json());
   //     setImages(newImages);
   //     // setLoading(false);
   //   }
-    
   //   fetchImages()
   // }, [imagesUrl, setImages])
 

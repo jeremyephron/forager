@@ -51,7 +51,7 @@ const SubmitButton = styled(Button)`
 class NewDatasetForm extends React.Component {
   constructor(props) {
     super(props);
-    this.createDatasetUrl = "http://127.0.0.1:8000/api/create_dataset";
+    this.createDatasetUrl = "https://127.0.0.1:8000/api/create_dataset";
     this.state = {loading: false};
 
     this.handleSubmit = this.handleSubmit.bind(this);
@@ -63,6 +63,7 @@ class NewDatasetForm extends React.Component {
     const data = {dataset: event.target.dataset.value, dirpath: event.target.dirpath.value};
     const response = await fetch(this.createDatasetUrl, {
       method: "POST",
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json'
       },

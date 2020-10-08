@@ -60,10 +60,12 @@ const Table = styled.table`
 
 const DatasetsTable = ({ datasets }) => {
   const history = useHistory();
-  const datasetInfoUrlBase = "http://127.0.0.1:8000/api/dataset/";
+  const datasetInfoUrlBase = "https://127.0.0.1:8000/api/dataset/";
 
   const fetchDatasetInfo = async ( datasetName ) => {
-    const datasetInfo = await fetch(datasetInfoUrlBase + datasetName).then(results => results.json());
+    const datasetInfo = await fetch(datasetInfoUrlBase + datasetName, {
+      credentials: 'include',
+    }).then(results => results.json());
     history.push('/label', {
       datasetName: datasetInfo.datasetName,
       paths: datasetInfo.paths,
@@ -123,7 +125,7 @@ const DatasetsTable = ({ datasets }) => {
 }
 
 const DatasetsTableView = () => {
-  const datasetsUrl = "http://127.0.0.1:8000/api/get_datasets";
+  const datasetsUrl = "https://127.0.0.1:8000/api/get_datasets";
   const history = useHistory();
   // const [loading, setLoading] = useState(false); // for future use
   const [datasets, setDatasets] = useState([]);
@@ -134,7 +136,9 @@ const DatasetsTableView = () => {
 
   const fetchDatasets = async () => {
     // setLoading(true);
-    const newDatasets = await fetch(datasetsUrl).then(results => results.json());
+    const newDatasets = await fetch(datasetsUrl, {
+      credentials: 'include'
+    }).then(results => results.json());
     setDatasets(newDatasets);
     // setLoading(false);
   }

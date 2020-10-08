@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',
     'rest_framework',
+    'sslserver',
     'forager_server_api.apps.ForagerServerApiConfig',
 ]
 
@@ -124,8 +125,12 @@ USE_TZ = True
 STATIC_URL = '/static/'
 
 # source of the frontend requests
+CORS_ALLOW_CREDENTIALS = True
 CORS_ORIGIN_WHITELIST = ['http://127.0.0.1:3000', 'http://localhost:3000']
 CSRF_TRUSTED_ORIGINS  = ['127.0.0.1', 'localhost']
+SESSION_COOKIE_SAMESITE = 'None' # as a string
+SESSION_COOKIE_SECURE = True
+
 
 EMBEDDING_SERVER_ADDRESS = 'http://0.0.0.0:5000'
 EMBEDDING_CLUSTER_NODES = 50
