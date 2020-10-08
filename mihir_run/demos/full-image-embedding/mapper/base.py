@@ -36,13 +36,22 @@ class ResNetBackboneMapper(Mapper):
         self.session = aiohttp.ClientSession()
         self.storage_client = Storage(session=self.session)
 
-    async def download_and_process_image(self, image_bucket, image_path, request_id):
+    async def download_and_process_image(
+        self, image_bucket, image_path, request_id, num_retries=4
+    ):
         # Download image
-        async with self.session.get(
-            f"https://storage.googleapis.com/{os.path.join(image_bucket, image_path)}"
-        ) as response:
-            assert response.status == 200
-            image_bytes = await response.read()
+        for i in range(num_retries):
+            try:
+                async with self.session.get(
+                    f"https://storage.googleapis.com/{os.path.join(image_bucket, image_path)}"
+                ) as response:
+                    assert response.status == 200
+                    image_bytes = await response.read()
+            except Exception:
+                if i < num_retries - 1:
+                    await aiohttp.sleep(2 ** i)
+                else:
+                    raise
 
         # Preprocess image
         with self.profiler(request_id, "compute_time"):
