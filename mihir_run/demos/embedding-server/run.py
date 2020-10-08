@@ -178,7 +178,7 @@ class LabeledIndex:
 
     def query(self, query_vector, num_results, num_probes):
         dists, inds = self.index.query(query_vector, num_results, n_probes=num_probes)
-        assert len(inds) == 1
+        assert len(inds) == 1 and len(dists) == 1
         return [(self.labels[i], dist) for i, dist in zip(inds[0], dists[0])]
 
 
@@ -215,6 +215,7 @@ async def query_index(request):
         n_retries=config.N_RETRIES,
     )
     query_vector_dict = await job.run_until_complete([query_image_path])
+    assert len(query_vector_dict) == 1
     query_vector = next(iter(query_vector_dict.values()))
 
     # Run query and return results
