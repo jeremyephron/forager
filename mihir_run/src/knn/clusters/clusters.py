@@ -38,10 +38,13 @@ class GKECluster:
         self._unassigned_port = EXTERNAL_START_PORT
 
         # Will be initialized later
-        self.cluster_id: Optional[str] = None
         self.session: Optional[aiohttp.ClientSession] = session
         self.auth_client: Optional[Token] = None
         self.cluster_endpoint: Optional[str] = None
+
+        # GKE cluster names must start with a letter!!
+        self.started = False
+        self.cluster_id = 'a' + str(uuid.uuid4())
 
     async def __aenter__(self):
         await self.start()
@@ -60,8 +63,6 @@ class GKECluster:
         self.session = self.session or aiohttp.ClientSession()
         self.auth_client = Token(session=self.session)
 
-        cluster_id = str(uuid.uuid4())
-
         endpoint = (
             "https://container.googleapis.com/v1/"
             f"projects/{self.project_id}/"
@@ -72,7 +73,7 @@ class GKECluster:
 
         request = {
             "cluster": {
-                "name": cluster_id,
+                "name": self.cluster_id,
                 "masterAuth": {"clientCertificateConfig": {}},
                 "network": network,
                 "addonsConfig": {
@@ -115,22 +116,28 @@ class GKECluster:
         headers = {"Authorization": f"Bearer {await self.auth_client.get()}"}
         for i in range(num_retries):
             async with self.session.post(
-                endpoint, json=request, headers=headers
+                    endpoint, json=request, headers=headers
             ) as response:
                 if response.status == 400 and (i + 1) < num_retries:  # retry
                     await asyncio.sleep(POLL_INTERVAL)
                     continue
 
+                if response.status != 200:
+                    print(response)
+                    print(await response.text())
                 assert response.status == 200, response.status
                 break
 
-        self.cluster_id = cluster_id
+        self.started = True
 
         # Poll for cluster endpoint
-        poll_endpoint = f"{endpoint}/{cluster_id}"
+        poll_endpoint = f"{endpoint}/{self.cluster_id}"
         while not self.cluster_endpoint:
             await asyncio.sleep(POLL_INTERVAL)
             async with self.session.get(poll_endpoint, headers=headers) as response:
+                if response.status != 200:
+                    print(response)
+                    print(await response.text())
                 assert response.status == 200, response.status
                 response_json = await response.json()
                 if response_json.get("status") == "RUNNING":
@@ -143,7 +150,7 @@ class GKECluster:
     async def scale(self, num_nodes: int):
         assert self.session
         assert self.auth_client
-        assert self.cluster_id  # cluster has been started
+        assert self.started  # cluster has been started
 
         endpoint = (
             "https://container.googleapis.com/v1/"
@@ -168,7 +175,7 @@ class GKECluster:
         assert self.session
         assert self.auth_client
 
-        if self.cluster_id:
+        if self.started:
             endpoint = (
                 "https://container.googleapis.com/v1/"
                 f"projects/{self.project_id}/"

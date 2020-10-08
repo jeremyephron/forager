@@ -125,3 +125,6 @@ STATIC_URL = '/static/'
 CORS_ORIGIN_WHITELIST = ['http://127.0.0.1:3000', 'http://localhost:3000'] # source of the frontend req.
 CSRF_TRUSTED_ORIGINS  = ['127.0.0.1', 'localhost'] # source of the frontend req.
 
+EMBEDDING_SERVER_ADDRESS = '0.0.0.0:5000'
+EMBEDDING_CLUSTER_NODES = 4
+EMBEDDING_MAPPERS = 4

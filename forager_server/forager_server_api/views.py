@@ -1,11 +1,15 @@
 import json
 import os
+import http.client
+import urllib
+import json
 
 from django.http import HttpResponse
 from google.cloud import storage
 from django.core.exceptions import ValidationError
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import  get_object_or_404, get_list_or_404
+from django.conf import settings
 
 from .models import Dataset, DatasetItem
 
@@ -49,7 +53,8 @@ def create_dataset(request):
 
         client = storage.Client()
         bucket = client.get_bucket(bucket_name)
-        all_blobs = client.list_blobs(bucket, prefix=bucket_path)
+        #all_blobs = client.list_blobs(bucket, prefix=bucket_path)
+        all_blobs = []
 
         dataset = Dataset(name=name, directory=data_directory)
         dataset.save()
@@ -65,6 +70,33 @@ def create_dataset(request):
 
         # Start background job to start processing dataset
         # TODO(fpoms): implement background job
+        embedding_conn = http.client.HTTPConnection(
+            settings.EMBEDDING_SERVER_ADDRESS)
+        if not 'cluster_id' in request.session:
+            params = urllib.parse.urlencode(
+                {'n_nodes': settings.EMBEDDING_CLUSTER_NODES})
+            headers = {"Content-type": "application/x-www-form-urlencoded",
+                       "Accept": "application/json"}
+            embedding_conn.request("POST", "/start_cluster", params, headers)
+            response = embedding_conn.getresponse()
+            print(response.status)
+            response_data = json.loads(response.read())
+            print(response_data)
+            request.session['cluster_id'] = response_data['cluster_id']
+        # Initiate embedding computation
+        print('session cluster id', request.session['cluster_id'])
+        params = urllib.parse.urlencode(
+            {'cluster_id': request.session['cluster_id'],
+             'n_mappers': settings.EMBEDDING_MAPPERS,
+             'bucket': bucket_name,
+             'paths': paths})
+        headers = {"Content-type": "application/x-www-form-urlencoded",
+                   "Accept": "application/json"}
+        embedding_conn.request("POST", "/start", params, headers)
+        response = embedding_conn.getresponse()
+        print(response.status)
+        response_data = response.read()
+        print(response_data)
 
         # return HttpResponse(json.dumps({'status': 'success'}), content_type='application/json')
         return get_dataset_info(None, name, dataset)
