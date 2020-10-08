@@ -70,34 +70,34 @@ def create_dataset(request):
         ]
         DatasetItem.objects.bulk_create(items)
 
-        # # Start background job to start processing dataset
-        # embedding_conn = http.client.HTTPConnection(
-        #     settings.EMBEDDING_SERVER_ADDRESS)
-        # if not 'cluster_id' in request.session:
-        #     params = urllib.parse.urlencode(
-        #         {'n_nodes': settings.EMBEDDING_CLUSTER_NODES})
-        #     headers = {"Content-type": "application/x-www-form-urlencoded",
-        #                "Accept": "application/json"}
-        #     embedding_conn.request("POST", "/start_cluster", params, headers)
-        #     response = embedding_conn.getresponse()
-        #     print(response.status)
-        #     response_data = json.loads(response.read())
-        #     print(response_data)
-        #     request.session['cluster_id'] = response_data['cluster_id']
-        # # Initiate embedding computation
-        # print('session cluster id', request.session['cluster_id'])
-        # params = urllib.parse.urlencode(
-        #     {'cluster_id': request.session['cluster_id'],
-        #      'n_mappers': settings.EMBEDDING_MAPPERS,
-        #      'bucket': bucket_name,
-        #      'paths': paths})
-        # headers = {"Content-type": "application/x-www-form-urlencoded",
-        #            "Accept": "application/json"}
-        # embedding_conn.request("POST", "/start", params, headers)
-        # response = embedding_conn.getresponse()
-        # print(response.status)
-        # response_data = response.read()
-        # print(response_data)
+        # Start background job to start processing dataset
+        embedding_conn = http.client.HTTPConnection(
+            settings.EMBEDDING_SERVER_ADDRESS)
+        if not 'cluster_id' in request.session:
+            params = urllib.parse.urlencode(
+                {'n_nodes': settings.EMBEDDING_CLUSTER_NODES})
+            headers = {"Content-type": "application/x-www-form-urlencoded",
+                       "Accept": "application/json"}
+            embedding_conn.request("POST", "/start_cluster", params, headers)
+            response = embedding_conn.getresponse()
+            print(response.status)
+            response_data = json.loads(response.read())
+            print(response_data)
+            request.session['cluster_id'] = response_data['cluster_id']
+        # Initiate embedding computation
+        print('session cluster id', request.session['cluster_id'])
+        params = urllib.parse.urlencode(
+            {'cluster_id': request.session['cluster_id'],
+             'n_mappers': settings.EMBEDDING_MAPPERS,
+             'bucket': bucket_name,
+             'paths': paths})
+        headers = {"Content-type": "application/x-www-form-urlencoded",
+                   "Accept": "application/json"}
+        embedding_conn.request("POST", "/start", params, headers)
+        response = embedding_conn.getresponse()
+        print(response.status)
+        response_data = response.read()
+        print(response_data)
 
         # return HttpResponse(json.dumps({'status': 'success'}), content_type='application/json')
         req = HttpRequest()
