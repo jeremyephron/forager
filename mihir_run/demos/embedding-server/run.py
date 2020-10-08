@@ -3,12 +3,10 @@ import functools
 import uuid
 
 import numpy as np
-
-from typing import Dict, Any
-
-from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sanic import Sanic
 import sanic.response as resp
+
+from typing import Dict, Any
 
 from knn.jobs import MapReduceJob, MapperSpec
 from knn.reducers import Reducer
@@ -36,26 +34,10 @@ class EmbeddingDictReducer(Reducer):
 
 # Start web server
 app = Sanic(__name__)
-app.static("/static", "./static")
 app.update_config({"RESPONSE_TIMEOUT": 10 * 60})  # 10 minutes
-jinja = Environment(
-    loader=FileSystemLoader("./templates"),
-    autoescape=select_autoescape(["html"]),
-)
 
 current_clusters = {}  # type: Dict[str, Dict[str, Any]]
 current_queries = {}  # type: Dict[str, MapReduceJob]
-
-
-@app.route("/")
-async def homepage(request):
-    template = jinja.get_template("index.html")
-    response = template.render(
-        n_concurrent_workers=config.N_CONCURRENT_WORKERS_DEFAULT,
-        demo_images=config.DEMO_IMAGES,
-        image_bucket=config.IMAGE_BUCKET,
-    )
-    return resp.html(response)
 
 
 @app.route("/start_cluster", methods=["POST"])
