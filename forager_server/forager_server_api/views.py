@@ -4,16 +4,19 @@ import http.client
 import urllib
 import json
 
-from django.http import HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from google.cloud import storage
 from django.core.exceptions import ValidationError
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import  get_object_or_404, get_list_or_404
 from django.conf import settings
+from rest_framework import status
+from rest_framework.decorators import api_view
 
 from .models import Dataset, DatasetItem
 
-
+@api_view(['GET'])
+@csrf_exempt
 def get_datasets(request):
     datasets = Dataset.objects.filter()
 
@@ -30,10 +33,10 @@ def get_datasets(request):
             'last_labeled': 'N/A'
         }
 
-    payload = json.dumps(list(map(serialize, datasets)))
-    return HttpResponse(payload, content_type='application/json')
+    return JsonResponse(list(map(serialize, datasets)), safe=False)
 
 
+@api_view(['POST'])
 @csrf_exempt
 def create_dataset(request):
     try:
@@ -53,8 +56,8 @@ def create_dataset(request):
 
         client = storage.Client()
         bucket = client.get_bucket(bucket_name)
-        #all_blobs = client.list_blobs(bucket, prefix=bucket_path)
-        all_blobs = []
+        all_blobs = client.list_blobs(bucket, prefix=bucket_path)
+        # all_blobs = []
 
         dataset = Dataset(name=name, directory=data_directory)
         dataset.save()
@@ -66,48 +69,51 @@ def create_dataset(request):
             for path in paths
         ]
         DatasetItem.objects.bulk_create(items)
-        print('SUCCESS')
 
-        # Start background job to start processing dataset
-        embedding_conn = http.client.HTTPConnection(
-            settings.EMBEDDING_SERVER_ADDRESS)
-        if not 'cluster_id' in request.session:
-            params = urllib.parse.urlencode(
-                {'n_nodes': settings.EMBEDDING_CLUSTER_NODES})
-            headers = {"Content-type": "application/x-www-form-urlencoded",
-                       "Accept": "application/json"}
-            embedding_conn.request("POST", "/start_cluster", params, headers)
-            response = embedding_conn.getresponse()
-            print(response.status)
-            response_data = json.loads(response.read())
-            print(response_data)
-            request.session['cluster_id'] = response_data['cluster_id']
-        # Initiate embedding computation
-        print('session cluster id', request.session['cluster_id'])
-        params = urllib.parse.urlencode(
-            {'cluster_id': request.session['cluster_id'],
-             'n_mappers': settings.EMBEDDING_MAPPERS,
-             'bucket': bucket_name,
-             'paths': paths})
-        headers = {"Content-type": "application/x-www-form-urlencoded",
-                   "Accept": "application/json"}
-        embedding_conn.request("POST", "/start", params, headers)
-        response = embedding_conn.getresponse()
-        print(response.status)
-        response_data = response.read()
-        print(response_data)
+        # # Start background job to start processing dataset
+        # embedding_conn = http.client.HTTPConnection(
+        #     settings.EMBEDDING_SERVER_ADDRESS)
+        # if not 'cluster_id' in request.session:
+        #     params = urllib.parse.urlencode(
+        #         {'n_nodes': settings.EMBEDDING_CLUSTER_NODES})
+        #     headers = {"Content-type": "application/x-www-form-urlencoded",
+        #                "Accept": "application/json"}
+        #     embedding_conn.request("POST", "/start_cluster", params, headers)
+        #     response = embedding_conn.getresponse()
+        #     print(response.status)
+        #     response_data = json.loads(response.read())
+        #     print(response_data)
+        #     request.session['cluster_id'] = response_data['cluster_id']
+        # # Initiate embedding computation
+        # print('session cluster id', request.session['cluster_id'])
+        # params = urllib.parse.urlencode(
+        #     {'cluster_id': request.session['cluster_id'],
+        #      'n_mappers': settings.EMBEDDING_MAPPERS,
+        #      'bucket': bucket_name,
+        #      'paths': paths})
+        # headers = {"Content-type": "application/x-www-form-urlencoded",
+        #            "Accept": "application/json"}
+        # embedding_conn.request("POST", "/start", params, headers)
+        # response = embedding_conn.getresponse()
+        # print(response.status)
+        # response_data = response.read()
+        # print(response_data)
 
         # return HttpResponse(json.dumps({'status': 'success'}), content_type='application/json')
-        return get_dataset_info(None, name, dataset)
+        req = HttpRequest()
+        req.method = 'GET'
+        return get_dataset_info(req, name, dataset)
     except ValidationError as e:
         # Redisplay the question voting form.
-        return HttpResponse(json.dumps({
+        return JsonResponse({
             'status': 'failure',
             'message': ('Something went wrong. Make sure the directory path is '
                        'valid.')
-        }), content_type='application/json')
+        })
 
 
+@api_view(['GET'])
+@csrf_exempt
 def get_dataset_info(request, dataset_name, dataset=None):
     if not dataset:
         dataset = get_object_or_404(Dataset, name=dataset_name)
@@ -118,14 +124,16 @@ def get_dataset_info(request, dataset_name, dataset=None):
     dataset_item_paths = [path_template.format(di.path) for di in dataset_items]
     dataset_item_identifiers = [di.identifier for di in dataset_items]
 
-    return HttpResponse(json.dumps({
+    return JsonResponse({
         'status': 'success',
         'datasetName': dataset.name,
         'paths': dataset_item_paths,
         'identifiers': dataset_item_identifiers
-    }), content_type='application/json')
+    })
 
 
+@api_view(['GET'])
+@csrf_exempt
 def get_results(request, dataset_name):
     # Placeholder
     dataset = get_object_or_404(Dataset, name=dataset_name)
@@ -135,6 +143,47 @@ def get_results(request, dataset_name):
     dataset_item_paths = [path_template.format(di.path) for di in dataset_items]
     dataset_item_identifiers = [di.identifier for di in dataset_items]
 
-    return HttpResponse(json.dumps([
+    return JsonResponse([
         {'path': p, 'idx': i} for i, p in list(enumerate(dataset_item_paths))[50:100]
-    ]), content_type='application/json')
+    ], safe=False)
+
+
+@api_view(['GET'])
+@csrf_exempt
+def get_annotations(request, dataset_name):
+    image_identifiers = request.GET['identifiers'].split(',')
+    print(image_identifiers)
+
+    return JsonResponse({
+        '000000000009': [{'type': 2, 'bbox': {'bmin': {'x': 0.2, 'y': 0.5}, 'bmax': {'x': 0.5, 'y': 0.7}}}]
+    })
+
+
+@api_view(['POST'])
+@csrf_exempt
+def add_annotation(request, dataset_name, image_identifier):
+    # body is the JSON of a single annotation
+    # {
+    #   'type': 2, 
+    #   'bbox': {'bmin': {'x': 0.2, 'y': 0.5}, 'bmax': {'x': 0.5, 'y': 0.7}}
+    # }
+    annotation = json.loads(request.body)
+
+    # TODO (Fait): create an annotation object and return it's identifier
+
+    ann_identifier = '0'  # TODO: change me!
+    return HttpResponse(ann_identifier)
+
+
+@api_view(['DELETE'])
+@csrf_exempt
+def delete_annotation(request, dataset_name, image_identifier, ann_identifier):
+    # TODO (Fait): delete the annotation
+
+    return HttpResponse(status=status.HTTP_204_NO_CONTENT)
+
+    # if annotation doesn't exist:
+    #     return JsonResponse({'error': str(e)}, safe=False, status=status=status.HTTP_404_NOT_FOUND)
+    # if other error:
+    #     return JsonResponse({'error': str(e)}, safe=False, status=status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+

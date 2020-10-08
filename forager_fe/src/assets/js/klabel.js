@@ -29,28 +29,33 @@ export class Annotation {
 	}
 }
 
-class PerFrameAnnotation extends Annotation {
+export class PerFrameAnnotation extends Annotation {
 	constructor(value) {
 		super(Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY);
 		this.value = value;
 	}
 }
 
-class PointAnnotation extends Annotation {
+export class PointAnnotation extends Annotation {
 	constructor(pt) {
 		super(Annotation.ANNOTATION_MODE_POINT);
 		this.pt = pt;
 	}
 }
 
-class TwoPointBoxAnnotation extends Annotation {
+export class TwoPointBoxAnnotation extends Annotation {
 	constructor(corner_pts) {
 		super(Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX);
 		this.bbox = BBox2D.two_points_to_bbox(corner_pts);
 	}
+
+	static parse(obj) {
+		obj.bbox = Object.setPrototypeOf(obj.bbox, BBox2D.prototype);
+		return Object.setPrototypeOf(obj, TwoPointBoxAnnotation.prototype);
+	}
 }
 
-class ExtremeBoxAnnnotation extends Annotation {
+export class ExtremeBoxAnnnotation extends Annotation {
 	constructor(extreme_points) {
 		super(Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX);
 		this.bbox = BBox2D.extreme_points_to_bbox(extreme_points);
@@ -90,6 +95,8 @@ export class ImageLabeler {
 		// event callbacks
 		this.frame_changed_callback = null;
 		this.annotation_changed_callback = null;
+		this.annotation_added_callback = null;
+		this.annotation_deleted_callback = null;
 
 		// state for UI related to zooming
 		this.zoom_key_down = false;
@@ -298,6 +305,8 @@ export class ImageLabeler {
 	add_annotation(ann) {
 		var cur_frame = this.get_current_frame()
 		cur_frame.data.annotations.push(ann);
+		if (this.annotation_added_callback !== null)
+			this.annotation_added_callback(cur_frame, ann);
 		if (this.annotation_changed_callback !== null)
 			this.annotation_changed_callback();
 	}
@@ -319,9 +328,12 @@ export class ImageLabeler {
 			var selected = this.get_selected_annotation();
 
 			if (selected !== -1) {
+				const ann = cur_frame.data.annotations[selected];
 				cur_frame.data.annotations.splice(selected, 1);
 				//console.log("KLabeler: Deleted box " + selected);
 
+				if (this.annotation_deleted_callback !== null)
+					this.annotation_deleted_callback(cur_frame, ann)
 				if (this.annotation_changed_callback !== null)
 					this.annotation_changed_callback();
 			}
@@ -971,6 +983,12 @@ export class ImageLabeler {
 		}
 
 		return results;
+	}
+
+	get_current_frame_data() {
+		this.update_labeling_time();
+
+		return this.get_current_frame().data
 	}
 
 	init(main_canvas_el) {
