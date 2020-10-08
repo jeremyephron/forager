@@ -67,6 +67,10 @@ def create_dataset(request):
 
         # Create all the DatasetItems for this dataset
         paths = [blob.name for blob in all_blobs]
+        paths = [path for path in paths
+                 if (path.endswith('.jpg') or
+                     path.endswith('.jpeg') or
+                     path.endswith('.png'))]
         items = [
             DatasetItem(dataset=dataset,
                         identifier=os.path.basename(path).split('.')[0],
