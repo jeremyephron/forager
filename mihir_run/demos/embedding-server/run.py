@@ -1,6 +1,7 @@
 import asyncio
 import functools
 import uuid
+import json
 
 import numpy as np
 
@@ -8,7 +9,7 @@ from typing import Dict
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sanic import Sanic
-from sanic.response import json, html, text
+import sanic.response as resp
 
 from knn.jobs import MapReduceJob, MapperSpec
 from knn.reducers import Reducer
@@ -55,7 +56,7 @@ async def homepage(request):
         demo_images=config.DEMO_IMAGES,
         image_bucket=config.IMAGE_BUCKET,
     )
-    return html(response)
+    return resp.html(response)
 
 
 @app.route("/start_cluster", methods=["POST"])
@@ -83,7 +84,7 @@ async def start_cluster(request):
         'service_url': None
     }
 
-    return json({"cluster_id": gke_cluster.cluster_id})
+    return resp.json({"cluster_id": gke_cluster.cluster_id})
 
 
 @app.route("/stop_cluster", methods=["POST"])
@@ -94,7 +95,7 @@ async def stop_cluster(request):
     await gke_cluster.stop()
     del current_clusters[cluster_id]
 
-    return text("", status=204)
+    return resp.text("", status=204)
 
 
 @app.route("/start", methods=["POST"])
@@ -102,7 +103,8 @@ async def start(request):
     cluster_id = request.form["cluster_id"][0]
     n_mappers = int(request.form["n_mappers"][0])
     bucket = request.form["bucket"][0]
-    paths = request.form["paths"][0]
+    paths = [x.strip()[1:-1]
+             for x in request.form["paths"][0][1:-1].split(',')]
 
     cluster_data = current_clusters[cluster_id]
     cluster = cluster_data['cluster']
@@ -133,7 +135,7 @@ async def start(request):
 
     await job.start(iterable, cleanup_func)
 
-    return json({"query_id": query_id})
+    return resp.json({"query_id": query_id})
 
     # dataset = FileListIterator(config.IMAGE_LIST_PATH)
     # cleanup_func = functools.partial(cleanup_query, query_id=query_id, dataset=dataset)
@@ -149,14 +151,14 @@ async def get_results(request):
 
     results = query_job.job_result
     results["result"] = [r.to_dict() for r in results["result"]]  # make serializable
-    return json(results)
+    return resp.json(results)
 
 
 @app.route("/stop", methods=["PUT"])
 async def stop(request):
     query_id = request.json["query_id"]
     await current_queries.pop(query_id).stop()
-    return text("", status=204)
+    return resp.text("", status=204)
 
 
 def cleanup_query(_, query_id: str, dataset: FileListIterator):
@@ -212,7 +214,7 @@ async def create_index(request):
         vectors_per_index=config.INDEX_SUBINDEX_SIZE,
         use_gpu=config.INDEX_USE_GPU,
     )
-    return json({"index_id": index_id})
+    return resp.json({"index_id": index_id})
 
 
 @app.route("/query_index", methods=["POST"])
@@ -237,14 +239,14 @@ async def query_index(request):
     query_results = current_indexes[index_id].query(
         query_vector, num_results, config.INDEX_NUM_QUERY_PROBES
     )
-    return json(query_results)
+    return resp.json(query_results)
 
 
 @app.route("/delete_index", methods=["POST"])
 async def delete_index(request):
     index_id = request.form["index_id"]
     current_indexes.pop(index_id).delete()
-    return text("", status=204)
+    return resp.text("", status=204)
 
 
 if __name__ == "__main__":

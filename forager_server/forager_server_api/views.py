@@ -3,6 +3,8 @@ import os
 import http.client
 import urllib
 import json
+import time
+import requests
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from google.cloud import storage
@@ -77,29 +79,41 @@ def create_dataset(request):
         embedding_conn = http.client.HTTPConnection(
             settings.EMBEDDING_SERVER_ADDRESS)
         if not 'cluster_id' in request.session:
-            params = urllib.parse.urlencode(
-                {'n_nodes': settings.EMBEDDING_CLUSTER_NODES})
             headers = {"Content-type": "application/x-www-form-urlencoded",
                        "Accept": "application/json"}
-            embedding_conn.request("POST", "/start_cluster", params, headers)
-            response = embedding_conn.getresponse()
-            print(response.status)
-            response_data = json.loads(response.read())
-            print(response_data)
+            params = {'n_nodes': settings.EMBEDDING_CLUSTER_NODES}
+            r = requests.post(
+                settings.EMBEDDING_SERVER_ADDRESS + '/start_cluster',
+                data=params, headers=headers)
+            response_data = r.json()
             request.session['cluster_id'] = response_data['cluster_id']
         # Initiate embedding computation
-        params = urllib.parse.urlencode(
-            {'cluster_id': request.session['cluster_id'],
-             'n_mappers': settings.EMBEDDING_MAPPERS,
-             'bucket': bucket_name,
-             'paths': paths})
         headers = {"Content-type": "application/x-www-form-urlencoded",
                    "Accept": "application/json"}
-        embedding_conn.request("POST", "/start", params, headers)
-        response = embedding_conn.getresponse()
-        print(response.status)
-        response_data = response.read()
-        print(response_data)
+        params = {
+            'cluster_id': request.session['cluster_id'],
+            'n_mappers': settings.EMBEDDING_MAPPERS,
+            'bucket': bucket_name,
+            'paths': paths}
+        r = requests.post(
+            settings.EMBEDDING_SERVER_ADDRESS + '/start',
+            data=params, headers=headers)
+        response_data = r.json()
+
+        query_id = response_data['query_id']
+
+        # Track status of the embedding computation
+        while True:
+            params = {'query_id': query_id}
+            r = requests.get(
+                settings.EMBEDDING_SERVER_ADDRESS + '/results',
+                params=params
+            )
+            response_data = r.json()
+            print(response_data)
+            if response_data['progress']['finished']:
+                break
+            time.sleep(5)
 
         # return HttpResponse(json.dumps({'status': 'success'}), content_type='application/json')
         req = HttpRequest()
