@@ -89,13 +89,6 @@ class InteractiveIndex:
 
         self.multi_id = self.cfg['multi_id']
 
-        # TODO: get from index_str
-        self.requires_training = True
-        self.is_trained = False
-
-        self.n_indexes = 0
-        self.n_vectors = 0
-
         self.create(self.index_str)
     
     def create(self, index_str: str) -> None:
@@ -109,6 +102,12 @@ class InteractiveIndex:
 
         index = faiss.index_factory(self.d, index_str)
         faiss.write_index(index, str(self.tempdir/self.TRAINED_INDEX_NAME))
+
+        # TODO: get from index_str
+        self.requires_training = True
+        self.is_trained = False
+        self.n_indexes = 0
+        self.n_vectors = 0
 
     def train(self, xt_src: Union[str, np.ndarray, List[float]]) -> None:
         """
@@ -263,6 +262,17 @@ class InteractiveIndex:
             inds = self._invert_cantor_pairing_vec(inds)
 
         return dists, inds
+
+    def cleanup() -> None:
+        """Deletes all persistent files associated with this index."""
+
+        (self.tempdir/self.TRAINED_INDEX_NAME).unlink(missing_ok=True)
+        (self.tempdir/self.MERGED_INDEX_NAME).unlink(missing_ok=True)
+        (self.tempdir/self.MERGED_INDEX_DATA_NAME).unlink(missing_ok=True)
+        for shard_num in range(self.n_indexes):
+            (self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num)).unlink(
+                missing_ok=True
+            )
 
     #####################
     # Private Functions #
