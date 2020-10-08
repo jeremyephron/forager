@@ -5,17 +5,17 @@ import styled from "styled-components";
 import { colors } from "../../Constants";
 import { MainCanvas, ImageColumn } from "./Components";
 import { ImageLabeler, ImageData, Annotation } from "../../assets/js/klabel.js";
+import { Button, Select } from "../../Components";
 
 const Container = styled.div`
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   background-color: white;
 `;
 
 const SubContainer = styled.div`
-  flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   background-color: white;
   margin-left: 3vw;
   margin-top: 3vh;
@@ -24,7 +24,7 @@ const SubContainer = styled.div`
 const ImageColumnContainer = styled.div`
   width: 100%;
   height: 75vh;
-  margin-top: 9vh;
+  margin-top: 2vh;
   margin-right: 3vw;
   margin-left: 3vw;
   border-radius: 5px;
@@ -34,6 +34,13 @@ const TitleHeader = styled.h1`
   font-family: "AirBnbCereal-Medium";
   font-size: 24px;
   color: ${colors.primary};
+  padding-right: 20px;
+`;
+
+const OptionsSelect = styled(Select)`
+  font-size: 13px;
+  height: 28px;
+  padding: 0 5px;
 `;
 
 function LabelingPage() {
@@ -45,6 +52,9 @@ function LabelingPage() {
   /* Klabel stuff */
   const labeler = new ImageLabeler();
   const main_canvas_id = 'main_canvas';
+
+  // Annotating vs Exploring
+  var forager_mode = 'forager_annotate';
 
   const image_data = [];
   for (let i=0; i<paths.length; i++) {
@@ -110,6 +120,18 @@ function LabelingPage() {
     const main_canvas = document.getElementById(main_canvas_id);
     labeler.init(main_canvas);
 
+    const handle_forager_change = () => {
+      const select = document.getElementById("select_forager_mode");
+      const klabeldiv = document.getElementById("klabel_wrapper");
+      if (select.value.localeCompare("forager_annotate") === 0) {
+        forager_mode = "forager_annotate"
+        klabeldiv.style.display = "flex"
+      } else if (select.value.localeCompare("forager_explore") === 0) {
+        forager_mode = "forager_explore"
+        klabeldiv.style.display = "none"
+      } 
+    }
+
     labeler.load_image_stack(image_data);
 
     labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX);
@@ -134,8 +156,11 @@ function LabelingPage() {
     button = document.getElementById("get_annotations");
     button.onclick = handle_get_annotations;
 
-    const select = document.getElementById("select_annotation_mode")
+    let select = document.getElementById("select_annotation_mode")
     select.onchange = handle_mode_change;
+
+    select = document.getElementById("select_forager_mode")
+    select.onchange = handle_forager_change;
 
     window.addEventListener("keydown", function(e) {
       e.preventDefault();
@@ -151,12 +176,18 @@ function LabelingPage() {
   return (
     <Container>
       <SubContainer>
-      <TitleHeader>Labeling: {datasetName}</TitleHeader>
-      <MainCanvas />
+        <TitleHeader>Labeling: {datasetName}</TitleHeader>
+        <OptionsSelect alt="true" id="select_forager_mode">
+          <option value="forager_annotate">Annotate</option>
+          <option value="forager_explore">Explore</option>
+        </OptionsSelect>
       </SubContainer>
-      <ImageColumnContainer>
-        <ImageColumn datasetName={datasetName} onImageClick={onImageClick} />
-      </ImageColumnContainer>
+      <SubContainer>
+        <MainCanvas/>
+        <ImageColumnContainer>
+          <ImageColumn datasetName={datasetName} onImageClick={onImageClick} />
+        </ImageColumnContainer>
+      </SubContainer>
     </Container>
   );
 };

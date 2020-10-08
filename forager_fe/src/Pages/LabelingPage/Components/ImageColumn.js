@@ -3,7 +3,8 @@ import styled from "styled-components";
 
 const Image = styled.img`
   margin-top: 10px;
-  width: 100%;
+  width: 150px;
+  object-fit: contain;
   box-shadow: 0 2px 3px -1px rgba(0,0,0,0.5);
   cursor: pointer;
   transition: background 0.2s ease, opacity 0.2s ease;
@@ -15,9 +16,9 @@ const Image = styled.img`
 `;
 
 const Column = styled.div`
-  width: 200px;
+  width: 100%;
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   height: 100%;
   overflow-y: scroll;
   box-shadow: 0 2px 3px -3px rgba(0,0,0,0.5);
