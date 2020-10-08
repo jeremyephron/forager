@@ -4,7 +4,6 @@ import styled from "styled-components";
 const Image = styled.img`
   margin-top: 10px;
   margin-right: 10px;
-  width: 150px;
   object-fit: contain;
   box-shadow: 0 2px 3px -1px rgba(0,0,0,0.5);
   cursor: pointer;
@@ -31,22 +30,24 @@ const Grid = styled.div`
 
 const ImageGrid = ({
   datasetName,
-  onImageClick
+  onImageClick,
+  imagePaths,
+  imageHeight
 }) => {
-  const imagesUrl = "http://127.0.0.1:8000/api/get_results/" + datasetName;
+  // const imagesUrl = "http://127.0.0.1:8000/api/get_results/" + datasetName;
   // const [loading, setLoading] = useState(false);
-  const [images, setImages] = useState([]);
+  // const [images, setImages] = useState(images);
 
-  useEffect(() => {
-    const fetchImages = async () => {
-      // setLoading(true)
-      const newImages = await fetch(imagesUrl).then(results => results.json());
-      setImages(newImages);
-      // setLoading(false);
-    }
+  // useEffect(() => {
+  //   const fetchImages = async () => {
+  //     // setLoading(true)
+  //     const newImages = await fetch(imagesUrl).then(results => results.json());
+  //     setImages(newImages);
+  //     // setLoading(false);
+  //   }
     
-    fetchImages()
-  }, [imagesUrl, setImages])
+  //   fetchImages()
+  // }, [imagesUrl, setImages])
 
   // if (loading) {
   //     // return spinner
@@ -54,7 +55,7 @@ const ImageGrid = ({
 
   return (
     <Grid>
-      {images.map(img => <Image key={img.idx} src={img.path} onClick={() => onImageClick(img.idx)} />)}
+      {imagePaths.map((path, idx) => <Image key={idx} src={path} onClick={() => onImageClick(idx)} style={{ height: imageHeight + 'px' }}/>)}
     </Grid>
   );
 }

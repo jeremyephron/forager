@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'corsheaders',
+    'rest_framework',
     'forager_server_api.apps.ForagerServerApiConfig',
 ]
 
@@ -126,6 +127,6 @@ STATIC_URL = '/static/'
 CORS_ORIGIN_WHITELIST = ['http://127.0.0.1:3000', 'http://localhost:3000']
 CSRF_TRUSTED_ORIGINS  = ['127.0.0.1', 'localhost']
 
-EMBEDDING_SERVER_ADDRESS = '0.0.0.0:5000'
-EMBEDDING_CLUSTER_NODES = 4
-EMBEDDING_MAPPERS = 4
+EMBEDDING_SERVER_ADDRESS = 'http://0.0.0.0:5000'
+EMBEDDING_CLUSTER_NODES = 50
+EMBEDDING_MAPPERS = 50

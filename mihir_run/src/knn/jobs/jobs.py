@@ -237,7 +237,8 @@ class MapReduceJob:
                     if response.status == 200:
                         result = await response.json()
                         break
-            except aiohttp.ClientConnectionError:
+            except aiohttp.ClientConnectionError as e:
+                print(e)
                 break
 
         return chunk, result, end_time - start_time

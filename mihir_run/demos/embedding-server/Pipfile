@@ -8,9 +8,7 @@ verify_ssl = true
 [packages]
 knn = {editable = true,path = "./../.."}
 interactive_index = {editable = true,path = "./../../../interactive_index"}
-jupyter = "*"
-tqdm = "*"
 sanic = "*"
 
 [requires]
-python_version = "3.8"
+python_version = "3.7"

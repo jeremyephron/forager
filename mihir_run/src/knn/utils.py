@@ -12,7 +12,9 @@ JSONType = Union[str, int, float, bool, None, Dict[str, Any], List[Any]]
 
 
 class FileListIterator:
-    def __init__(self, list_path: str) -> None:
+    def __init__(self, list_path: str, map_fn=lambda line: line) -> None:
+        self.map_fn = map_fn
+
         self._list = open(list_path, "r")
         self._total = 0
         for line in self._list:
@@ -34,7 +36,7 @@ class FileListIterator:
         elem = self._list.readline().strip()
         if not elem:
             raise StopIteration
-        return elem
+        return self.map_fn(elem)
 
 
 def limited_as_completed(coros, limit):

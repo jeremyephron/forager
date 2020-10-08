@@ -16,6 +16,10 @@ from interactive_index.utils import (merge_on_disk,
                                      cantor_pairing,
                                      invert_cantor_pairing)
 
+# Handle faiss compiled without GPU support
+if not hasattr(faiss, 'GpuMultipleClonerOptions'):
+    faiss.GpuMultipleClonerOptions = List
+
 
 class InteractiveIndex:
     """

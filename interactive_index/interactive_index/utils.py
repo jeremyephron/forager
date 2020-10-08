@@ -11,6 +11,9 @@ from typing import List, Optional, Tuple
 
 import faiss
 
+# Handle faiss compiled without GPU support
+if not hasattr(faiss, 'GpuMultipleClonerOptions'):
+    faiss.GpuMultipleClonerOptions = List
 
 def merge_on_disk(
 	trained_index: faiss.Index,
