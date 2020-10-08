@@ -1,6 +1,6 @@
 GCP_PROJECT = "visualdb-1046"
 GCP_ZONE = "us-central1-a"
-GCP_MACHINE_TYPE = "n2-highcpu-2"
+GCP_MACHINE_TYPE = "n2-highcpu-4"
 
 OUTPUT_FILENAME = "lvis-embeddings.npy"
 MAPPER_CONTAINER = "gcr.io/visualdb-1046/mihir-demo-full-image-embedding"

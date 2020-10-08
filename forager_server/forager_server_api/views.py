@@ -110,7 +110,11 @@ def create_dataset(request):
                 params=params
             )
             response_data = r.json()
-            print(response_data)
+            if 'progress' in response_data:
+                print('{:d}/{:d} ({:d} skipped)'.format(
+                    response_data['progress']['n_processed'],
+                    response_data['progress']['n_total'],
+                    response_data['progress']['n_skipped']))
             if response_data['progress']['finished']:
                 break
             time.sleep(5)

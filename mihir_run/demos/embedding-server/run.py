@@ -25,7 +25,12 @@ class EmbeddingDictReducer(Reducer):
         self.embeddings = {}
 
     def handle_result(self, input, output):
-        self.embeddings[input] = base64_to_numpy(output[self.embedding_layer])
+        try:
+            self.embeddings[input['image']] = base64_to_numpy(output[self.embedding_layer])
+        except Exception as e:
+            print(e)
+            raise e
+
 
     @property
     def result(self):
@@ -69,7 +74,7 @@ async def start_cluster(request):
 
 @app.route("/stop_cluster", methods=["POST"])
 async def stop_cluster(request):
-    cluster_id = request.form["cluster_id"][0]
+    cluster_id = request.form["cluster_id"]
 
     gke_cluster = current_clusters[cluster_id]["cluster"]
     await gke_cluster.stop()
@@ -82,7 +87,7 @@ async def stop_cluster(request):
 async def start(request):
     cluster_id = request.form["cluster_id"][0]
     bucket = request.form["bucket"][0]
-    paths = [x.strip()[1:-1] for x in request.form["paths"][0][1:-1].split(",")]
+    paths = request.form["paths"]
 
     cluster_data = current_clusters[cluster_id]
     service_url = cluster_data["service_url"]
@@ -123,8 +128,10 @@ async def get_results(request):
         current_queries.pop(query_id)
 
     results = query_job.job_result
-    results["result"] = [r.to_dict() for r in results["result"]]  # make serializable
-    return resp.json(results)
+    return resp.json({
+        'performance': results['performance'],
+        'progress': results['progress'],
+    })
 
 
 @app.route("/stop", methods=["PUT"])
@@ -206,7 +213,8 @@ async def query_index(request):
         n_retries=config.N_RETRIES,
     )
     query_vector_dict = await job.run_until_complete(
-        [{"image": query_image_path, "patch": query_patch}]
+        [{"image": query_image_path,
+          "patch": query_patch}]
     )
     assert len(query_vector_dict) == 1
     query_vector = next(iter(query_vector_dict.values()))
