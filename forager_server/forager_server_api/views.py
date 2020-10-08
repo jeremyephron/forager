@@ -69,7 +69,6 @@ def create_dataset(request):
         print('SUCCESS')
 
         # Start background job to start processing dataset
-        # TODO(fpoms): implement background job
         embedding_conn = http.client.HTTPConnection(
             settings.EMBEDDING_SERVER_ADDRESS)
         if not 'cluster_id' in request.session:

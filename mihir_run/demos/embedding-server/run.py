@@ -29,6 +29,7 @@ jinja = Environment(
 
 current_clusters = {}  # type: Dict[str, GKECluster]
 current_queries = {}  # type: Dict[str, MapReduceJob]
+current_indices = {}  # type: Dict[str, InteractiveIndex]
 
 
 @app.route("/")
@@ -54,6 +55,12 @@ async def start_cluster(request):
 
     await gke_cluster.start()
     current_clusters[gke_cluster.cluster_id] = gke_cluster
+
+    # Create deployment
+    deployment_id, service_url = await gke_cluster.create_deployment(
+        container=config.MAPPER_CONTAINER,
+        num_replicas=n_nodes
+    )
 
     return json({"cluster_id": gke_cluster.cluster_id})
 
@@ -81,10 +88,9 @@ async def start(request):
 
     # Get template
     job = MapReduceJob(
-        config.MAPPER_CONTAINER,
+        MapperSpec(url=service_url),
         EmbeddingDictReducer(),
         {"input_bucket": bucket},
-        n_mappers=n_mappers,
         n_retries=N_RETRIES,
     )
 
@@ -96,7 +102,7 @@ async def start(request):
 
     cleanup_func = functools.partial(cleanup_query, query_id=query_id, dataset=iterable)
 
-    await job.start(cluster, iterable, iterable.close)
+    await job.start(iterable, iterable.close)
 
     return json({"query_id": query_id})
 
@@ -121,6 +127,31 @@ async def get_results(request):
 async def stop(request):
     query_id = request.json["query_id"]
     await current_queries.pop(query_id).stop()
+    return text("", status=204)
+
+# Index
+@app.route("/create_index", methods=["POST"])
+async def create_index(request):
+    query_id = request.json["query_id"]
+    #await current_queries.pop(query_id).stop()
+    index_id = None
+    return json({'index_id': index_id})
+
+
+@app.route("/query_index")
+async def query_index(request):
+    index_id = request.json["index_id"]
+    query_paths = request.json["query_paths"]
+    num_results = request.json["num_results"]
+    #await current_queries.pop(query_id).stop()
+    query_results = {}
+    return json(query_results)
+
+
+@app.route("/delete_index")
+async def delete_index(request, methods=["POST"]):
+    index_id = request.json["index_id"]
+    #await current_queries.pop(query_id).stop()
     return text("", status=204)
 
 
