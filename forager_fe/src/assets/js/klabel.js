@@ -98,6 +98,7 @@ export class ImageLabeler {
 		// this structure holds the annotation data
 		this.current_frame_index = 0;
 		this.frames = [];
+		this.selected_frames = [];
 
 		// annotation state
 		this.annotation_mode = Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX;

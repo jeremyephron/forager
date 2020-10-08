@@ -4,7 +4,7 @@ import styled from "styled-components";
 const Image = styled.img`
   margin-top: 10px;
   margin-right: 10px;
-  width: 150px;
+  height: 150px;
   object-fit: contain;
   box-shadow: 0 2px 3px -1px rgba(0,0,0,0.5);
   cursor: pointer;
@@ -23,10 +23,6 @@ const Grid = styled.div`
   height: 100%;
   overflow-y: scroll;
   justify-content: space-evenly;
-
-  img:first-child {
-      margin-top: 0;
-  }
 `;
 
 const ImageGrid = ({
@@ -48,15 +44,9 @@ const ImageGrid = ({
     fetchImages()
   }, [imagesUrl, setImages])
 
-  // if (loading) {
-  //     // return spinner
-  // }
-
-  return (
-    <Grid>
-      {images.map(img => <Image key={img.idx} src={img.path} onClick={() => onImageClick(img.idx)} />)}
-    </Grid>
-  );
+  return (<Grid>
+    {images.map(img => <Image key={img.idx} className="grid-item" src={img.path} onClick={() => onImageClick(img.idx)} />)}
+  </Grid>);
 }
 
 export default ImageGrid;

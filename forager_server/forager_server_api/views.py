@@ -136,5 +136,5 @@ def get_results(request, dataset_name):
     dataset_item_identifiers = [di.identifier for di in dataset_items]
 
     return HttpResponse(json.dumps([
-        {'path': p, 'idx': i} for i, p in list(enumerate(dataset_item_paths))[50:100]
+        {'path': p, 'idx': i} for i, p in list(enumerate(dataset_item_paths))[:100]
     ]), content_type='application/json')
