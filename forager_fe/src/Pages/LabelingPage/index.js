@@ -53,10 +53,10 @@ function LabelingPage() {
   const [paths, setPaths] = useState(location.state.paths);
   const [identifiers, setIdentifiers] = useState(location.state.identifiers);
 
-  const getAnnotationsUrl = "http://127.0.0.1:8000/api/get_annotations/" + datasetName;
-  const addAnnotationUrl = "http://127.0.0.1:8000/api/add_annotation/" + datasetName;
-  const deleteAnnotationUrl = "http://127.0.0.1:8000/api/delete_annotation/" + datasetName;
-  const lookupKnnUrl = "http://127.0.0.1:8000/api/lookup_knn/" + datasetName;
+  const getAnnotationsUrl = "https://127.0.0.1:8000/api/get_annotations/" + datasetName;
+  const addAnnotationUrl = "https://127.0.0.1:8000/api/add_annotation/" + datasetName;
+  const deleteAnnotationUrl = "https://127.0.0.1:8000/api/delete_annotation/" + datasetName;
+  const lookupKnnUrl = "https://127.0.0.1:8000/api/lookup_knn/" + datasetName;
 
   /* Klabel stuff */
   const labeler = useMemo(() => new ImageLabeler(), []);
@@ -122,6 +122,7 @@ function LabelingPage() {
       const identifer = await fetch(endpoint, {
         method: "POST",
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(annotation)
       })
       .then(response => response.text());
@@ -173,7 +174,9 @@ function LabelingPage() {
     const handle_annotation_deleted = async (currFrame, annotation) => {
       const endpoint = deleteAnnotationUrl + '/' + currFrame.data.identifier + '/' + annotation.identifier;
 
-      await fetch(endpoint, { method: "DELETE" }).then(results => {
+      await fetch(endpoint, { method: "DELETE",
+                              credentials: 'include',
+      }).then(results => {
         if (results.status === 204) {
           // success, no content
         } else {
@@ -190,7 +193,11 @@ function LabelingPage() {
       const url = new URL(getAnnotationsUrl);
       url.search = new URLSearchParams({identifiers: identifiers}).toString();
       const annotations = await fetch(url, {
-        method: "GET"
+        method: "GET",
+        credentials: 'include',
+        headers: {
+        'Content-Type': 'application/json'
+        }
       })
       .then(results => results.json());
 

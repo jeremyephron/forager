@@ -28,18 +28,17 @@ const Column = styled.div`
 `;
 
 const ImageColumn = ({ datasetName, imagePaths, onImageClick }) => {
-  // const imagesUrl = "http://127.0.0.1:8000/api/get_results/" + datasetName;
+  // const imagesUrl = "https://127.0.0.1:8000/api/get_results/" + datasetName;
   // const [loading, setLoading] = useState(false);
   // const [images, setImages] = useState(images);
 
   // useEffect(() => {
   //   const fetchImages = async () => {
   //     // setLoading(true)
-  //     const newImages = await fetch(imagesUrl).then(results => results.json());
+  //     const newImages = await fetch(imagesUrl, {credentials: 'include'}).then(results => results.json());
   //     setImages(newImages);
   //     // setLoading(false);
   //   }
-    
   //   fetchImages()
   // }, [imagesUrl, setImages])
 
