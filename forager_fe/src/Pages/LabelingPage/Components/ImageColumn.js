@@ -33,24 +33,24 @@ const ImageColumn = ({ datasetName, onImageClick }) => {
   const [images, setImages] = useState([]);
 
   useEffect(() => {
-      fetchImages()
-  }, [])
-
-  const fetchImages = async () => {
+    const fetchImages = async () => {
       // setLoading(true)
       const newImages = await fetch(imagesUrl).then(results => results.json());
       setImages(newImages);
       // setLoading(false);
-  }
+    }
+    
+    fetchImages()
+  }, [imagesUrl, setImages])
 
   // if (loading) {
   //     // return spinner
   // }
 
   return (
-      <Column>
-          {images.map(img => <Image key={img.idx} src={img.path} onClick={() => onImageClick(img.idx)} />)}
-      </Column>
+    <Column>
+      {images.map(img => <Image key={img.idx} src={img.path} onClick={() => onImageClick(img.idx)} />)}
+    </Column>
   );
 }
 

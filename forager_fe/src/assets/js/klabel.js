@@ -71,7 +71,7 @@ class Frame {
 		this.data = image_data;
 		this.image_load_started = false;
 		this.image_load_complete = false;
-		this.source_image = new Image;
+		this.source_image = new Image();
 	}
 }
 
@@ -205,19 +205,19 @@ export class ImageLabeler {
 	}
 
 	is_annotation_mode_per_frame_category() {
-		return this.annotation_mode == Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY;
+		return this.annotation_mode === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY;
 	}
 
 	is_annotation_mode_point() {
-		return this.annotation_mode == Annotation.ANNOTATION_MODE_POINT;
+		return this.annotation_mode === Annotation.ANNOTATION_MODE_POINT;
 	}
 
 	is_annotation_mode_two_point_bbox() {
-		return this.annotation_mode == Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX;
+		return this.annotation_mode === Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX;
 	}
 
 	is_annotation_mode_extreme_points_bbox() {
-		return this.annotation_mode == Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX;
+		return this.annotation_mode === Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX;
 	}
 
 	// Returns the index of the annotation that is the "selected annotation" given
@@ -243,16 +243,16 @@ export class ImageLabeler {
 		var smallest_area = Number.MAX_VALUE;
 		for (var i=0; i<cur_frame.data.annotations.length; i++) {
 			
-			if (cur_frame.data.annotations[i].type == Annotation.ANNOTATION_MODE_POINT) {
+			if (cur_frame.data.annotations[i].type === Annotation.ANNOTATION_MODE_POINT) {
 
-				if (image_cursor_pt.x == cur_frame.data.annotations[i].x &&
-					image_cursor_pt.y == cur_frame.data.annotations[i].y) {
+				if (image_cursor_pt.x === cur_frame.data.annotations[i].x &&
+					image_cursor_pt.y === cur_frame.data.annotations[i].y) {
 					selected = i;
 					smallest_area = 0.0;
 				}
 
-			} else if (cur_frame.data.annotations[i].type == Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX ||
-					   cur_frame.data.annotations[i].type == Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX) {
+			} else if (cur_frame.data.annotations[i].type === Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX ||
+					   cur_frame.data.annotations[i].type === Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX) {
 
 				if (cur_frame.data.annotations[i].bbox.inside(image_cursor_pt) &&
 					cur_frame.data.annotations[i].bbox.area < smallest_area) {
@@ -281,24 +281,24 @@ export class ImageLabeler {
 
 		// if a per-frame annotation exists, remove it
 		for (var i=0; i<cur_frame.data.annotations.length; i++) {
-			if (cur_frame.data.annotations[i].type == Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+			if (cur_frame.data.annotations[i].type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
 				cur_frame.data.annotations.splice(i, 1);
 			}
 		}
 
-		if (cat_idx != Annotation.INVALID_CATEGORY) {
+		if (cat_idx !== Annotation.INVALID_CATEGORY) {
 			cur_frame.data.annotations.push(new PerFrameAnnotation(cat_idx));
 			//console.log("KLabeler: set per-frame annotation: " + this.category_to_name[cat_idx]);
 		}
 
-		if (this.annotation_changed_callback != null)
+		if (this.annotation_changed_callback !== null)
 			this.annotation_changed_callback();
 	}
 
 	add_annotation(ann) {
 		var cur_frame = this.get_current_frame()
 		cur_frame.data.annotations.push(ann);
-		if (this.annotation_changed_callback != null)
+		if (this.annotation_changed_callback !== null)
 			this.annotation_changed_callback();
 	}
 
@@ -318,11 +318,11 @@ export class ImageLabeler {
 
 			var selected = this.get_selected_annotation();
 
-			if (selected != -1) {
+			if (selected !== -1) {
 				cur_frame.data.annotations.splice(selected, 1);
 				//console.log("KLabeler: Deleted box " + selected);
 
-				if (this.annotation_changed_callback != null)
+				if (this.annotation_changed_callback !== null)
 					this.annotation_changed_callback();
 			}
 		}
@@ -334,7 +334,7 @@ export class ImageLabeler {
 
 		// if there are no in progress points, then this must be the last click needed to
 		// make an annotation play the sound corresponding to a finished annotation. 
-		if (this.in_progress_points.length == 0) {
+		if (this.in_progress_points.length === 0) {
 
 			// stop other sounds
 			this.audio_click_sound.pause();
@@ -406,13 +406,13 @@ export class ImageLabeler {
 		for (var i=1; i<canvas_in_progress_points.length; i++) {
 			var cornerx = 0;
 			var cornery = 0;
-			if (i == 1) {
+			if (i === 1) {
 				cornerx = canvas_in_progress_points[0].x;
 				cornery = canvas_in_progress_points[1].y;
-			} else if (i == 2) {
+			} else if (i === 2) {
 				cornerx = canvas_in_progress_points[2].x;
 				cornery = canvas_in_progress_points[1].y;
-			} else if (i == 3) {
+			} else if (i === 3) {
 				cornerx = canvas_in_progress_points[0].x;
 				cornery = canvas_in_progress_points[3].y;
 			}
@@ -422,13 +422,13 @@ export class ImageLabeler {
 
 		// now draw lines to the tentative point
 		if (this.is_hovering()) {
-			if (canvas_in_progress_points.length == 1) {
+			if (canvas_in_progress_points.length === 1) {
 				ctx.lineTo(canvas_in_progress_points[0].x, canvas_cursor_pt.y);		
 				ctx.lineTo(canvas_cursor_pt.x, canvas_cursor_pt.y);
-			} else if (canvas_in_progress_points.length == 2) {
+			} else if (canvas_in_progress_points.length === 2) {
 				ctx.lineTo(canvas_cursor_pt.x, canvas_in_progress_points[1].y);
 				ctx.lineTo(canvas_cursor_pt.x, canvas_cursor_pt.y);
-			} else if (canvas_in_progress_points.length == 3) {
+			} else if (canvas_in_progress_points.length === 3) {
 				ctx.lineTo(canvas_in_progress_points[2].x, canvas_cursor_pt.y);
 				// extrapolation of rest of box
 				ctx.lineTo(canvas_in_progress_points[0].x, canvas_cursor_pt.y);
@@ -440,7 +440,7 @@ export class ImageLabeler {
 		// draw dots at all the extreme points that have been specified so far
 		var full_circle_angle = 2 * Math.PI;
 		ctx.fillStyle = this.color_extreme_point_fill;
-		for (var i=0; i<canvas_in_progress_points.length; i++) {
+		for (i = 0; i < canvas_in_progress_points.length; i++) {
 			ctx.beginPath();
 				ctx.arc(canvas_in_progress_points[i].x, canvas_in_progress_points[i].y, this.extreme_point_radius, 0, full_circle_angle, false);
 	        ctx.fill();
@@ -530,10 +530,10 @@ export class ImageLabeler {
 		for (var ann_index=0; ann_index<cur_frame.data.annotations.length; ann_index++) {
 
 			var ann = cur_frame.data.annotations[ann_index];
-			var is_selected = (selected == ann_index);
+			var is_selected = (selected === ann_index);
 
 			// draw a point annotation
-			if (ann.type == Annotation.ANNOTATION_MODE_POINT) {
+			if (ann.type === Annotation.ANNOTATION_MODE_POINT) {
 
 				// do not render points that lie outside the visible region (when zoomed)
 				if (!this.visible_image_region.inside(ann.pt))
@@ -552,8 +552,8 @@ export class ImageLabeler {
 		        ctx.fill();
 
 		    // draw bounding box annotation
-			} else if (ann.type == Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX ||
-	   				   ann.type == Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX)  {
+			} else if (ann.type === Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX ||
+	   				   ann.type === Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX)  {
 
 				// clip the bbox to the visible region of the image (if zoomed)
 				var visible_ann_box = ann.bbox.intersect(this.visible_image_region);
@@ -583,8 +583,8 @@ export class ImageLabeler {
 				}
 
 				// if this is a box created from extreme points, draw dots indicating all the extreme points
-				if (this.show_extreme_points && ann.type == Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX)  {
-					var full_circle_angle = 2 * Math.PI;
+				if (this.show_extreme_points && ann.type === Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX)  {
+					full_circle_angle = 2 * Math.PI;
 					ctx.fillStyle = this.color_extreme_point_fill;
 					for (var i=0; i<4; i++) {
 
@@ -593,13 +593,13 @@ export class ImageLabeler {
 							continue;
 						}
 
-						var canvas_pt = this.image_to_canvas(ann.extreme_points[i]);
+						canvas_pt = this.image_to_canvas(ann.extreme_points[i]);
 						ctx.beginPath();
 	      				ctx.arc(canvas_pt.x, canvas_pt.y, this.extreme_point_radius, 0, full_circle_angle, false);
 				        ctx.fill();
 					}
 				}	
-			} else if (ann.type == Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+			} else if (ann.type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
 
 				// draw box around the display in the appropriate color to indicate the per-frame label
 				ctx.strokeStyle = this.category_to_color[ann.value];
@@ -620,7 +620,7 @@ export class ImageLabeler {
 
 			// convert image-space points to canvas space for drawing on screen
 			var canvas_in_progress_points = [];
-			for (var i =0; i<this.in_progress_points.length; i++)
+			for (i = 0; i<this.in_progress_points.length; i++)
 				canvas_in_progress_points[i] = this.image_to_canvas(this.in_progress_points[i]);
 
 			ctx.lineWidth = 1;
@@ -641,7 +641,7 @@ export class ImageLabeler {
 
 			// convert image-space points to canvas space for drawing on screen
 			var canvas_zoom_corner_points = [];
-			for (var i=0; i<this.zoom_corner_points.length; i++)
+			for (i = 0; i < this.zoom_corner_points.length; i++)
 				canvas_zoom_corner_points[i] = this.image_to_canvas(this.zoom_corner_points[i]);
 
 			this.draw_inprogress_zoom_bbox(ctx, canvas_zoom_corner_points, canvas_cursor_pt);
@@ -680,7 +680,7 @@ export class ImageLabeler {
 	handle_keydown = event => {
 		//console.log("KeyDown: " + event.keyCode);
 
-		if (event.keyCode == 37) {   // left arrow
+		if (event.keyCode === 37) {   // left arrow
 			if (this.current_frame_index > 0)
 				this.set_current_frame_num(this.current_frame_index-1);
 			else
@@ -692,7 +692,7 @@ export class ImageLabeler {
 				this.render();
 			}
 
-		} else if (event.keyCode == 39) {  // right arrow
+		} else if (event.keyCode === 39) {  // right arrow
 			if (this.current_frame_index < this.frames.length-1)
 				this.set_current_frame_num(this.current_frame_index+1);
 			else
@@ -704,17 +704,17 @@ export class ImageLabeler {
 				this.render();
 			}
 
-		} else if (event.keyCode == 27) {  // ESC key
+		} else if (event.keyCode === 27) {  // ESC key
 
 			this.clear_in_progress_points();
 			this.clear_zoom_corner_points();
 			this.render();
 
-		} else if (event.keyCode == 82) {  // 'r' key: reset zoom
+		} else if (event.keyCode === 82) {  // 'r' key: reset zoom
 			this.visible_image_region = new BBox2D(0.0, 0.0, 1.0, 1.0);
 			this.render();
 
-		} else if (event.keyCode == 90) {  // 'z' key 
+		} else if (event.keyCode === 90) {  // 'z' key 
 			if (!this.zoom_key_down) {
 				this.zoom_key_down = true;
 				this.clear_zoom_corner_points();
@@ -735,16 +735,16 @@ export class ImageLabeler {
 
 				// ignore keys if image hasn't loaded yet
 				var cur_frame = this.get_current_frame();
-				if (cur_frame.image_load_complete && category_name != "") {
+				if (cur_frame.image_load_complete && category_name !== "") {
 					this.set_per_frame_category_annotation(key_pressed);
 				}
 			}
 		}
 
-		if (event.keyCode == 8) {            // delete/bksp key
+		if (event.keyCode === 8) {            // delete/bksp key
 			this.delete_annotation();
 
-		} else if (event.keyCode == 90) {   // 'z' key (zoom mode)
+		} else if (event.keyCode === 90) {   // 'z' key (zoom mode)
 			this.zoom_key_down = false;
 			this.clear_zoom_corner_points();
 		}
@@ -769,7 +769,7 @@ export class ImageLabeler {
 
 			this.zoom_corner_points.push(image_cursor_pt);
 
-			if (this.zoom_corner_points.length == 2) {
+			if (this.zoom_corner_points.length === 2) {
 				this.visible_image_region = BBox2D.two_points_to_bbox(this.zoom_corner_points);
 				this.clear_zoom_corner_points(); 
 				//console.log("Set visible region: (" + this.visible_image_region.bmin.x + ", " + this.visible_image_region.bmin.y + "), w=" + this.visible_image_region.width + ", h=" + this.visible_image_region.height);
@@ -782,7 +782,7 @@ export class ImageLabeler {
 		this.in_progress_points.push(image_cursor_pt);		
 		//console.log("KLabeler: Click at (" + this.cursorx + ", " + this.cursory + "), image space=(" + image_cursor_pt.x + ", " + image_cursor_pt.y + "), point " + this.in_progress_points.length);
 
-		if (this.is_annotation_mode_extreme_points_bbox() && this.in_progress_points.length == 4) {
+		if (this.is_annotation_mode_extreme_points_bbox() && this.in_progress_points.length === 4) {
 
 			// discard box if this set of four extreme points is not a valid set of extreme points
 			if (!BBox2D.validate_extreme_points(this.in_progress_points)) {
@@ -799,18 +799,18 @@ export class ImageLabeler {
 			this.clear_in_progress_points();
 
 		// this click completes a new corner point box annotation
-		} else if (this.is_annotation_mode_two_point_bbox() && this.in_progress_points.length == 2) {
+		} else if (this.is_annotation_mode_two_point_bbox() && this.in_progress_points.length === 2) {
 
 			// validate box by discarding empty boxes.
-			if (this.in_progress_points[0].x == this.in_progress_points[1].x &&
-				this.in_progress_points[0].y == this.in_progress_points[1].y) {
+			if (this.in_progress_points[0].x === this.in_progress_points[1].x &&
+				this.in_progress_points[0].y === this.in_progress_points[1].y) {
 				alert("Empty bbox. Discarding box.");
 				this.clear_in_progress_points();
 				this.render();
 				return;
 			}
 
-			var new_annotation = new TwoPointBoxAnnotation(this.in_progress_points);
+			new_annotation = new TwoPointBoxAnnotation(this.in_progress_points);
 			this.add_annotation(new_annotation);
 			//console.log("KLabeler: New box: x=[" + new_annotation.bbox.bmin.x + ", " + new_annotation.bbox.bmax.y + "], y=[" + new_annotation.bbox.bmin.y + ", " + new_annotation.bbox.bmax.y + "]");
 
@@ -819,7 +819,7 @@ export class ImageLabeler {
 		// this click completes a new point annotation
 		} else if (this.is_annotation_mode_point()) {
 
-			var new_annotation = new PointAnnotation(this.in_progress_points[0]);
+			new_annotation = new PointAnnotation(this.in_progress_points[0]);
 			this.add_annotation(new_annotation);
 			//console.log("KLabeler: New point: (" + new_annotation.pt.x + ", " + new_annotation.pt.y + ")");
 
@@ -919,7 +919,7 @@ export class ImageLabeler {
 		this.clear_zoom_corner_points();
 		this.render();
 
-		if (this.frame_changed_callback != null)
+		if (this.frame_changed_callback !== null)
 			this.frame_changed_callback(this.current_frame_index);
 	}
 
@@ -987,7 +987,7 @@ export class ImageLabeler {
 		this.main_canvas_el.addEventListener("keyup", this.handle_keyup, false);
 
 		// make a dummy frame as a placeholder until the application provides real data
-		this.frames.push(new Frame(new ImageData));
+		this.frames.push(new Frame(new ImageData()));
 		
 		// FIXME(kayvonf): extract to helper function
 		// reset the viewer sequence

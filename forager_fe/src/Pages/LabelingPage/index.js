@@ -43,63 +43,14 @@ function LabelingPage() {
   const identifiers = location.state.identifiers;
 
   /* Klabel stuff */
-  const labeler = new ImageLabeler;
+  const labeler = new ImageLabeler();
   const main_canvas_id = 'main_canvas';
 
   const image_data = [];
   for (let i=0; i<paths.length; i++) {
-    const data = new ImageData;
+    const data = new ImageData();
     data.source_url = paths[i];
     image_data.push(data);
-  }
-
-  const handle_clear_boxes = () => {
-    labeler.clear_boxes();
-  }
-
-  const toggle_extreme_points_display = () => {
-    const button = document.getElementById("toggle_pt_viz_button");
-    const new_status = !button.toggle_status;
-    labeler.set_extreme_points_viz(new_status);
-    button.toggle_status = new_status;
-
-    if (new_status == false) {
-      button.innerHTML = 'Show Extreme Points';
-    } else {
-      button.innerHTML = 'Hide Extreme Points';
-    }
-  }
-
-  const toggle_letterbox = () => {
-    const button = document.getElementById("toggle_letterbox_button");
-    const new_status = !button.toggle_status; 
-    labeler.set_letterbox(new_status);
-    button.toggle_status = new_status;
-
-    if (new_status == false) {
-      button.innerHTML = 'Use Letterbox View';
-    } else {
-      button.innerHTML = 'Use Scaled View';
-    }
-  }
-
-  const handle_mode_change = () => {
-    const select = document.getElementById("select_annotation_mode");
-    if (select.value.localeCompare("box_extreme_points") == 0) {
-      labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX);
-    } else if (select.value.localeCompare("box_two_points") == 0) {
-      labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX);
-    } else if (select.value.localeCompare("point") == 0) {
-      labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_POINT);
-    } else if (select.value.localeCompare("per_frame") == 0) {
-      labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY);
-      labeler.set_categories( { true: { idx: 1, color: "#67bf5c" }, false: {idx:2, color: "#ed665d"} } );
-    }
-  }
-
-  const handle_get_annotations = () => {
-    const results = labeler.get_annotations();
-    console.log(results);
   }
 
   const onImageClick = (idx) => {
@@ -107,6 +58,55 @@ function LabelingPage() {
   }
 
   useEffect(() => {
+    const handle_clear_boxes = () => {
+      labeler.clear_boxes();
+    }
+
+    const toggle_extreme_points_display = () => {
+      const button = document.getElementById("toggle_pt_viz_button");
+      const new_status = !button.toggle_status;
+      labeler.set_extreme_points_viz(new_status);
+      button.toggle_status = new_status;
+
+      if (new_status === false) {
+        button.innerHTML = 'Show Extreme Points';
+      } else {
+        button.innerHTML = 'Hide Extreme Points';
+      }
+    }
+
+    const toggle_letterbox = () => {
+      const button = document.getElementById("toggle_letterbox_button");
+      const new_status = !button.toggle_status; 
+      labeler.set_letterbox(new_status);
+      button.toggle_status = new_status;
+
+      if (new_status === false) {
+        button.innerHTML = 'Use Letterbox View';
+      } else {
+        button.innerHTML = 'Use Scaled View';
+      }
+    }
+
+    const handle_mode_change = () => {
+      const select = document.getElementById("select_annotation_mode");
+      if (select.value.localeCompare("box_extreme_points") === 0) {
+        labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX);
+      } else if (select.value.localeCompare("box_two_points") === 0) {
+        labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX);
+      } else if (select.value.localeCompare("point") === 0) {
+        labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_POINT);
+      } else if (select.value.localeCompare("per_frame") === 0) {
+        labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY);
+        labeler.set_categories( { true: { idx: 1, color: "#67bf5c" }, false: {idx:2, color: "#ed665d"} } );
+      }
+    }
+
+    const handle_get_annotations = () => {
+      const results = labeler.get_annotations();
+      console.log(results);
+    }
+
     const main_canvas = document.getElementById(main_canvas_id);
     labeler.init(main_canvas);
 
@@ -146,7 +146,7 @@ function LabelingPage() {
       e.preventDefault();
       labeler.handle_keyup(e);
     });
-  }, []);
+  }, [labeler, image_data]);
 
   return (
     <Container>

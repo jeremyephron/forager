@@ -69,7 +69,7 @@ const Instructions = () => {
         <tbody>
           <tr>
             <td width="180">Extreme points box mode:</td>
-            <td>Click four times to draw a box.  (Use the <a href="https://arxiv.org/abs/1708.02750" target="_blank">extreme clicking</a> technique: leftmost, topmost, rightmost, bottommost)</td>
+            <td>Click four times to draw a box.  (Use the <a href="https://arxiv.org/abs/1708.02750" target="_blank" rel="noopener noreferrer">extreme clicking</a> technique: leftmost, topmost, rightmost, bottommost)</td>
           </tr>
           <tr>
             <td>Two-point box mode:</td>

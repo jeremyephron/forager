@@ -130,3 +130,7 @@ dmypy.json
 
 # Django
 migrations/
+
+# React
+node_modules/
+package-lock.json

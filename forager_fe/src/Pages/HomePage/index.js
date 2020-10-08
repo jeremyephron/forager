@@ -2,7 +2,6 @@ import React from "react";
 import styled from "styled-components";
 
 import { DatasetsTableView } from "./Components";
-import { AppNavBar, Footer } from "../../Components";
 
 const Container = styled.div`
   flex: 1;
@@ -11,7 +10,7 @@ const Container = styled.div`
   background-color: white;
 `;
 
-function HomePage({}) {
+function HomePage() {
   return (
     <Container>
       <DatasetsTableView />
