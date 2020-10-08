@@ -1,11 +1,10 @@
 import asyncio
 import functools
 import uuid
-import json
 
 import numpy as np
 
-from typing import Dict
+from typing import Dict, Any
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sanic import Sanic
@@ -70,18 +69,17 @@ async def start_cluster(request):
     async def run_after_start(start_task):
         await start_task
         return await gke_cluster.create_deployment(
-            container=config.MAPPER_CONTAINER,
-            num_replicas=n_nodes
+            container=config.MAPPER_CONTAINER, num_replicas=n_nodes
         )
 
     start_task = asyncio.create_task(gke_cluster.start())
     deployment_task = asyncio.create_task(run_after_start(start_task))
 
     current_clusters[gke_cluster.cluster_id] = {
-        'cluster': gke_cluster,
-        'deployment_task': deployment_task,
-        'deployment_id': None,
-        'service_url': None
+        "cluster": gke_cluster,
+        "deployment_task": deployment_task,
+        "deployment_id": None,
+        "service_url": None,
     }
 
     return resp.json({"cluster_id": gke_cluster.cluster_id})
@@ -91,7 +89,7 @@ async def start_cluster(request):
 async def stop_cluster(request):
     cluster_id = request.form["cluster_id"][0]
 
-    gke_cluster = current_clusters[cluster_id]['cluster']
+    gke_cluster = current_clusters[cluster_id]["cluster"]
     await gke_cluster.stop()
     del current_clusters[cluster_id]
 
@@ -101,20 +99,16 @@ async def stop_cluster(request):
 @app.route("/start", methods=["POST"])
 async def start(request):
     cluster_id = request.form["cluster_id"][0]
-    n_mappers = int(request.form["n_mappers"][0])
     bucket = request.form["bucket"][0]
-    paths = [x.strip()[1:-1]
-             for x in request.form["paths"][0][1:-1].split(',')]
+    paths = [x.strip()[1:-1] for x in request.form["paths"][0][1:-1].split(",")]
 
     cluster_data = current_clusters[cluster_id]
-    cluster = cluster_data['cluster']
-    service_url = cluster_data['service_url']
+    service_url = cluster_data["service_url"]
     if service_url is None:
-        deployment_id, service_url = await cluster_data['deployment_task']
-        cluster_data['service_url'] = service_url
-        cluster_data['deployment_id'] = deployment_id
+        deployment_id, service_url = await cluster_data["deployment_task"]
+        cluster_data["service_url"] = service_url
+        cluster_data["deployment_id"] = deployment_id
 
-    # Get template
     job = MapReduceJob(
         MapperSpec(url=service_url),
         EmbeddingDictReducer(config.EMBEDDING_LAYER),
@@ -125,13 +119,10 @@ async def start(request):
     query_id = job.job_id
     current_queries[query_id] = job
 
-    # Get list of paths
-    iterable = paths
+    # Construct input iterable
+    iterable = [{"image": path} for path in paths]
 
-    cleanup_func = functools.partial(
-        cleanup_query,
-        query_id=query_id,
-        dataset=iterable)
+    cleanup_func = functools.partial(cleanup_query, query_id=query_id, dataset=iterable)
 
     await job.start(iterable, cleanup_func)
 
@@ -174,7 +165,7 @@ async def final_query_cleanup(query_id: str):
 class LabeledIndex:
     def __init__(self, embedding_dict, **kwargs):
         self.labels = list(embedding_dict.keys())
-        vectors = np.concatenate(list(embedding_dict.values()))
+        vectors = np.stack(list(embedding_dict.values()))
 
         self.index = InteractiveIndex(**kwargs)
 
@@ -221,6 +212,7 @@ async def create_index(request):
 async def query_index(request):
     embedding_endpoint = request.form["embedding_endpoint"]
     query_image_path = request.form["query_image_path"]
+    query_patch = [float(request.form[k]) for k in ("x1", "y1", "x2", "y2")]  # [0, 1]^2
     index_id = request.form["index_id"]
     num_results = int(request.form["num_results"])
 
@@ -231,7 +223,9 @@ async def query_index(request):
         {"input_bucket": config.IMAGE_BUCKET},
         n_retries=config.N_RETRIES,
     )
-    query_vector_dict = await job.run_until_complete([query_image_path])
+    query_vector_dict = await job.run_until_complete(
+        [{"image": query_image_path, "patch": query_patch}]
+    )
     assert len(query_vector_dict) == 1
     query_vector = next(iter(query_vector_dict.values()))
 

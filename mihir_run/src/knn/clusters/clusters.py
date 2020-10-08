@@ -44,7 +44,7 @@ class GKECluster:
 
         # GKE cluster names must start with a letter!!
         self.started = False
-        self.cluster_id = 'a' + str(uuid.uuid4())
+        self.cluster_id = f"cl-{uuid.uuid4()}"
 
     async def __aenter__(self):
         await self.start()
@@ -116,7 +116,7 @@ class GKECluster:
         headers = {"Authorization": f"Bearer {await self.auth_client.get()}"}
         for i in range(num_retries):
             async with self.session.post(
-                    endpoint, json=request, headers=headers
+                endpoint, json=request, headers=headers
             ) as response:
                 if response.status == 400 and (i + 1) < num_retries:  # retry
                     await asyncio.sleep(POLL_INTERVAL)

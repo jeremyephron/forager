@@ -53,14 +53,14 @@ async def main():
             },
             n_retries=N_RETRIES,
         )
-        iterable = FileListIterator(IMAGE_LIST_PATH)
+        iterable = FileListIterator(IMAGE_LIST_PATH, lambda i: {"image": i})
 
         await job.start(iterable, iterable.close)
         with tqdm(total=len(iterable)) as pbar:
             while not job.finished:
                 await asyncio.sleep(UPDATE_INTERVAL)
                 progress = job.job_result["progress"]
-                pbar.update(progress["n_processed"] + progress["n_skipped"])
+                pbar.update(progress["n_processed"])
 
         np.save(OUTPUT_FILENAME, job.result)
 
