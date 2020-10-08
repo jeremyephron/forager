@@ -122,8 +122,9 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
-CORS_ORIGIN_WHITELIST = ['http://127.0.0.1:3000', 'http://localhost:3000'] # source of the frontend req.
-CSRF_TRUSTED_ORIGINS  = ['127.0.0.1', 'localhost'] # source of the frontend req.
+# source of the frontend requests
+CORS_ORIGIN_WHITELIST = ['http://127.0.0.1:3000', 'http://localhost:3000']
+CSRF_TRUSTED_ORIGINS  = ['127.0.0.1', 'localhost']
 
 EMBEDDING_SERVER_ADDRESS = '0.0.0.0:5000'
 EMBEDDING_CLUSTER_NODES = 4
