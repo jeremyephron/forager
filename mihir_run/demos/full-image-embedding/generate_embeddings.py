@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from knn import utils
 from knn.clusters import GKECluster
-from knn.jobs import MapReduceJob
+from knn.jobs import MapReduceJob, MapperSpec
 from knn.utils import FileListIterator
 from knn.reducers import Reducer
 
@@ -44,17 +44,18 @@ class EmbeddingDictReducer(Reducer):
 async def main():
     async with GKECluster(GCP_PROJECT, GCP_ZONE, GCP_MACHINE_TYPE, N_NODES) as cluster:
         job = MapReduceJob(
-            MAPPER_CONTAINER,
+            MapperSpec(
+                container=MAPPER_CONTAINER, cluster=cluster, n_mappers=N_MAPPERS
+            ),
             EmbeddingDictReducer(),
             {
                 "input_bucket": INPUT_BUCKET,
             },
-            n_mappers=N_MAPPERS,
             n_retries=N_RETRIES,
         )
         iterable = FileListIterator(IMAGE_LIST_PATH)
 
-        await job.start(cluster, iterable, iterable.close)
+        await job.start(iterable, iterable.close)
         with tqdm(total=len(iterable)) as pbar:
             while not job.finished:
                 await asyncio.sleep(UPDATE_INTERVAL)
