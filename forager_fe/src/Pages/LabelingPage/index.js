@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 
@@ -50,15 +50,16 @@ const TitleHeader = styled.h1`
 function LabelingPage() {
   const location = useLocation();
   const datasetName = location.state.datasetName;
-  const paths = location.state.paths;
-  const identifiers = location.state.identifiers;
+  const [paths, setPaths] = useState(location.state.paths);
+  const [identifiers, setIdentifiers] = useState(location.state.identifiers);
 
   const getAnnotationsUrl = "http://127.0.0.1:8000/api/get_annotations/" + datasetName;
   const addAnnotationUrl = "http://127.0.0.1:8000/api/add_annotation/" + datasetName;
   const deleteAnnotationUrl = "http://127.0.0.1:8000/api/delete_annotation/" + datasetName;
+  const lookupKnnUrl = "http://127.0.0.1:8000/api/lookup_knn/" + datasetName;
 
   /* Klabel stuff */
-  const labeler = new ImageLabeler();
+  const labeler = useMemo(() => new ImageLabeler(), []);
   const main_canvas_id = 'main_canvas';
 
   const onImageClick = (idx) => {
@@ -118,20 +119,58 @@ function LabelingPage() {
     const handle_annotation_added = async (currFrame, annotation) => {
       const endpoint = addAnnotationUrl + '/' + currFrame.data.identifier;
 
-      const res = await fetch(endpoint, {
+      const identifer = await fetch(endpoint, {
         method: "POST",
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(annotation)
       })
       .then(response => response.text());
 
-      annotation.identifier = res;
+      annotation.identifier = identifer;
+
+      let url = new URL(lookupKnnUrl);
+      url.search = new URLSearchParams({
+        ann_identifiers:  currFrame.data.annotations.map(ann => ann.identifier)
+      }).toString();
+      const res = await fetch(url, {method: "GET"}).then(results => results.json());
+
+      url = new URL(getAnnotationsUrl);
+      url.search = new URLSearchParams({identifiers: res.identifiers}).toString();
+      const annotations = await fetch(url, {
+        method: "GET"
+      })
+      .then(results => results.json());
+
+      const imageData = [];
+      for (let i=0; i<res.paths.length; i++) {
+        const data = new ImageData();
+        data.source_url = res.paths[i];
+        data.identifier = res.identifiers[i];
+
+        if (data.identifier in annotations) {
+          annotations[data.identifier].map(ann => {
+            if (ann.type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+              // TODO: how to handle?
+            } else if (ann.type === Annotation.ANNOTATION_MODE_POINT) {
+              data.annotations.push(PointAnnotation.parse(ann));
+            } else if (ann.type === Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX) {
+              data.annotations.push(TwoPointBoxAnnotation.parse(ann));
+            } else if (ann.type === Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX) {
+              data.annotations.push(ExtremeBoxAnnnotation.parse(ann));
+            }
+          });
+        }
+        imageData.push(data);
+      }
+
+      setIdentifiers(res.identifiers);
+      setPaths(res.paths)
+
+      labeler.load_image_stack(imageData);
+      labeler.set_focus();
     }
 
     const handle_annotation_deleted = async (currFrame, annotation) => {
-      console.log(annotation)
       const endpoint = deleteAnnotationUrl + '/' + currFrame.data.identifier + '/' + annotation.identifier;
 
       await fetch(endpoint, { method: "DELETE" }).then(results => {
@@ -151,9 +190,7 @@ function LabelingPage() {
       const url = new URL(getAnnotationsUrl);
       url.search = new URLSearchParams({identifiers: identifiers}).toString();
       const annotations = await fetch(url, {
-        method: "GET", headers: {
-        'Content-Type': 'application/json'
-        }
+        method: "GET"
       })
       .then(results => results.json());
 
@@ -180,6 +217,7 @@ function LabelingPage() {
       }
 
       labeler.load_image_stack(imageData);
+      labeler.set_focus();
 
       labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX);
       labeler.annotation_added_callback = handle_annotation_added;
@@ -209,27 +247,27 @@ function LabelingPage() {
       select.onchange = handle_mode_change;
 
       window.addEventListener("keydown", function(e) {
-        e.preventDefault();
+        // e.preventDefault();
         labeler.handle_keydown(e);
       });
 
       window.addEventListener("keyup", function(e) {
-        e.preventDefault();
+        // e.preventDefault();
         labeler.handle_keyup(e);
       });
     }
 
     klabelRun();
-  }, [labeler, paths, identifiers, addAnnotationUrl, deleteAnnotationUrl]);
+  }, []);
 
   return (
     <Container>
       <SubContainer>
       <TitleHeader>Labeling: {datasetName}</TitleHeader>
-      <MainCanvas />
+      <MainCanvas tabindex={0} />
       </SubContainer>
       <ImageColumnContainer>
-        <ImageColumn datasetName={datasetName} onImageClick={onImageClick} />
+        <ImageColumn datasetName={datasetName} onImageClick={onImageClick} imagePaths={paths} />
       </ImageColumnContainer>
     </Container>
   );
