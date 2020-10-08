@@ -41,6 +41,11 @@ export class PointAnnotation extends Annotation {
 		super(Annotation.ANNOTATION_MODE_POINT);
 		this.pt = pt;
 	}
+
+	static parse(obj) {
+		obj.pt = Object.setPrototypeOf(obj.pt, Point2D.prototype);
+		return Object.setPrototypeOf(obj, PointAnnotation.prototype);
+	}
 }
 
 export class TwoPointBoxAnnotation extends Annotation {
@@ -60,6 +65,14 @@ export class ExtremeBoxAnnnotation extends Annotation {
 		super(Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX);
 		this.bbox = BBox2D.extreme_points_to_bbox(extreme_points);
 		this.extreme_points = extreme_points;
+	}
+
+	static parse(obj) {
+		obj.bbox = Object.setPrototypeOf(obj.bbox, BBox2D.prototype);
+		obj.extreme_points = obj.extreme_points.map(
+			point => Object.setPrototypeOf(point, Point2D.prototype)
+		)
+		return Object.setPrototypeOf(obj, ExtremeBoxAnnnotation.prototype);
 	}
 }
 
