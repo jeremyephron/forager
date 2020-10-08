@@ -22,7 +22,7 @@ const Grid = styled.div`
   flex-wrap: wrap;
   height: 100%;
   overflow-y: scroll;
-  box-shadow: 0 2px 3px -3px rgba(0,0,0,0.5);
+  justify-content: space-evenly;
 
   img:first-child {
       margin-top: 0;
