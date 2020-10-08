@@ -26,11 +26,12 @@ class EmbeddingDictReducer(Reducer):
 
     def handle_result(self, input, output):
         try:
-            self.embeddings[input['image']] = base64_to_numpy(output[self.embedding_layer])
+            self.embeddings[input["image"]] = base64_to_numpy(
+                output[self.embedding_layer]
+            )
         except Exception as e:
             print(e)
             raise e
-
 
     @property
     def result(self):
@@ -128,10 +129,12 @@ async def get_results(request):
         current_queries.pop(query_id)
 
     results = query_job.job_result
-    return resp.json({
-        'performance': results['performance'],
-        'progress': results['progress'],
-    })
+    return resp.json(
+        {
+            "performance": results["performance"],
+            "progress": results["progress"],
+        }
+    )
 
 
 @app.route("/stop", methods=["PUT"])
@@ -199,22 +202,25 @@ async def create_index(request):
 
 @app.route("/query_index", methods=["POST"])
 async def query_index(request):
-    embedding_endpoint = request.form["embedding_endpoint"]
-    query_image_path = request.form["query_image_path"]
-    query_patch = [float(request.form[k]) for k in ("x1", "y1", "x2", "y2")]  # [0, 1]^2
+    cluster_id = request.form["cluster_id"]
+    image_path = request.form["path"]
+    bucket = request.form["bucket"]
+    patch = [float(request.form[k]) for k in ("x1", "y1", "x2", "y2")]  # [0, 1]^2
     index_id = request.form["index_id"]
     num_results = int(request.form["num_results"])
 
+    cluster_data = current_clusters[cluster_id]
+    service_url = cluster_data["service_url"]
+
     # Generate query vector
     job = MapReduceJob(
-        MapperSpec(url=embedding_endpoint),
+        MapperSpec(url=service_url),
         EmbeddingDictReducer(config.EMBEDDING_LAYER),
-        {"input_bucket": config.IMAGE_BUCKET},
+        {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
     )
     query_vector_dict = await job.run_until_complete(
-        [{"image": query_image_path,
-          "patch": query_patch}]
+        [{"image": image_path, "patch": patch}]
     )
     assert len(query_vector_dict) == 1
     query_vector = next(iter(query_vector_dict.values()))

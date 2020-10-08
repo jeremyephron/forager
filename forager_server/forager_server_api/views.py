@@ -121,7 +121,15 @@ def create_dataset(request):
             time.sleep(5)
 
         # Create index using the embedding results
-        # TODO(mihirg): implement
+        headers = {"Content-type": "application/x-www-form-urlencoded",
+                   "Accept": "application/json"}
+        params = {"query_id": query_id}
+        r = requests.post(
+            settings.EMBEDDING_SERVER_ADDRESS + "/create_index",
+            data=params, headers=headers
+        )
+        response_data = r.json()
+        request.session["index_id"] = response_data["index_id"]
 
         # return HttpResponse(json.dumps({'status': 'success'}), content_type='application/json')
         req = HttpRequest()
