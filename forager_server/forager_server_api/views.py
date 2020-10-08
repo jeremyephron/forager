@@ -79,6 +79,7 @@ def create_dataset(request):
         embedding_conn = http.client.HTTPConnection(
             settings.EMBEDDING_SERVER_ADDRESS)
         if not 'cluster_id' in request.session:
+            # Create cluster if it does not exist
             headers = {"Content-type": "application/x-www-form-urlencoded",
                        "Accept": "application/json"}
             params = {'n_nodes': settings.EMBEDDING_CLUSTER_NODES}
@@ -118,6 +119,9 @@ def create_dataset(request):
             if response_data['progress']['finished']:
                 break
             time.sleep(5)
+
+        # Create index using the embedding results
+        # TODO(mihirg): implement
 
         # return HttpResponse(json.dumps({'status': 'success'}), content_type='application/json')
         req = HttpRequest()
