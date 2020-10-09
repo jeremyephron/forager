@@ -120,6 +120,7 @@ def create_dataset(request):
         # Track status of the embedding computation
         value_at_last = None
         same_as_last = 0
+        SAME_AS_ATTEMPTS = 10
         while True:
             params = {'query_id': query_id}
             r = requests.get(
@@ -134,11 +135,9 @@ def create_dataset(request):
                 n_skipped = response_data['progress']['n_skipped']
                 print('{:d}/{:d} ({:d} skipped)'.format(
                     n_processed, n_total, n_skipped))
-                if (n_processed + n_skipped) / n_total > 0.9:
-                    break
-                if n_processed == value_at_last:
+                if n_processed == value_at_last and n_processed != 0:
                     same_as_last += 1
-                    if same_as_last == 10:
+                    if same_as_last == SAME_AS_ATTEMPTS:
                         break
                 else:
                     value_at_last = n_processed
@@ -285,10 +284,8 @@ def lookup_knn(request, dataset_name):
                 'y2': bbox['bmax']['y']}
                for bbox in [json.loads(ann.label_data)['bbox']
                             for ann in query_annotations]]
-    print(patches)
 
     # 3. Send paths and patches to /query_index
-    print(request.session.keys())
     cluster_id = request.session['cluster_id']
     index_id = request.session['index_id']
     headers = {"Content-type": "application/x-www-form-urlencoded",
@@ -306,8 +303,18 @@ def lookup_knn(request, dataset_name):
         data=params, headers=headers
     )
     response_data = r.json()
-    request.session["index_id"] = response_data["index_id"]
-    print(response_data)
+    response = {
+        'identifiers': [],
+        'paths': []
+    }
+    ditems = DatasetItem.objects.filter(path__in=response_data['results'])
+    path_to_id = {}
+    for ditem in ditems:
+        path_to_id[ditem.path] = ditem.pk
+    for path in response_data['results']:
+        path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
+        response['paths'].append(path_template.format(path))
+        response['identifiers'].append(path_to_id[path])
 
     # 4. Return knn results
-    return JsonResponse({})
+    return JsonResponse(response)

@@ -43,8 +43,10 @@ class EmbeddingDictReducer(Reducer):
 app = Sanic(__name__)
 app.update_config({"RESPONSE_TIMEOUT": 10 * 60})  # 10 minutes
 
+# Global data
 current_clusters = {}  # type: Dict[str, Dict[str, Any]]
 current_queries = {}  # type: Dict[str, MapReduceJob]
+current_indexes = {}  # type: Dict[str, LabeledIndex]
 
 
 async def _start_cluster(cluster_id):
@@ -193,9 +195,6 @@ class LabeledIndex:
         return [(self.labels[i], dist) for i, dist in zip(inds[0], dists[0])]
 
 
-current_indexes = {}  # type: Dict[str, LabeledIndex]
-
-
 @app.route("/create_index", methods=["POST"])
 async def create_index(request):
     query_id = request.form["query_id"][0]
@@ -248,7 +247,8 @@ async def query_index(request):
     query_results = current_indexes[index_id].query(
         query_vector, num_results, config.INDEX_NUM_QUERY_PROBES
     )
-    return resp.json({"results": query_results})
+    paths = [x[0] for x in query_results]
+    return resp.json({"results": paths})
 
 
 @app.route("/delete_index", methods=["POST"])
