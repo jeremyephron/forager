@@ -144,6 +144,8 @@ class MapReduceJob:
                 ):
                     try:
                         self._handle_chunk_result(*(await response_tuple))
+                    except asyncio.CancelledError:
+                        raise
                     except Exception as e:
                         print(f"Error in _handle_chunk_result, raising! {type(e)}: {e}")
                         traceback.print_exc()
@@ -228,6 +230,8 @@ class MapReduceJob:
                     if response.status == 200:
                         result = await response.json()
                         break
+            except asyncio.CancelledError:
+                raise
             except Exception as e:
                 print(f"Error in _request, but ignoring. {type(e)}: {e}")
                 traceback.print_exc()
