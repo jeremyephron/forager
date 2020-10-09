@@ -3,6 +3,7 @@ import collections
 import itertools
 import resource
 import time
+import traceback
 import uuid
 
 import aiohttp
@@ -152,12 +153,20 @@ class MapReduceJob:
 
         async with self.mapper as mapper_url:
             connector = aiohttp.TCPConnector(limit=0)
-            async with aiohttp.ClientSession(connector=connector) as session:
-                for response_tuple in utils.limited_as_completed(
-                    (self._request(session, mapper_url, chunk) for chunk in chunked),
-                    self.mapper.n_mappers,
-                ):
-                    self._handle_chunk_result(*(await response_tuple))
+            try:
+                async with aiohttp.ClientSession(connector=connector) as session:
+                    for response_tuple in utils.limited_as_completed(
+                        (
+                            self._request(session, mapper_url, chunk)
+                            for chunk in chunked
+                        ),
+                        self.mapper.n_mappers,
+                    ):
+                        self._handle_chunk_result(*(await response_tuple))
+            except Exception as e:
+                print(f"Error in MapReduceJob! {type(e)}: {e}")
+                traceback.print_exc()
+                raise
 
         if self._n_total is None:
             self._n_total = self._n_successful + self._n_failed
@@ -232,15 +241,11 @@ class MapReduceJob:
             start_time = time.time()
             end_time = start_time
 
-            try:
-                async with session.post(mapper_url, json=request) as response:
-                    end_time = time.time()
-                    if response.status == 200:
-                        result = await response.json()
-                        break
-            except aiohttp.ClientConnectionError as e:
-                print(e)
-                break
+            async with session.post(mapper_url, json=request) as response:
+                end_time = time.time()
+                if response.status == 200:
+                    result = await response.json()
+                    break
 
         return chunk, result, end_time - start_time
 

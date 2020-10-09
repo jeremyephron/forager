@@ -129,8 +129,6 @@ async def start(request):
 async def get_results(request):
     query_id = request.args["query_id"][0]
     query_job = current_queries[query_id]
-    if query_job.finished:
-        current_queries.pop(query_id)
 
     results = query_job.job_result
     return resp.json(
