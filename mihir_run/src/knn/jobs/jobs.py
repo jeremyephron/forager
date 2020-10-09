@@ -1,6 +1,5 @@
 import asyncio
 import collections
-import itertools
 import resource
 import time
 import traceback
@@ -134,39 +133,21 @@ class MapReduceJob:
             pass
 
         iterable = iter(iterable)
-
-        if self.chunk_size == 15:
-            print("Using chunk size schedule 1 -> 5")
-            chunked = itertools.chain(
-                utils.chunk(iterable, 1, until=2 * self.mapper.n_mappers),
-                utils.chunk(iterable, 5),
-            )
-        elif self.chunk_size == 135:
-            print("Using chunk size schedule 1 -> 3 -> 5")
-            chunked = itertools.chain(
-                utils.chunk(iterable, 1, until=2 * self.mapper.n_mappers),
-                utils.chunk(iterable, 3, until=2 * self.mapper.n_mappers),
-                utils.chunk(iterable, 5),
-            )
-        else:
-            chunked = utils.chunk(iterable, self.chunk_size)
+        chunked = utils.chunk(iterable, self.chunk_size)
 
         async with self.mapper as mapper_url:
             connector = aiohttp.TCPConnector(limit=0)
-            try:
-                async with aiohttp.ClientSession(connector=connector) as session:
-                    for response_tuple in utils.limited_as_completed(
-                        (
-                            self._request(session, mapper_url, chunk)
-                            for chunk in chunked
-                        ),
-                        self.mapper.n_mappers,
-                    ):
+            async with aiohttp.ClientSession(connector=connector) as session:
+                for response_tuple in utils.limited_as_completed(
+                    (self._request(session, mapper_url, chunk) for chunk in chunked),
+                    self.mapper.n_mappers,
+                ):
+                    try:
                         self._handle_chunk_result(*(await response_tuple))
-            except Exception as e:
-                print(f"Error in MapReduceJob! {type(e)}: {e}")
-                traceback.print_exc()
-                raise
+                    except Exception as e:
+                        print(f"Error in _handle_chunk_result! {type(e)}: {e}")
+                        traceback.print_exc()
+                        raise
 
         if self._n_total is None:
             self._n_total = self._n_successful + self._n_failed
@@ -241,11 +222,16 @@ class MapReduceJob:
             start_time = time.time()
             end_time = start_time
 
-            async with session.post(mapper_url, json=request) as response:
-                end_time = time.time()
-                if response.status == 200:
-                    result = await response.json()
-                    break
+            try:
+                async with session.post(mapper_url, json=request) as response:
+                    end_time = time.time()
+                    if response.status == 200:
+                        result = await response.json()
+                        break
+            except Exception as e:
+                print(f"Error in _request! {type(e)}: {e}")
+                traceback.print_exc()
+                raise
 
         return chunk, result, end_time - start_time
 
