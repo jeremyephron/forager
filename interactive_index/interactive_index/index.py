@@ -217,8 +217,9 @@ class InteractiveIndex:
         index.add_with_ids(xb[:end_idx], ids)
         self.n_vectors += end_idx
 
+        
         faiss.write_index(
-            faiss.index_gpu_to_cpu(index), 
+            faiss.index_gpu_to_cpu(index) if self.use_gpu else index, 
             str(self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num))
         )
 
