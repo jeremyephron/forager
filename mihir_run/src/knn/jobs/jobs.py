@@ -39,12 +39,13 @@ class MapperSpec:
         url: Optional[str] = None,
         container: Optional[str] = None,
         cluster: Optional[GKECluster] = None,
-        n_mappers: int = defaults.N_MAPPERS,
+        n_mappers: Optional[int] = None,
     ):
-        assert n_mappers < new_soft
-        assert (url and not any((container, cluster))) or (
+        assert (all((url, n_mappers)) and not any((container, cluster))) or (
             not url and all((container, cluster))
         )
+        n_mappers = n_mappers or defaults.N_MAPPERS
+        assert n_mappers < new_soft
 
         self.url = url
         self.container = container
