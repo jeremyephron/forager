@@ -104,7 +104,7 @@ async def start(request):
     paths = request.form["paths"]
 
     cluster_data = current_clusters[cluster_id]
-    await cluster_data["deployed"]
+    await cluster_data["deployed"].wait()
     service_url = cluster_data["service_url"]
 
     job = MapReduceJob(
@@ -218,7 +218,7 @@ async def query_index(request):
     num_results = int(request.form["num_results"][0])
 
     cluster_data = current_clusters[cluster_id]
-    await cluster_data["deployed"]
+    await cluster_data["deployed"].wait()
     service_url = cluster_data["service_url"]
 
     # Generate query vector
