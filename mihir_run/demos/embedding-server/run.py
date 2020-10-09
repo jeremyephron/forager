@@ -186,7 +186,7 @@ current_indexes = {}  # type: Dict[str, LabeledIndex]
 
 @app.route("/create_index", methods=["POST"])
 async def create_index(request):
-    query_id = request.form["query_id"]
+    query_id = request.form["query_id"][0]
     embedding_dict = current_queries[query_id].result
 
     index_id = str(uuid.uuid4())

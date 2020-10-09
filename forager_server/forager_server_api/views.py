@@ -108,6 +108,8 @@ def create_dataset(request):
         query_id = response_data['query_id']
 
         # Track status of the embedding computation
+        value_at_last = None
+        same_as_last = 0
         while True:
             params = {'query_id': query_id}
             r = requests.get(
@@ -115,11 +117,22 @@ def create_dataset(request):
                 params=params
             )
             response_data = r.json()
+
             if 'progress' in response_data:
+                n_processed = response_data['progress']['n_processed']
+                n_total = response_data['progress']['n_total']
+                n_skipped = response_data['progress']['n_skipped']
                 print('{:d}/{:d} ({:d} skipped)'.format(
-                    response_data['progress']['n_processed'],
-                    response_data['progress']['n_total'],
-                    response_data['progress']['n_skipped']))
+                    n_processed, n_total, n_skipped))
+                if (n_processed + n_skipped) / n_total > 0.9:
+                    break
+                if n_processed == value_at_last:
+                    same_as_last += 1
+                    if same_as_last == 10:
+                        break
+                else:
+                    value_at_last = n_processed
+                    same_as_last = 0
             if response_data['progress']['finished']:
                 break
             time.sleep(5)
