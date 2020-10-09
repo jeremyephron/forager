@@ -65,7 +65,11 @@ async def _start_cluster(cluster_id):
 async def start_cluster(request):
     n_nodes = int(request.form["n_nodes"][0])
     cluster = GKECluster(
-        config.GCP_PROJECT, config.GCP_ZONE, config.GCP_MACHINE_TYPE, n_nodes
+        config.GCP_PROJECT,
+        config.GCP_ZONE,
+        config.GCP_CLUSTER_NAME,
+        config.GCP_MACHINE_TYPE,
+        n_nodes,
     )
     cluster_id = cluster.cluster_id
 

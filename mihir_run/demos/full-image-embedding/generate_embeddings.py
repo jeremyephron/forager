@@ -12,6 +12,7 @@ from knn.reducers import Reducer
 
 GCP_PROJECT = "visualdb-1046"
 GCP_ZONE = "us-central1-a"
+GCP_CLUSTER_NAME = "forager"
 GCP_MACHINE_TYPE = "n2-highcpu-2"
 
 INPUT_BUCKET = "mihir-fast-queries"
@@ -42,7 +43,9 @@ class EmbeddingDictReducer(Reducer):
 
 @utils.unasync
 async def main():
-    async with GKECluster(GCP_PROJECT, GCP_ZONE, GCP_MACHINE_TYPE, N_NODES) as cluster:
+    async with GKECluster(
+        GCP_PROJECT, GCP_ZONE, GCP_CLUSTER_NAME, GCP_MACHINE_TYPE, N_NODES
+    ) as cluster:
         job = MapReduceJob(
             MapperSpec(
                 container=MAPPER_CONTAINER, cluster=cluster, n_mappers=N_MAPPERS
