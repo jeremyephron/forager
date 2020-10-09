@@ -11,7 +11,7 @@ from kubernetes_asyncio.client.api_client import ApiClient
 
 DISK_SIZE_GB = 10
 DISK_TYPE = "pd-ssd"
-GKE_VERSION = "1.15.12-gke.20"
+GKE_VERSION = "1.16.13-gke.401"
 USE_PREEMPTIBLES = True
 POLL_INTERVAL = 2
 INTERNAL_PORT = 5000
