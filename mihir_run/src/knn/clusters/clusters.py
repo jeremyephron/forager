@@ -75,7 +75,8 @@ class GKECluster:  # TODO(mihirg): Rename to GKENodePool
                     continue
 
                 response_json = await response.json()
-                self.cluster_endpoint = response_json.get("endpoint")
+                if response_json.get("status") == "RUNNING":
+                    self.cluster_endpoint = response_json.get("endpoint")
 
         print(
             f"Located Kubernetes cluster {self.cluster_name} at {self.cluster_endpoint}"
@@ -86,11 +87,6 @@ class GKECluster:  # TODO(mihirg): Rename to GKENodePool
             connector=aiohttp.TCPConnector(verify_ssl=False)
         )
         self.auth_client = Token(session=self.session)
-
-        # Kick off background task to get cluster endpoint
-        populate_cluster_endpoint_task = asyncio.create_task(
-            self.populate_cluster_endpoint()
-        )
 
         # Create node pool
         endpoint = (
@@ -138,6 +134,11 @@ class GKECluster:  # TODO(mihirg): Rename to GKENodePool
                     raise RuntimeError("Error when attempting to create node pool")
                 else:
                     break
+
+        # Kick off background task to get cluster endpoint
+        populate_cluster_endpoint_task = asyncio.create_task(
+            self.populate_cluster_endpoint()
+        )
 
         # Poll until node pool has been started
         poll_endpoint = f"{endpoint}/{self.cluster_id}"
