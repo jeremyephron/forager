@@ -97,7 +97,13 @@ async def cluster_status(request):
 @app.route("/stop_cluster", methods=["POST"])
 async def stop_cluster(request):
     cluster_id = request.form["cluster_id"][0]
-    await current_clusters.pop(cluster_id)["cluster"].stop()
+    cluster_data = current_clusters.pop(cluster_id)
+    cluster = cluster_data["cluster"]
+
+    await cluster_data["deployed"].wait()
+    await cluster.delete_deployment(cluster_data["deployment_id"])
+    await cluster.stop()
+
     return resp.text("", status=204)
 
 
