@@ -82,6 +82,16 @@ def create_dataset(request):
         # Start background job to start processing dataset
         embedding_conn = http.client.HTTPConnection(
             settings.EMBEDDING_SERVER_ADDRESS)
+        if 'cluster_id' in request.session:
+            # Check if stil exists
+            params = {'cluster_id': request.session['cluster_id']}
+            r = requests.get(
+                settings.EMBEDDING_SERVER_ADDRESS + '/cluster_status',
+                params=params
+            )
+            response_data = r.json()
+            if not response_data['has_cluster']:
+                del request.session['cluster_id']
         if not 'cluster_id' in request.session:
             # Create cluster if it does not exist
             headers = {"Content-type": "application/x-www-form-urlencoded",
@@ -260,7 +270,7 @@ def lookup_knn(request, dataset_name):
     ann_identifiers = [int(x) for x in request.GET['ann_identifiers'].split(',')]
 
     # 1. Retrieve dataset info from db
-    dataset = Dataset.objects.get(dataset_name=dataset_name)
+    dataset = Dataset.objects.get(name=dataset_name)
     data_directory = dataset.directory
     split_dir = data_directory[len('gs://'):].split('/')
     bucket_name = split_dir[0]
@@ -268,15 +278,19 @@ def lookup_knn(request, dataset_name):
 
     # 2. Retrieve annotations from db
     query_annotations = Annotation.objects.filter(pk__in=ann_identifiers)
-    paths = [ann.dataset_item['path'] for ann in query_annotations]
+    paths = [ann.dataset_item.path for ann in query_annotations]
     patches = [{'x1': bbox['bmin']['x'],
                 'y1': bbox['bmin']['y'],
                 'x2': bbox['bmax']['x'],
                 'y2': bbox['bmax']['y']}
-               for bbox in [json.loads(ann['label_data'])['bbox']
+               for bbox in [json.loads(ann.label_data)['bbox']
                             for ann in query_annotations]]
+    print(patches)
 
     # 3. Send paths and patches to /query_index
+    print(request.session.keys())
+    cluster_id = request.session['cluster_id']
+    index_id = request.session['index_id']
     headers = {"Content-type": "application/x-www-form-urlencoded",
                "Accept": "application/json"}
     params = {
@@ -284,7 +298,7 @@ def lookup_knn(request, dataset_name):
         "index_id": index_id,
         "bucket": bucket_name,
         "paths": paths,
-        "patches": patches,
+        "patches": json.dumps(patches),
         "num_results": 100,
     }
     r = requests.post(

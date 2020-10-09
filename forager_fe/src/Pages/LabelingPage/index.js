@@ -158,12 +158,15 @@ function LabelingPage() {
       url.search = new URLSearchParams({
         ann_identifiers:  currFrame.data.annotations.map(ann => ann.identifier)
       }).toString();
-      const res = await fetch(url, {method: "GET"}).then(results => results.json());
+      const res = await fetch(url, {method: "GET",
+        credentials: 'include',
+      }).then(results => results.json());
 
       url = new URL(getAnnotationsUrl);
       url.search = new URLSearchParams({identifiers: res.identifiers}).toString();
       const annotations = await fetch(url, {
-        method: "GET"
+        method: "GET",
+        credentials: 'include',
       })
       .then(results => results.json());
 

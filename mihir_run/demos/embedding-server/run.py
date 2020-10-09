@@ -1,6 +1,7 @@
 import asyncio
 import functools
 import uuid
+import json
 
 import numpy as np
 from sanic import Sanic
@@ -71,6 +72,15 @@ async def start_cluster(request):
     }
 
     return resp.json({"cluster_id": gke_cluster.cluster_id})
+
+
+@app.route("/cluster_status", methods=["GET"])
+async def cluster_status(request):
+    cluster_id = request.args["cluster_id"][0]
+    if cluster_id in current_clusters:
+        return resp.json({'has_cluster': True})
+    else:
+        return resp.json({'has_cluster': False})
 
 
 @app.route("/stop_cluster", methods=["POST"])
@@ -202,13 +212,16 @@ async def create_index(request):
 
 @app.route("/query_index", methods=["POST"])
 async def query_index(request):
-    cluster_id = request.form["cluster_id"]
+    cluster_id = request.form["cluster_id"][0]
     image_paths = request.form["paths"]
-    bucket = request.form["bucket"]
+    bucket = request.form["bucket"][0]
+    print(image_paths)
+    print(len(image_paths))
+    print(request.form['patches'])
     patches = [[float(patch[k]) for k in ("x1", "y1", "x2", "y2")]
-               for patch in request.form['patches']]  # [0, 1]^2
-    index_id = request.form["index_id"]
-    num_results = int(request.form["num_results"])
+               for patch in json.loads(request.form['patches'][0])]  # [0, 1]^2
+    index_id = request.form["index_id"][0]
+    num_results = int(request.form["num_results"][0])
 
     cluster_data = current_clusters[cluster_id]
     service_url = cluster_data["service_url"]

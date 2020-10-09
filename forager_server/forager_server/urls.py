@@ -41,4 +41,7 @@ urlpatterns = [
     path('api/delete_annotation/<slug:dataset_name>/<slug:image_identifier>/<slug:ann_identifier>',
          views.delete_annotation,
          name='delete_annotation'),
+    path('api/lookup_knn/<slug:dataset_name>',
+         views.lookup_knn,
+         name='lookup_knn'),
 ]
