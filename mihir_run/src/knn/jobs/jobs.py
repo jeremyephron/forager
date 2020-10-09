@@ -145,7 +145,7 @@ class MapReduceJob:
                     try:
                         self._handle_chunk_result(*(await response_tuple))
                     except Exception as e:
-                        print(f"Error in _handle_chunk_result! {type(e)}: {e}")
+                        print(f"Error in _handle_chunk_result, raising! {type(e)}: {e}")
                         traceback.print_exc()
                         raise
 
@@ -229,9 +229,8 @@ class MapReduceJob:
                         result = await response.json()
                         break
             except Exception as e:
-                print(f"Error in _request! {type(e)}: {e}")
+                print(f"Error in _request, but ignoring. {type(e)}: {e}")
                 traceback.print_exc()
-                raise
 
         return chunk, result, end_time - start_time
 
