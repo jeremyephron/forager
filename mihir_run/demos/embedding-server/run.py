@@ -11,7 +11,7 @@ from typing import Dict, Any
 
 from knn.jobs import MapReduceJob, MapperSpec
 from knn.reducers import Reducer
-from knn.utils import FileListIterator, base64_to_numpy
+from knn.utils import base64_to_numpy
 from knn.clusters import GKECluster
 
 from interactive_index import InteractiveIndex
@@ -47,31 +47,42 @@ current_clusters = {}  # type: Dict[str, Dict[str, Any]]
 current_queries = {}  # type: Dict[str, MapReduceJob]
 
 
+async def _start_cluster(cluster_id):
+    cluster_data = current_clusters[cluster_id]
+    cluster = cluster_data["cluster"]
+
+    await cluster.start()
+    deployment_id, service_url = await cluster.create_deployment(
+        container=config.MAPPER_CONTAINER, num_replicas=cluster_data["n_nodes"]
+    )
+
+    cluster_data["deployment_id"] = deployment_id
+    cluster_data["service_url"] = service_url
+    cluster_data["deployed"].set()
+
+
 @app.route("/start_cluster", methods=["POST"])
 async def start_cluster(request):
     n_nodes = int(request.form["n_nodes"][0])
-
-    gke_cluster = GKECluster(
-        config.GCP_PROJECT, config.GCP_ZONE, config.GCP_MACHINE_TYPE, n_nodes
+    cluster = GKECluster(
+        config.GCP_PROJECT,
+        config.GCP_ZONE,
+        config.GCP_CLUSTER_NAME,
+        config.GCP_MACHINE_TYPE,
+        n_nodes,
     )
+    cluster_id = cluster.cluster_id
 
-    async def run_after_start(start_task):
-        await start_task
-        return await gke_cluster.create_deployment(
-            container=config.MAPPER_CONTAINER, num_replicas=n_nodes
-        )
-
-    start_task = asyncio.create_task(gke_cluster.start())
-    deployment_task = asyncio.create_task(run_after_start(start_task))
-
-    current_clusters[gke_cluster.cluster_id] = {
-        "cluster": gke_cluster,
-        "deployment_task": deployment_task,
+    current_clusters[cluster_id] = {
+        "cluster": cluster,
+        "deployed": asyncio.Event(),
         "deployment_id": None,
         "service_url": None,
+        "n_nodes": n_nodes,
     }
+    app.add_task(_start_cluster(cluster_id))
 
-    return resp.json({"cluster_id": gke_cluster.cluster_id})
+    return resp.json({"cluster_id": cluster_id})
 
 
 @app.route("/cluster_status", methods=["GET"])
@@ -85,11 +96,13 @@ async def cluster_status(request):
 
 @app.route("/stop_cluster", methods=["POST"])
 async def stop_cluster(request):
-    cluster_id = request.form["cluster_id"]
+    cluster_id = request.form["cluster_id"][0]
+    cluster_data = current_clusters.pop(cluster_id)
+    cluster = cluster_data["cluster"]
 
-    gke_cluster = current_clusters[cluster_id]["cluster"]
-    await gke_cluster.stop()
-    del current_clusters[cluster_id]
+    await cluster_data["deployed"].wait()
+    await cluster.delete_deployment(cluster_data["deployment_id"])
+    await cluster.stop()
 
     return resp.text("", status=204)
 
@@ -101,14 +114,11 @@ async def start(request):
     paths = request.form["paths"]
 
     cluster_data = current_clusters[cluster_id]
+    await cluster_data["deployed"].wait()
     service_url = cluster_data["service_url"]
-    if service_url is None:
-        deployment_id, service_url = await cluster_data["deployment_task"]
-        cluster_data["service_url"] = service_url
-        cluster_data["deployment_id"] = deployment_id
 
     job = MapReduceJob(
-        MapperSpec(url=service_url),
+        MapperSpec(url=service_url, n_mappers=cluster_data["n_nodes"]),
         EmbeddingDictReducer(config.EMBEDDING_LAYER),
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
@@ -119,24 +129,16 @@ async def start(request):
 
     # Construct input iterable
     iterable = [{"image": path} for path in paths]
-
-    cleanup_func = functools.partial(cleanup_query, query_id=query_id, dataset=iterable)
-
+    cleanup_func = functools.partial(cleanup_query, query_id=query_id)
     await job.start(iterable, cleanup_func)
 
     return resp.json({"query_id": query_id})
-
-    # dataset = FileListIterator(config.IMAGE_LIST_PATH)
-    # cleanup_func = functools.partial(cleanup_query, query_id=query_id, dataset=dataset)
-    # await query_job.start(dataset, cleanup_func)
 
 
 @app.route("/results", methods=["GET"])
 async def get_results(request):
     query_id = request.args["query_id"][0]
     query_job = current_queries[query_id]
-    if query_job.finished:
-        current_queries.pop(query_id)
 
     results = query_job.job_result
     return resp.json(
@@ -154,8 +156,8 @@ async def stop(request):
     return resp.text("", status=204)
 
 
-def cleanup_query(_, query_id: str, dataset: FileListIterator):
-    asyncio.create_task(final_query_cleanup(query_id))
+def cleanup_query(_, query_id: str):
+    app.add_task(final_query_cleanup(query_id))
 
 
 async def final_query_cleanup(query_id: str):
@@ -224,30 +226,34 @@ async def query_index(request):
     num_results = int(request.form["num_results"][0])
 
     cluster_data = current_clusters[cluster_id]
+    await cluster_data["deployed"].wait()
     service_url = cluster_data["service_url"]
 
     # Generate query vector
     job = MapReduceJob(
-        MapperSpec(url=service_url),
+        MapperSpec(url=service_url, n_mappers=1),
         EmbeddingDictReducer(config.EMBEDDING_LAYER),
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
     )
     query_vector_dict = await job.run_until_complete(
-        [{"image": image_path, "patch": patch}
-         for image_path, patch in zip(image_paths, patches)])
-    query_vector = next(iter(query_vector_dict.values()))
+        [
+            {"image": image_path, "patch": patch}
+            for image_path, patch in zip(image_paths, patches)
+        ]
+    )
+    query_vector = next(iter(query_vector_dict.values()))  # just uses first result
 
     # Run query and return results
     query_results = current_indexes[index_id].query(
         query_vector, num_results, config.INDEX_NUM_QUERY_PROBES
     )
-    return resp.json(query_results)
+    return resp.json({"results": query_results})
 
 
 @app.route("/delete_index", methods=["POST"])
 async def delete_index(request):
-    index_id = request.form["index_id"]
+    index_id = request.form["index_id"][0]
     current_indexes.pop(index_id).delete()
     return resp.text("", status=204)
 

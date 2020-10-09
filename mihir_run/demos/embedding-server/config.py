@@ -1,5 +1,6 @@
 GCP_PROJECT = "visualdb-1046"
 GCP_ZONE = "us-central1-a"
+GCP_CLUSTER_NAME = "forager"
 GCP_MACHINE_TYPE = "n2-highcpu-4"
 
 OUTPUT_FILENAME = "lvis-embeddings.npy"

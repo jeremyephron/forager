@@ -9,11 +9,9 @@ from kubernetes_asyncio import client
 from kubernetes_asyncio.client.api_client import ApiClient
 
 
-NODE_POOL_NAME = "pool"  # one node pool per cluster for now
 DISK_SIZE_GB = 10
 DISK_TYPE = "pd-ssd"
-NETWORK_NAME = "kubernetes"  # you must have GCP network called "kubernetes"
-GKE_VERSION = "1.15.12-gke.20"
+GKE_VERSION = "1.16.13-gke.401"
 USE_PREEMPTIBLES = True
 POLL_INTERVAL = 2
 INTERNAL_PORT = 5000
@@ -21,30 +19,31 @@ EXTERNAL_START_PORT = 5000
 KUBE_NAMESPACE = "default"
 
 
-class GKECluster:
+class GKECluster:  # TODO(mihirg): Rename to GKENodePool
     def __init__(
         self,
         project_id: str,
         zone: str,
+        cluster_name: str,
         machine_type: str,
         num_nodes: int,
         session: Optional[aiohttp.ClientSession] = None,
     ):
         self.project_id = project_id
         self.zone = zone
+        self.cluster_name = cluster_name
         self.machine_type = machine_type
         self.num_nodes = num_nodes
 
         self._unassigned_port = EXTERNAL_START_PORT
 
+        self.started = False
+        self.cluster_id = f"np-{uuid.uuid4()}"  # TODO(mihirg): Change to pool_id
+
         # Will be initialized later
         self.session: Optional[aiohttp.ClientSession] = session
         self.auth_client: Optional[Token] = None
         self.cluster_endpoint: Optional[str] = None
-
-        # GKE cluster names must start with a letter!!
-        self.started = False
-        self.cluster_id = f"cl-{uuid.uuid4()}"
 
     async def __aenter__(self):
         await self.start()
@@ -59,60 +58,70 @@ class GKECluster:
 
     # CLUSTER MANAGEMENT
 
-    async def start(self, num_retries=15):
-        self.session = self.session or aiohttp.ClientSession()
-        self.auth_client = Token(session=self.session)
-
+    async def populate_cluster_endpoint(self):
         endpoint = (
             "https://container.googleapis.com/v1/"
             f"projects/{self.project_id}/"
             f"zones/{self.zone}/"
-            f"clusters"
+            f"clusters/{self.cluster_name}"
         )
-        network = f"projects/{self.project_id}/global/networks/{NETWORK_NAME}"
+        headers = {"Authorization": f"Bearer {await self.auth_client.get()}"}
 
+        while not self.cluster_endpoint:
+            await asyncio.sleep(POLL_INTERVAL)
+            async with self.session.get(endpoint, headers=headers) as response:
+                if response.status != 200:
+                    print(response, await response.text())
+                    continue
+
+                response_json = await response.json()
+                if response_json.get("status") == "RUNNING":
+                    self.cluster_endpoint = response_json.get("endpoint")
+
+        print(
+            f"Located Kubernetes cluster {self.cluster_name} at {self.cluster_endpoint}"
+        )
+
+    async def start(self, num_retries=15):
+        self.session = self.session or aiohttp.ClientSession(
+            connector=aiohttp.TCPConnector(verify_ssl=False)
+        )
+        self.auth_client = Token(session=self.session)
+
+        # Create node pool
+        endpoint = (
+            "https://container.googleapis.com/v1/"
+            f"projects/{self.project_id}/"
+            f"zones/{self.zone}/"
+            f"clusters/{self.cluster_name}/"
+            "nodePools"
+        )
         request = {
-            "cluster": {
+            "nodePool": {
                 "name": self.cluster_id,
-                "masterAuth": {"clientCertificateConfig": {}},
-                "network": network,
-                "addonsConfig": {
-                    "httpLoadBalancing": {},
-                    "horizontalPodAutoscaling": {},
-                    "kubernetesDashboard": {"disabled": True},
-                    "dnsCacheConfig": {},
+                "config": {
+                    "machineType": self.machine_type,
+                    "diskSizeGb": DISK_SIZE_GB,
+                    "oauthScopes": [
+                        "https://www.googleapis.com/auth/devstorage.read_only",
+                        "https://www.googleapis.com/auth/logging.write",
+                        "https://www.googleapis.com/auth/monitoring",
+                        "https://www.googleapis.com/auth/servicecontrol",
+                        "https://www.googleapis.com/auth/service.management.readonly",  # noqa
+                        "https://www.googleapis.com/auth/trace.append",
+                    ],
+                    "metadata": {"disable-legacy-endpoints": "true"},
+                    "preemptible": USE_PREEMPTIBLES,
+                    "diskType": DISK_TYPE,
+                    "shieldedInstanceConfig": {"enableIntegrityMonitoring": True},
                 },
-                "nodePools": [
-                    {
-                        "name": NODE_POOL_NAME,
-                        "config": {
-                            "machineType": self.machine_type,
-                            "diskSizeGb": DISK_SIZE_GB,
-                            "oauthScopes": [
-                                "https://www.googleapis.com/auth/devstorage.read_only",
-                                "https://www.googleapis.com/auth/logging.write",
-                                "https://www.googleapis.com/auth/monitoring",
-                                "https://www.googleapis.com/auth/servicecontrol",
-                                "https://www.googleapis.com/auth/service.management.readonly",  # noqa
-                                "https://www.googleapis.com/auth/trace.append",
-                            ],
-                            "metadata": {"disable-legacy-endpoints": "true"},
-                            "preemptible": USE_PREEMPTIBLES,
-                            "diskType": DISK_TYPE,
-                            "shieldedInstanceConfig": {
-                                "enableIntegrityMonitoring": True
-                            },
-                        },
-                        "initialNodeCount": self.num_nodes,
-                        "autoscaling": {},
-                        "management": {"autoUpgrade": True, "autoRepair": True},
-                        "version": GKE_VERSION,
-                        "upgradeSettings": {"maxSurge": 1},
-                    }
-                ],
+                "initialNodeCount": self.num_nodes,
+                "autoscaling": {},
+                "management": {"autoUpgrade": True, "autoRepair": True},
+                "version": GKE_VERSION,
+                "upgradeSettings": {"maxSurge": 1},
             }
         }
-
         headers = {"Authorization": f"Bearer {await self.auth_client.get()}"}
         for i in range(num_retries):
             async with self.session.post(
@@ -120,44 +129,46 @@ class GKECluster:
             ) as response:
                 if response.status == 400 and (i + 1) < num_retries:  # retry
                     await asyncio.sleep(POLL_INTERVAL)
-                    continue
+                elif response.status != 200:
+                    print(response, await response.text())
+                    raise RuntimeError("Error when attempting to create node pool")
+                else:
+                    break
 
-                if response.status != 200:
-                    print(response)
-                    print(await response.text())
-                assert response.status == 200, response.status
-                break
+        # Kick off background task to get cluster endpoint
+        populate_cluster_endpoint_task = asyncio.create_task(
+            self.populate_cluster_endpoint()
+        )
 
-        self.started = True
-
-        # Poll for cluster endpoint
+        # Poll until node pool has been started
         poll_endpoint = f"{endpoint}/{self.cluster_id}"
-        while not self.cluster_endpoint:
+        while True:
             await asyncio.sleep(POLL_INTERVAL)
             async with self.session.get(poll_endpoint, headers=headers) as response:
                 if response.status != 200:
-                    print(response)
-                    print(await response.text())
-                assert response.status == 200, response.status
+                    print(response, await response.text())
+                    continue
+
                 response_json = await response.json()
                 if response_json.get("status") == "RUNNING":
-                    self.cluster_endpoint = response_json.get("endpoint")
+                    break
 
-        print(
-            f"Started Kubernetes cluster {self.cluster_id} at {self.cluster_endpoint}"
-        )
+        print(f"Started Kubernetes node pool {self.cluster_id}")
+
+        await populate_cluster_endpoint_task
+        self.started = True
 
     async def scale(self, num_nodes: int):
         assert self.session
         assert self.auth_client
-        assert self.started  # cluster has been started
+        assert self.started  # node pool has been started
 
         endpoint = (
             "https://container.googleapis.com/v1/"
             f"projects/{self.project_id}/"
             f"zones/{self.zone}/"
-            f"clusters/{self.cluster_id}"
-            f"nodePools/{NODE_POOL_NAME}"
+            f"clusters/{self.cluster_name}"
+            f"nodePools/{self.cluster_id}"
         )
         request = {
             "nodeCount": num_nodes,
@@ -180,7 +191,8 @@ class GKECluster:
                 "https://container.googleapis.com/v1/"
                 f"projects/{self.project_id}/"
                 f"zones/{self.zone}/"
-                f"clusters/{self.cluster_id}"
+                f"clusters/{self.cluster_name}/"
+                f"nodePools/{self.cluster_id}"
             )
 
             headers = {"Authorization": f"Bearer {await self.auth_client.get()}"}
@@ -244,7 +256,10 @@ class GKECluster:
                                         )
                                     ],
                                 )
-                            ]
+                            ],
+                            node_selector={
+                                "cloud.google.com/gke-nodepool": self.cluster_id
+                            },
                         ),
                     ),
                 ),

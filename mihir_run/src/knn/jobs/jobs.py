@@ -1,8 +1,8 @@
 import asyncio
 import collections
-import itertools
 import resource
 import time
+import traceback
 import uuid
 
 import aiohttp
@@ -39,12 +39,13 @@ class MapperSpec:
         url: Optional[str] = None,
         container: Optional[str] = None,
         cluster: Optional[GKECluster] = None,
-        n_mappers: int = defaults.N_MAPPERS,
+        n_mappers: Optional[int] = None,
     ):
-        assert n_mappers < new_soft
-        assert (url and not any((container, cluster))) or (
+        assert (all((url, n_mappers)) and not any((container, cluster))) or (
             not url and all((container, cluster))
         )
+        n_mappers = n_mappers or defaults.N_MAPPERS
+        assert n_mappers < new_soft
 
         self.url = url
         self.container = container
@@ -132,22 +133,7 @@ class MapReduceJob:
             pass
 
         iterable = iter(iterable)
-
-        if self.chunk_size == 15:
-            print("Using chunk size schedule 1 -> 5")
-            chunked = itertools.chain(
-                utils.chunk(iterable, 1, until=2 * self.mapper.n_mappers),
-                utils.chunk(iterable, 5),
-            )
-        elif self.chunk_size == 135:
-            print("Using chunk size schedule 1 -> 3 -> 5")
-            chunked = itertools.chain(
-                utils.chunk(iterable, 1, until=2 * self.mapper.n_mappers),
-                utils.chunk(iterable, 3, until=2 * self.mapper.n_mappers),
-                utils.chunk(iterable, 5),
-            )
-        else:
-            chunked = utils.chunk(iterable, self.chunk_size)
+        chunked = utils.chunk(iterable, self.chunk_size)
 
         async with self.mapper as mapper_url:
             connector = aiohttp.TCPConnector(limit=0)
@@ -156,7 +142,14 @@ class MapReduceJob:
                     (self._request(session, mapper_url, chunk) for chunk in chunked),
                     self.mapper.n_mappers,
                 ):
-                    self._handle_chunk_result(*(await response_tuple))
+                    try:
+                        self._handle_chunk_result(*(await response_tuple))
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as e:
+                        print(f"Error in _handle_chunk_result, raising! {type(e)}: {e}")
+                        traceback.print_exc()
+                        raise
 
         if self._n_total is None:
             self._n_total = self._n_successful + self._n_failed
@@ -237,9 +230,11 @@ class MapReduceJob:
                     if response.status == 200:
                         result = await response.json()
                         break
-            except aiohttp.ClientConnectionError as e:
-                print(e)
-                break
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                print(f"Error in _request, but ignoring. {type(e)}: {e}")
+                traceback.print_exc()
 
         return chunk, result, end_time - start_time
 
