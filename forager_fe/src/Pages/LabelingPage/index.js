@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 
 import { colors } from "../../Constants";
-import { MainCanvas, ImageGrid } from "./Components";
+import { MainCanvas, ImageGrid, QuickLabeler } from "./Components";
 import { Button, Select } from "../../Components";
 import {
   BBox2D,
@@ -41,6 +41,15 @@ const ImageGridContainer = styled.div`
   border-radius: 5px;
 `;
 
+const QuickLabelContainer = styled.div`
+  width: 100%;
+  height: 75vh;
+  margin-top: 2vh;
+  margin-right: 3vw;
+  margin-left: 3vw;
+  border-radius: 5px;
+`;
+
 const TitleHeader = styled.h1`
   font-family: "AirBnbCereal-Medium";
   font-size: 24px;
@@ -67,6 +76,10 @@ function LabelingPage() {
   const [paths, setPaths] = useState(location.state.paths);
   const [identifiers, setIdentifiers] = useState(location.state.identifiers);
   const [imageSize, setImageSize] = useState(150);
+  const [propQuickLabels, setPropQuickLabels] = useState(new Array(location.state.paths.length).fill(1,0,location.state.paths.length))
+  var quickLabels = new Array(location.state.paths.length).fill(1,0,location.state.paths.length);
+  //const [currentImage, setCurrentImage] = useState(0);
+  const [imageSubset, setImageSubset] = useState(7);
 
   const getAnnotationsUrl = "https://127.0.0.1:8000/api/get_annotations/" + datasetName;
   const addAnnotationUrl = "https://127.0.0.1:8000/api/add_annotation/" + datasetName;
@@ -89,7 +102,27 @@ function LabelingPage() {
 
   const onImageClick = (idx) => {
     labeler.set_current_frame_num(idx);
+    //setCurrentImage(idx);
   }
+
+  /*
+  const nextFrame = (idx) => {
+    // Move currFrame to next, behavior dependent on mode
+    if (idx + 1 < paths.length) {
+      setCurrentImage(idx+1);
+      console.log(currentImage);
+    }
+  }
+
+  const prevFrame = () => {
+    // Move currFrame to prev, behavior dependent on mode
+    console.log("Going back?")
+    if (currentImage > 0) {
+      setCurrentImage(3);
+      console.log("Going back!")
+    }
+  }
+  */
 
   useEffect(() => {
     const handle_clear_boxes = () => {
@@ -217,13 +250,38 @@ function LabelingPage() {
     const handle_forager_change = () => {
       const select = document.getElementById("select_forager_mode");
       const klabeldiv = document.getElementById("klabel_wrapper");
+      const explorediv = document.getElementById("explore_grid");
+      const quicklabeldiv = document.getElementById("quick_labeler_container");
       if (select.value.localeCompare("forager_annotate") === 0) {
         forager_mode = "forager_annotate"
         klabeldiv.style.display = "flex"
+        explorediv.style.display = "flex"
+        quicklabeldiv.style.display = "none"
       } else if (select.value.localeCompare("forager_explore") === 0) {
         forager_mode = "forager_explore"
         klabeldiv.style.display = "none"
+        explorediv.style.display = "flex"
+        quicklabeldiv.style.display = "none"
+      } else if (select.value.localeCompare("forager_quicklabel") === 0) {
+        forager_mode = "forager_quicklabel"
+        klabeldiv.style.display = "none"
+        explorediv.style.display = "flex"
+        quicklabeldiv.style.display = "flex"
       } 
+    }
+
+    const handle_image_subset_change = () => {
+      const select = document.getElementById("select_image_subset");
+      if (select.value.localeCompare("all") === 0) {
+        setImageSubset(7);
+      } else if (select.value.localeCompare("unlabeled") === 0) {
+        setImageSubset(1);
+      } else if (select.value.localeCompare("positive") === 0) {
+        setImageSubset(2);
+      } else if (select.value.localeCompare("negative") === 0) {
+        setImageSubset(4);
+      } 
+      setPropQuickLabels(quickLabels);
     }
 
     const klabelRun = async () => {
@@ -295,14 +353,31 @@ function LabelingPage() {
       select = document.getElementById("select_forager_mode")
       select.onchange = handle_forager_change;
 
+      select = document.getElementById("select_image_subset")
+      select.onchange = handle_image_subset_change;
+
       window.addEventListener("keydown", function(e) {
         e.preventDefault();
-        labeler.handle_keydown(e);
+        if (forager_mode === "forager_annotate") {
+        } else {
+          if (e.key === "ArrowUp") {   
+            // Yes
+            quickLabels[labeler.current_frame_index] = 2;
+          } else if (e.key === "ArrowDown") {  
+            // No
+            quickLabels[labeler.current_frame_index] = 4;
+          } 
+          labeler.handle_keydown(e);
+          console.log(quickLabels);
+        }
+        document.getElementById("quick_labeler").src = paths[labeler.current_frame_index];
       });
 
       window.addEventListener("keyup", function(e) {
         e.preventDefault();
-        labeler.handle_keyup(e);
+        if (forager_mode === "forager_annotate") {
+          labeler.handle_keyup(e);
+        }
       });
     }
 
@@ -316,14 +391,31 @@ function LabelingPage() {
         <OptionsSelect alt="true" id="select_forager_mode">
           <option value="forager_annotate">Annotate</option>
           <option value="forager_explore">Explore</option>
+          <option value="forager_quicklabel">QuickLabel</option>
         </OptionsSelect>
+        <OptionsSelect alt="true" id="select_image_subset">
+          <option value="all">All</option>
+          <option value="unlabeled">Unlabeled</option>
+          <option value="positive">Positive</option>
+          <option value="negative">Negative</option>
+        </OptionsSelect>
+        <input type="text" list="categories" />
+        <datalist id="categories">
+          <option>Volvo</option>
+          <option>Saab</option>
+          <option>Mercedes</option>
+          <option>Audi</option>
+        </datalist>
         <label style={{"fontSize": '25px',"marginLeft": "260px"}}>Image Size</label>
         <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
       </SubContainer>
       <SubContainer>
         <MainCanvas/>
-        <ImageGridContainer>
-          <ImageGrid datasetName={datasetName} onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} />
+        <QuickLabelContainer id="quick_labeler_container" style={{"display": 'none'}}>
+          <QuickLabeler imagePaths={paths} currentIndex={labeler.current_frame_index}/>
+        </QuickLabelContainer>
+        <ImageGridContainer id="explore_grid">
+          <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} labels={propQuickLabels} show={imageSubset}/>
         </ImageGridContainer>
       </SubContainer>
     </Container>

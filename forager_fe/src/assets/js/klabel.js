@@ -778,7 +778,7 @@ export class ImageLabeler {
 	}
 
 	handle_canvas_click = event => {
-
+		this.set_focus();
 		var cur_frame = this.get_current_frame();
 
 		// ignore mouse clicks if the image hasn't loaded yet
@@ -1014,8 +1014,8 @@ export class ImageLabeler {
 		this.main_canvas_el.addEventListener("mouseover", this.handle_canvas_mouseover, false);
 		this.main_canvas_el.addEventListener("mouseout", this.handle_canvas_mouseout, false);
 
-		this.main_canvas_el.addEventListener("keydown", this.handle_keydown, false);
-		this.main_canvas_el.addEventListener("keyup", this.handle_keyup, false);
+		//this.main_canvas_el.addEventListener("keydown", this.handle_keydown, false);
+		//this.main_canvas_el.addEventListener("keyup", this.handle_keyup, false);
 
 		// make a dummy frame as a placeholder until the application provides real data
 		this.frames.push(new Frame(new ImageData()));
