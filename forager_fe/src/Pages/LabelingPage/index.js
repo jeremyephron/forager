@@ -78,12 +78,13 @@ function LabelingPage() {
   const [imageSize, setImageSize] = useState(150);
   const [propQuickLabels, setPropQuickLabels] = useState(new Array(location.state.paths.length).fill(1,0,location.state.paths.length))
   var quickLabels = new Array(location.state.paths.length).fill(1,0,location.state.paths.length);
-  //const [currentImage, setCurrentImage] = useState(0);
   const [imageSubset, setImageSubset] = useState(7);
-  // I know this isn't as good as using useState, but struggling to get it to work and can fix later
+  // Can't get it to work with just useState(paths), and can fix later
   var currPaths = location.state.identifiers;
   // Same thing with imagesubset
   var currImageSubset = 7;
+  const [categories, setCategories] = useState(["Hello","There"]);
+  const [currentCategory, setCurrentCategory] = useState("");
 
   const getAnnotationsUrl = "https://127.0.0.1:8000/api/get_annotations/" + datasetName;
   const addAnnotationUrl = "https://127.0.0.1:8000/api/add_annotation/" + datasetName;
@@ -107,6 +108,15 @@ function LabelingPage() {
   const onImageClick = (idx) => {
     labeler.set_current_frame_num(idx);
     //setCurrentImage(idx);
+  }
+
+  const onUserCategory = event => {
+    // If empty, refresh list to include any new categories actually labeled
+    if (event.target.value === "") {
+      console.log("Handle this")
+    }
+    // Set currentCategory to contents of text field
+    setCurrentCategory(event.target.value);
   }
 
   const getNextFrame = () => {
@@ -435,18 +445,6 @@ function LabelingPage() {
       });
 
       currPaths = paths; // Need this for initialization when the page loads...
-
-      var mycars = ['Hello','There']; // Replace this with current list of categories
-      var list = document.createElement('datalist');
-      list.id = "categories";
-
-      mycars.forEach(function(item){
-        var option = document.createElement('option');
-        option.value = item;
-        list.appendChild(option);
-      });
-      console.log(list);
-      document.body.appendChild(list);
     }
 
     klabelRun();
@@ -467,7 +465,12 @@ function LabelingPage() {
           <option value="positive">Positive</option>
           <option value="negative">Negative</option>
         </OptionsSelect>
-        <input type="text" list="categories" />
+        <input type="text" list="data" onChange={onUserCategory} />
+        <datalist id="data">
+          {categories.map((item, key) =>
+            <option key={key} value={item} />
+          )}
+        </datalist>
         <label style={{"fontSize": '25px',"marginLeft": "260px"}}>Image Size</label>
         <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
       </SubContainer>
