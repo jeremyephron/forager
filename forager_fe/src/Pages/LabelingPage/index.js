@@ -80,6 +80,8 @@ function LabelingPage() {
   var quickLabels = new Array(location.state.paths.length).fill(1,0,location.state.paths.length);
   //const [currentImage, setCurrentImage] = useState(0);
   const [imageSubset, setImageSubset] = useState(7);
+  // I know this isn't as good as using useState, but struggling to get it to work and can fix later
+  var currPaths = location.state.identifiers;
 
   const getAnnotationsUrl = "https://127.0.0.1:8000/api/get_annotations/" + datasetName;
   const addAnnotationUrl = "https://127.0.0.1:8000/api/add_annotation/" + datasetName;
@@ -227,6 +229,7 @@ function LabelingPage() {
 
       setIdentifiers(res.identifiers);
       setPaths(res.paths)
+      currPaths = res.paths;
 
       labeler.load_image_stack(imageData);
       labeler.set_focus();
@@ -357,7 +360,7 @@ function LabelingPage() {
       select.onchange = handle_image_subset_change;
 
       window.addEventListener("keydown", function(e) {
-        e.preventDefault();
+        //e.preventDefault(); // If we prevent default it stops typing, only prevent default maybe for arrow keys
         if (forager_mode === "forager_annotate") {
         } else {
           if (e.key === "ArrowUp") {   
@@ -366,11 +369,11 @@ function LabelingPage() {
           } else if (e.key === "ArrowDown") {  
             // No
             quickLabels[labeler.current_frame_index] = 4;
-          } 
-          labeler.handle_keydown(e);
+          }
           console.log(quickLabels);
         }
-        document.getElementById("quick_labeler").src = paths[labeler.current_frame_index];
+        labeler.handle_keydown(e);
+        document.getElementById("quick_labeler").src = currPaths[labeler.current_frame_index];
       });
 
       window.addEventListener("keyup", function(e) {
