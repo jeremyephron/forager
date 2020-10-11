@@ -702,12 +702,12 @@ export class ImageLabeler {
 		this.render();
 	}
 
-	handle_keydown = event => {
+	handle_keydown(event, prevFrame, nextFrame) {
 		//console.log("KeyDown: " + event.keyCode);
 
 		if (event.keyCode === 37) {   // left arrow
 			if (this.current_frame_index > 0)
-				this.set_current_frame_num(this.current_frame_index-1);
+				this.set_current_frame_num(prevFrame);
 			else
 				this.update_labeling_time();
 
@@ -719,7 +719,7 @@ export class ImageLabeler {
 
 		} else if (event.keyCode === 39) {  // right arrow
 			if (this.current_frame_index < this.frames.length-1)
-				this.set_current_frame_num(this.current_frame_index+1);
+				this.set_current_frame_num(nextFrame);
 			else
 				this.update_labeling_time();
 
@@ -778,7 +778,7 @@ export class ImageLabeler {
 	}
 
 	handle_canvas_click = event => {
-
+		this.set_focus();
 		var cur_frame = this.get_current_frame();
 
 		// ignore mouse clicks if the image hasn't loaded yet
@@ -1014,8 +1014,8 @@ export class ImageLabeler {
 		this.main_canvas_el.addEventListener("mouseover", this.handle_canvas_mouseover, false);
 		this.main_canvas_el.addEventListener("mouseout", this.handle_canvas_mouseout, false);
 
-		this.main_canvas_el.addEventListener("keydown", this.handle_keydown, false);
-		this.main_canvas_el.addEventListener("keyup", this.handle_keyup, false);
+		//this.main_canvas_el.addEventListener("keydown", this.handle_keydown, false);
+		//this.main_canvas_el.addEventListener("keyup", this.handle_keyup, false);
 
 		// make a dummy frame as a placeholder until the application provides real data
 		this.frames.push(new Frame(new ImageData()));

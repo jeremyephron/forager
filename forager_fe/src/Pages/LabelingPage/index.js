@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 
 import { colors } from "../../Constants";
-import { MainCanvas, ImageGrid } from "./Components";
+import { MainCanvas, ImageGrid, QuickLabeler } from "./Components";
 import { Button, Select } from "../../Components";
 import {
   BBox2D,
@@ -41,6 +41,15 @@ const ImageGridContainer = styled.div`
   border-radius: 5px;
 `;
 
+const QuickLabelContainer = styled.div`
+  width: 100%;
+  height: 75vh;
+  margin-top: 2vh;
+  margin-right: 3vw;
+  margin-left: 3vw;
+  border-radius: 5px;
+`;
+
 const TitleHeader = styled.h1`
   font-family: "AirBnbCereal-Medium";
   font-size: 24px;
@@ -67,6 +76,15 @@ function LabelingPage() {
   const [paths, setPaths] = useState(location.state.paths);
   const [identifiers, setIdentifiers] = useState(location.state.identifiers);
   const [imageSize, setImageSize] = useState(150);
+  const [propQuickLabels, setPropQuickLabels] = useState(new Array(location.state.paths.length).fill(1,0,location.state.paths.length))
+  var quickLabels = new Array(location.state.paths.length).fill(1,0,location.state.paths.length);
+  const [imageSubset, setImageSubset] = useState(7);
+  // Can't get it to work with just useState(paths), and can fix later
+  var currPaths = location.state.identifiers;
+  // Same thing with imagesubset
+  var currImageSubset = 7;
+  const [categories, setCategories] = useState(["Hello","There"]);
+  const [currentCategory, setCurrentCategory] = useState("");
 
   const getAnnotationsUrl = "https://127.0.0.1:8000/api/get_annotations/" + datasetName;
   const addAnnotationUrl = "https://127.0.0.1:8000/api/add_annotation/" + datasetName;
@@ -89,6 +107,73 @@ function LabelingPage() {
 
   const onImageClick = (idx) => {
     labeler.set_current_frame_num(idx);
+    //setCurrentImage(idx);
+  }
+
+  const onUserCategory = event => {
+    // If empty, refresh list to include any new categories actually labeled
+    if (event.target.value === "") {
+      console.log("Handle this")
+    }
+    // Set currentCategory to contents of text field
+    setCurrentCategory(event.target.value);
+  }
+
+  const getNextFrame = () => {
+    // Move currFrame to next, behavior dependent on mode
+    var nextFrame = labeler.current_frame_index + 1;
+    console.log(nextFrame)
+    while (nextFrame < paths.length) {
+      if (currImageSubset & quickLabels[nextFrame]) {
+        // labeler.current_frame_index = nextFrame;
+        // break;
+        return nextFrame;
+      } else {
+        nextFrame += 1;
+      }
+    }
+    return getLastFrame();
+  }
+
+  const getPrevFrame = () => {
+    // Move currFrame to prev, behavior dependent on mode
+    var prevFrame = labeler.current_frame_index - 1;
+    while (prevFrame > 0) {
+      if (currImageSubset & quickLabels[prevFrame]) {
+        //labeler.current_frame_index = prevFrame;
+        //break;
+        return prevFrame;
+      } else {
+        prevFrame -= 1;
+      }
+    }
+    return getFirstFrame();
+  }
+
+  const getFirstFrame = () => {
+    var firstFrame = 0;
+    while (firstFrame < paths.length) {
+      if (currImageSubset & quickLabels[firstFrame]) {
+        //labeler.current_frame_index = nextFrame;
+        //break;
+        return firstFrame;
+      } else {
+        firstFrame += 1;
+      }
+    }
+    return 0;
+  }
+
+  const getLastFrame = () => {
+    var lastFrame = paths.length - 1;
+    while (lastFrame > 0) {
+      if (currImageSubset & quickLabels[lastFrame]) {
+        return lastFrame;
+      } else {
+        lastFrame -= 1;
+      }
+    }
+    return paths.length - 1;
   }
 
   useEffect(() => {
@@ -194,6 +279,7 @@ function LabelingPage() {
 
       setIdentifiers(res.identifiers);
       setPaths(res.paths)
+      currPaths = res.paths;
 
       labeler.load_image_stack(imageData);
       labeler.set_focus();
@@ -217,13 +303,44 @@ function LabelingPage() {
     const handle_forager_change = () => {
       const select = document.getElementById("select_forager_mode");
       const klabeldiv = document.getElementById("klabel_wrapper");
+      const explorediv = document.getElementById("explore_grid");
+      const quicklabeldiv = document.getElementById("quick_labeler_container");
       if (select.value.localeCompare("forager_annotate") === 0) {
         forager_mode = "forager_annotate"
         klabeldiv.style.display = "flex"
+        explorediv.style.display = "flex"
+        quicklabeldiv.style.display = "none"
       } else if (select.value.localeCompare("forager_explore") === 0) {
         forager_mode = "forager_explore"
         klabeldiv.style.display = "none"
+        explorediv.style.display = "flex"
+        quicklabeldiv.style.display = "none"
+      } else if (select.value.localeCompare("forager_quicklabel") === 0) {
+        forager_mode = "forager_quicklabel"
+        klabeldiv.style.display = "none"
+        explorediv.style.display = "flex"
+        quicklabeldiv.style.display = "flex"
       } 
+    }
+
+    const handle_image_subset_change = () => {
+      const select = document.getElementById("select_image_subset");
+      if (select.value.localeCompare("all") === 0) {
+        setImageSubset(7);
+        currImageSubset = 7;
+      } else if (select.value.localeCompare("unlabeled") === 0) {
+        setImageSubset(1);
+        currImageSubset = 1;
+      } else if (select.value.localeCompare("positive") === 0) {
+        setImageSubset(2);
+        currImageSubset = 2;
+      } else if (select.value.localeCompare("negative") === 0) {
+        setImageSubset(4);
+        currImageSubset = 4;
+      } 
+      setPropQuickLabels(quickLabels);
+      console.log(getFirstFrame());
+      labeler.current_frame_index = getFirstFrame();
     }
 
     const klabelRun = async () => {
@@ -295,15 +412,39 @@ function LabelingPage() {
       select = document.getElementById("select_forager_mode")
       select.onchange = handle_forager_change;
 
+      select = document.getElementById("select_image_subset")
+      select.onchange = handle_image_subset_change;
+
       window.addEventListener("keydown", function(e) {
-        e.preventDefault();
-        labeler.handle_keydown(e);
+        //e.preventDefault(); // If we prevent default it stops typing, only prevent default maybe for arrow keys
+        var prevFrame = getPrevFrame();
+        var nextFrame = getNextFrame();
+        if (forager_mode === "forager_annotate") {
+          labeler.handle_keydown(e, prevFrame, nextFrame);
+        } else {
+          if (e.key === "ArrowUp") {   
+            // Yes
+            quickLabels[labeler.current_frame_index] = 2;
+            labeler.current_frame_index = nextFrame;
+          } else if (e.key === "ArrowDown") {  
+            // No
+            quickLabels[labeler.current_frame_index] = 4;
+            labeler.current_frame_index = nextFrame;
+          } else {
+            labeler.handle_keydown(e, prevFrame, nextFrame);
+          }
+        }
+        document.getElementById("quick_labeler").src = currPaths[labeler.current_frame_index];
       });
 
       window.addEventListener("keyup", function(e) {
         e.preventDefault();
-        labeler.handle_keyup(e);
+        if (forager_mode === "forager_annotate") {
+          labeler.handle_keyup(e);
+        }
       });
+
+      currPaths = paths; // Need this for initialization when the page loads...
     }
 
     klabelRun();
@@ -316,14 +457,30 @@ function LabelingPage() {
         <OptionsSelect alt="true" id="select_forager_mode">
           <option value="forager_annotate">Annotate</option>
           <option value="forager_explore">Explore</option>
+          <option value="forager_quicklabel">QuickLabel</option>
         </OptionsSelect>
+        <OptionsSelect alt="true" id="select_image_subset">
+          <option value="all">All</option>
+          <option value="unlabeled">Unlabeled</option>
+          <option value="positive">Positive</option>
+          <option value="negative">Negative</option>
+        </OptionsSelect>
+        <input type="text" list="data" onChange={onUserCategory} />
+        <datalist id="data">
+          {categories.map((item, key) =>
+            <option key={key} value={item} />
+          )}
+        </datalist>
         <label style={{"fontSize": '25px',"marginLeft": "260px"}}>Image Size</label>
         <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
       </SubContainer>
       <SubContainer>
         <MainCanvas/>
-        <ImageGridContainer>
-          <ImageGrid datasetName={datasetName} onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} />
+        <QuickLabelContainer id="quick_labeler_container" style={{"display": 'none'}}>
+          <QuickLabeler imagePaths={paths} currentIndex={labeler.current_frame_index}/>
+        </QuickLabelContainer>
+        <ImageGridContainer id="explore_grid">
+          <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} labels={propQuickLabels} show={imageSubset}/>
         </ImageGridContainer>
       </SubContainer>
     </Container>

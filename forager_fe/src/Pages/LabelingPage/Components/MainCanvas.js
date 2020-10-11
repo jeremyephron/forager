@@ -119,7 +119,7 @@ const Canvas = styled.canvas`
 const MainCanvas = () => {
   return (
     <Container id="klabel_wrapper">
-      <Canvas width="960" height="500" id="main_canvas" />
+      <Canvas width="960" height="500" id="main_canvas" tabindex="0"/>
       <OptionsBar />
       <Instructions />
     </Container>

@@ -22,17 +22,14 @@ const Grid = styled.div`
   height: 100%;
   overflow-y: scroll;
   justify-content: space-evenly;
-
-  img:first-child {
-      margin-top: 0;
-  }
 `;
 
 const ImageGrid = ({
-  datasetName,
   onImageClick,
   imagePaths,
-  imageHeight
+  imageHeight,
+  labels,
+  show
 }) => {
   // const imagesUrl = "http://127.0.0.1:8000/api/get_results/" + datasetName;
   // const [loading, setLoading] = useState(false);
@@ -54,7 +51,7 @@ const ImageGrid = ({
 
   return (
     <Grid>
-      {imagePaths.map((path, idx) => <Image key={idx} src={path} onClick={() => onImageClick(idx)} style={{ height: imageHeight + 'px' }}/>)}
+      {imagePaths.map((path, idx) => <Image key={idx} src={path} onClick={() => onImageClick(idx)} style={{ height: imageHeight + 'px' , display: (labels[idx] & show ? "flex" : "none")}}/>)}
     </Grid>
   );
 }
