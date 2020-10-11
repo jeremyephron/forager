@@ -702,12 +702,12 @@ export class ImageLabeler {
 		this.render();
 	}
 
-	handle_keydown = event => {
+	handle_keydown(event, prevFrame, nextFrame) {
 		//console.log("KeyDown: " + event.keyCode);
 
 		if (event.keyCode === 37) {   // left arrow
 			if (this.current_frame_index > 0)
-				this.set_current_frame_num(this.current_frame_index-1);
+				this.set_current_frame_num(prevFrame);
 			else
 				this.update_labeling_time();
 
@@ -719,7 +719,7 @@ export class ImageLabeler {
 
 		} else if (event.keyCode === 39) {  // right arrow
 			if (this.current_frame_index < this.frames.length-1)
-				this.set_current_frame_num(this.current_frame_index+1);
+				this.set_current_frame_num(nextFrame);
 			else
 				this.update_labeling_time();
 

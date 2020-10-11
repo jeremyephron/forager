@@ -82,6 +82,8 @@ function LabelingPage() {
   const [imageSubset, setImageSubset] = useState(7);
   // I know this isn't as good as using useState, but struggling to get it to work and can fix later
   var currPaths = location.state.identifiers;
+  // Same thing with imagesubset
+  var currImageSubset = 7;
 
   const getAnnotationsUrl = "https://127.0.0.1:8000/api/get_annotations/" + datasetName;
   const addAnnotationUrl = "https://127.0.0.1:8000/api/add_annotation/" + datasetName;
@@ -107,24 +109,62 @@ function LabelingPage() {
     //setCurrentImage(idx);
   }
 
-  /*
-  const nextFrame = (idx) => {
+  const getNextFrame = () => {
     // Move currFrame to next, behavior dependent on mode
-    if (idx + 1 < paths.length) {
-      setCurrentImage(idx+1);
-      console.log(currentImage);
+    var nextFrame = labeler.current_frame_index + 1;
+    console.log(nextFrame)
+    while (nextFrame < paths.length) {
+      if (currImageSubset & quickLabels[nextFrame]) {
+        // labeler.current_frame_index = nextFrame;
+        // break;
+        return nextFrame;
+      } else {
+        nextFrame += 1;
+      }
     }
+    return getLastFrame();
   }
 
-  const prevFrame = () => {
+  const getPrevFrame = () => {
     // Move currFrame to prev, behavior dependent on mode
-    console.log("Going back?")
-    if (currentImage > 0) {
-      setCurrentImage(3);
-      console.log("Going back!")
+    var prevFrame = labeler.current_frame_index - 1;
+    while (prevFrame > 0) {
+      if (currImageSubset & quickLabels[prevFrame]) {
+        //labeler.current_frame_index = prevFrame;
+        //break;
+        return prevFrame;
+      } else {
+        prevFrame -= 1;
+      }
     }
+    return getFirstFrame();
   }
-  */
+
+  const getFirstFrame = () => {
+    var firstFrame = 0;
+    while (firstFrame < paths.length) {
+      if (currImageSubset & quickLabels[firstFrame]) {
+        //labeler.current_frame_index = nextFrame;
+        //break;
+        return firstFrame;
+      } else {
+        firstFrame += 1;
+      }
+    }
+    return 0;
+  }
+
+  const getLastFrame = () => {
+    var lastFrame = paths.length - 1;
+    while (lastFrame > 0) {
+      if (currImageSubset & quickLabels[lastFrame]) {
+        return lastFrame;
+      } else {
+        lastFrame -= 1;
+      }
+    }
+    return paths.length - 1;
+  }
 
   useEffect(() => {
     const handle_clear_boxes = () => {
@@ -277,14 +317,20 @@ function LabelingPage() {
       const select = document.getElementById("select_image_subset");
       if (select.value.localeCompare("all") === 0) {
         setImageSubset(7);
+        currImageSubset = 7;
       } else if (select.value.localeCompare("unlabeled") === 0) {
         setImageSubset(1);
+        currImageSubset = 1;
       } else if (select.value.localeCompare("positive") === 0) {
         setImageSubset(2);
+        currImageSubset = 2;
       } else if (select.value.localeCompare("negative") === 0) {
         setImageSubset(4);
+        currImageSubset = 4;
       } 
       setPropQuickLabels(quickLabels);
+      console.log(getFirstFrame());
+      labeler.current_frame_index = getFirstFrame();
     }
 
     const klabelRun = async () => {
@@ -361,18 +407,23 @@ function LabelingPage() {
 
       window.addEventListener("keydown", function(e) {
         //e.preventDefault(); // If we prevent default it stops typing, only prevent default maybe for arrow keys
+        var prevFrame = getPrevFrame();
+        var nextFrame = getNextFrame();
         if (forager_mode === "forager_annotate") {
+          labeler.handle_keydown(e, prevFrame, nextFrame);
         } else {
           if (e.key === "ArrowUp") {   
             // Yes
             quickLabels[labeler.current_frame_index] = 2;
+            labeler.current_frame_index = nextFrame;
           } else if (e.key === "ArrowDown") {  
             // No
             quickLabels[labeler.current_frame_index] = 4;
+            labeler.current_frame_index = nextFrame;
+          } else {
+            labeler.handle_keydown(e, prevFrame, nextFrame);
           }
-          console.log(quickLabels);
         }
-        labeler.handle_keydown(e);
         document.getElementById("quick_labeler").src = currPaths[labeler.current_frame_index];
       });
 
@@ -382,6 +433,8 @@ function LabelingPage() {
           labeler.handle_keyup(e);
         }
       });
+
+      currPaths = paths; // Need this for initialization when the page loads...
     }
 
     klabelRun();
