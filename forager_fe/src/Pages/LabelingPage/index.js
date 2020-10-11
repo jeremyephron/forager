@@ -435,6 +435,18 @@ function LabelingPage() {
       });
 
       currPaths = paths; // Need this for initialization when the page loads...
+
+      var mycars = ['Hello','There']; // Replace this with current list of categories
+      var list = document.createElement('datalist');
+      list.id = "categories";
+
+      mycars.forEach(function(item){
+        var option = document.createElement('option');
+        option.value = item;
+        list.appendChild(option);
+      });
+      console.log(list);
+      document.body.appendChild(list);
     }
 
     klabelRun();
@@ -456,12 +468,6 @@ function LabelingPage() {
           <option value="negative">Negative</option>
         </OptionsSelect>
         <input type="text" list="categories" />
-        <datalist id="categories">
-          <option>Volvo</option>
-          <option>Saab</option>
-          <option>Mercedes</option>
-          <option>Audi</option>
-        </datalist>
         <label style={{"fontSize": '25px',"marginLeft": "260px"}}>Image Size</label>
         <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
       </SubContainer>
