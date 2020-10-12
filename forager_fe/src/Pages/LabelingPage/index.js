@@ -268,9 +268,7 @@ function LabelingPage() {
 
       let url = new URL(lookupKnnUrl);
       url.search = new URLSearchParams({
-        ann_identifiers:  currFrame.data.annotations.map(ann => ann.identifier),
-        user: user,
-        category: category
+        ann_identifiers:  currFrame.data.annotations.map(ann => ann.identifier)
       }).toString();
       const res = await fetch(url, {method: "GET",
         credentials: 'include',
