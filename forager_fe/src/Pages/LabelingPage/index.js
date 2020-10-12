@@ -85,11 +85,19 @@ function LabelingPage() {
   var currImageSubset = 7;
   const [categories, setCategories] = useState(["Hello","There"]);
   const [currentCategory, setCurrentCategory] = useState("");
+  const [users, setUsers] = useState(["Kenobi"]);
+  const [currentUser, setCurrentUser] = useState("");
+  //var user = "";
+  //var category = "";
 
   const getAnnotationsUrl = "https://127.0.0.1:8000/api/get_annotations/" + datasetName;
   const addAnnotationUrl = "https://127.0.0.1:8000/api/add_annotation/" + datasetName;
   const deleteAnnotationUrl = "https://127.0.0.1:8000/api/delete_annotation/" + datasetName;
   const lookupKnnUrl = "https://127.0.0.1:8000/api/lookup_knn/" + datasetName;
+  // can modify the other urls like this 
+  const getConflictsUrl = "https://127.0.0.1:8000/api/get_conflicts/" + datasetName;
+  const getUnlabeledImagesUrl = "https://127.0.0.1:8000/api/get_unlabeled/" + datasetName;
+  const getUsersAndCategoriesUrl = "https://127.0.0.1:8000/api/get_users_and_categories/" + datasetName;
 
   /* Klabel stuff */
   const labeler = useMemo(() => new ImageLabeler(), []);
@@ -110,19 +118,31 @@ function LabelingPage() {
     //setCurrentImage(idx);
   }
 
-  const onUserCategory = event => {
+  const onCategory = event => {
     // If empty, refresh list to include any new categories actually labeled
     if (event.target.value === "") {
       console.log("Handle this")
     }
     // Set currentCategory to contents of text field
     setCurrentCategory(event.target.value);
+    //category = event.target.value;
+  }
+
+  const onUser = event => {
+    // If empty, refresh list to include any new categories actually labeled
+    if (event.target.value === "") {
+      console.log("Handle this")
+    }
+    // Set currentCategory to contents of text field
+    setCurrentUser(event.target.value);
+    //user = event.target.value;
+    //console.log(user);
   }
 
   const getNextFrame = () => {
     // Move currFrame to next, behavior dependent on mode
     var nextFrame = labeler.current_frame_index + 1;
-    console.log(nextFrame)
+    //console.log(nextFrame)
     while (nextFrame < paths.length) {
       if (currImageSubset & quickLabels[nextFrame]) {
         // labeler.current_frame_index = nextFrame;
@@ -227,9 +247,16 @@ function LabelingPage() {
     }
 
     const handle_annotation_added = async (currFrame, annotation) => {
-      const endpoint = addAnnotationUrl + '/' + currFrame.data.identifier;
+      let user = document.getElementById("currUser").value;
+      let category = document.getElementById("currCategory").value;
 
-      const identifer = await fetch(endpoint, {
+      let endpoint = new URL(addAnnotationUrl + '/' + currFrame.data.identifier);
+      endpoint.search = new URLSearchParams({
+        user: user,
+        category: category
+      }).toString();
+
+      const identifer = await fetch(endpoint.toString(), {
         method: "POST",
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -241,14 +268,16 @@ function LabelingPage() {
 
       let url = new URL(lookupKnnUrl);
       url.search = new URLSearchParams({
-        ann_identifiers:  currFrame.data.annotations.map(ann => ann.identifier)
+        ann_identifiers:  currFrame.data.annotations.map(ann => ann.identifier),
+        user: user,
+        category: category
       }).toString();
       const res = await fetch(url, {method: "GET",
         credentials: 'include',
       }).then(results => results.json());
 
       url = new URL(getAnnotationsUrl);
-      url.search = new URLSearchParams({identifiers: res.identifiers}).toString();
+      url.search = new URLSearchParams({identifiers: res.identifiers, user: user, category: category}).toString();
       const annotations = await fetch(url, {
         method: "GET",
         credentials: 'include',
@@ -347,8 +376,12 @@ function LabelingPage() {
       const main_canvas = document.getElementById(main_canvas_id);
       labeler.init(main_canvas);
 
-      const url = new URL(getAnnotationsUrl);
-      url.search = new URLSearchParams({identifiers: identifiers}).toString();
+      let user = document.getElementById("currUser").value;
+      let category = document.getElementById("currCategory").value;
+
+      let url = new URL(getAnnotationsUrl);
+      url.search = new URLSearchParams({identifiers: identifiers, user: user, category: category}).toString();
+      console.log(identifiers);
       const annotations = await fetch(url, {
         method: "GET",
         credentials: 'include',
@@ -367,7 +400,7 @@ function LabelingPage() {
         if (data.identifier in annotations) {
           annotations[data.identifier].map(ann => {
             if (ann.type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
-
+              // Use this for fast binary labeling (quicklabel)
             } else if (ann.type === Annotation.ANNOTATION_MODE_POINT) {
               data.annotations.push(PointAnnotation.parse(ann));
             } else if (ann.type === Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX) {
@@ -379,6 +412,11 @@ function LabelingPage() {
         }
         imageData.push(data);
       }
+
+      url = new URL(getUsersAndCategoriesUrl);
+      /*const usersAndCategories = await fetch(url, {method: "GET",
+        credentials: 'include',
+      }).then(results => results.json());*/
 
       labeler.load_image_stack(imageData);
       labeler.set_focus();
@@ -465,8 +503,14 @@ function LabelingPage() {
           <option value="positive">Positive</option>
           <option value="negative">Negative</option>
         </OptionsSelect>
-        <input type="text" list="data" onChange={onUserCategory} />
-        <datalist id="data">
+        <input type="text" list="users" id="currUser" onChange={onUser} />
+        <datalist id="users">
+          {users.map((item, key) =>
+            <option key={key} value={item} />
+          )}
+        </datalist>
+        <input type="text" list="categories" id="currCategory" onChange={onCategory} />
+        <datalist id="categories">
           {categories.map((item, key) =>
             <option key={key} value={item} />
           )}
