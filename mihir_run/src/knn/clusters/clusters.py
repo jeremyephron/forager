@@ -58,7 +58,7 @@ class GKECluster:  # TODO(mihirg): Rename to GKENodePool
 
     # CLUSTER MANAGEMENT
 
-    async def populate_cluster_endpoint(self):
+    async def update_cluster_endpoint(self):
         endpoint = (
             "https://container.googleapis.com/v1/"
             f"projects/{self.project_id}/"
@@ -77,10 +77,6 @@ class GKECluster:  # TODO(mihirg): Rename to GKENodePool
                 response_json = await response.json()
                 if response_json.get("status") == "RUNNING":
                     self.cluster_endpoint = response_json.get("endpoint")
-
-        print(
-            f"Located Kubernetes cluster {self.cluster_name} at {self.cluster_endpoint}"
-        )
 
     async def start(self, num_retries=15):
         self.session = self.session or aiohttp.ClientSession(
@@ -135,27 +131,10 @@ class GKECluster:  # TODO(mihirg): Rename to GKENodePool
                 else:
                     break
 
-        # Kick off background task to get cluster endpoint
-        populate_cluster_endpoint_task = asyncio.create_task(
-            self.populate_cluster_endpoint()
-        )
-
-        # Poll until node pool has been started
-        poll_endpoint = f"{endpoint}/{self.cluster_id}"
-        while True:
-            await asyncio.sleep(POLL_INTERVAL)
-            async with self.session.get(poll_endpoint, headers=headers) as response:
-                if response.status != 200:
-                    print(response, await response.text())
-                    continue
-
-                response_json = await response.json()
-                if response_json.get("status") == "RUNNING":
-                    break
+        # Wait for node pool to be fully created (and master to resize if necessary)
+        await self.update_cluster_endpoint()
 
         print(f"Started Kubernetes node pool {self.cluster_id}")
-
-        await populate_cluster_endpoint_task
         self.started = True
 
     async def scale(self, num_nodes: int):
@@ -198,6 +177,9 @@ class GKECluster:  # TODO(mihirg): Rename to GKENodePool
             headers = {"Authorization": f"Bearer {await self.auth_client.get()}"}
             async with self.session.delete(endpoint, headers=headers) as response:
                 assert response.status == 200, response.status
+
+            # Wait for node pool to be fully deleted
+            await self.update_cluster_endpoint()
 
         await self.session.close()
 
