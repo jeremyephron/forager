@@ -237,7 +237,7 @@ function LabelingPage() {
         labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_POINT);
       } else if (select.value.localeCompare("per_frame") === 0) {
         labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY);
-        labeler.set_categories( { true: { idx: 1, color: "#67bf5c" }, false: {idx:2, color: "#ed665d"} } );
+        labeler.set_categories( { true: { value: 1, color: "#67bf5c" }, false: {value:2, color: "#ed665d"} } );
       }
     }
 
