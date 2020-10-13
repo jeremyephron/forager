@@ -211,8 +211,22 @@ def get_results(request, dataset_name):
 @csrf_exempt
 def get_annotations(request, dataset_name):
     image_identifiers = request.GET['identifiers'].split(',')
+    label_function = request.GET['user']
+    category = request.GET['category']
+
+    filter_args = dict(
+        dataset_item__in=dataset_items
+    )
+    if not label_function == 'all':
+        filter_args['label_function'] = label_function
+    if not category == 'all':
+        filter_args['category'] = category
+
     dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
-    anns = Annotation.objects.filter(dataset_item__in=dataset_items)
+    anns = Annotation.objects.filter(
+        dataset_item__in=dataset_items,
+        label_function=label_function,
+        label_category=category)
 
     data = defaultdict(list)
     for ann in anns:
@@ -231,12 +245,16 @@ def add_annotation(request, dataset_name, image_identifier):
     #   'type': 2,
     #   'bbox': {'bmin': {'x': 0.2, 'y': 0.5}, 'bmax': {'x': 0.5, 'y': 0.7}}
     # }
-    annotation = request.body.decode('utf-8')
+    body = request.body.decode('utf-8')
+    label_function = body['user']
+    category = body['category']
+    annotation = body['annotation']
 
     dataset_item = DatasetItem.objects.get(pk=image_identifier)
     ann = Annotation(
         dataset_item=dataset_item,
-        label_function='user',
+        label_function=label_function,
+        label_category=category,
         label_type='klabel',
         label_data=annotation)
     ann.save()

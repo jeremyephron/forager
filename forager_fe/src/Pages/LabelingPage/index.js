@@ -250,11 +250,17 @@ function LabelingPage() {
         category: category
       }).toString();
 
+      let body = {
+        user: user,
+        category: category,
+        annotation: annotation
+      }
+
       const identifer = await fetch(endpoint.toString(), {
         method: "POST",
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(annotation)
+        body: JSON.stringify(body)
       })
       .then(response => response.text());
 
