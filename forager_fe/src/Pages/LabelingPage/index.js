@@ -337,6 +337,24 @@ function LabelingPage() {
       const select = document.getElementById("select_image_subset");
       // Calculate the desired subset of images from annotations, then pass to currVisibility
       let show = new Array(labeler.frames.length).fill(false,0,labeler.frames.length)
+      let conflicts = {};
+      if (select.value.localeCompare("conflict") === 0) {
+        let user = document.getElementById("currUser").value;
+        let category = document.getElementById("currCategory").value;
+
+        // Assume this returns a list of conflicting identifiers
+        let url = new URL(getConflictsUrl);
+        url.search = new URLSearchParams({user: user, category: category}).toString();
+        console.log(identifiers);
+        conflicts = fetch(url, {
+          method: "GET",
+          credentials: 'include',
+          headers: {
+          'Content-Type': 'application/json'
+          }
+        })
+        .then(results => results.json());
+      }
       for (var i = 0; i < labeler.frames.length; i++) {
         if (select.value.localeCompare("all") === 0) {
           show[i] = true
@@ -364,10 +382,14 @@ function LabelingPage() {
             }
           }
         } 
+        else if (select.value.localeCompare("conflict") === 0) {
+          if (labeler.frames[i].identifer in conflicts) {
+            show[i] = true;
+          }
+        } 
       }
       setVisibility(show);
       currVisibility = show;
-      console.log(show);
       labeler.current_frame_index = getFirstFrame();
     }
 
