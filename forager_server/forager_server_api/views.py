@@ -216,15 +216,16 @@ def get_annotations(request, dataset_name):
     label_function = request.GET['user']
     category = request.GET['category']
 
+    dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
     filter_args = dict(
         dataset_item__in=dataset_items
     )
     if not label_function == 'all':
         filter_args['label_function'] = label_function
     if not category == 'all':
-        filter_args['category'] = category
+        filter_args['label_category'] = category
 
-    dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
+
     anns = Annotation.objects.filter(**filter_args)
 
     data = defaultdict(list)
