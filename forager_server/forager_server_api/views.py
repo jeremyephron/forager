@@ -6,7 +6,7 @@ import requests
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from google.cloud import storage
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 from django.conf import settings
@@ -215,6 +215,8 @@ def get_annotations(request, dataset_name):
     label_function = request.GET['user']
     category = request.GET['category']
 
+    dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
+
     filter_args = dict(
         dataset_item__in=dataset_items
     )
@@ -222,8 +224,6 @@ def get_annotations(request, dataset_name):
         filter_args['label_function'] = label_function
     if not category == 'all':
         filter_args['category'] = category
-
-    dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
     anns = Annotation.objects.filter(**filter_args)
 
     data = defaultdict(list)
@@ -242,14 +242,14 @@ def get_annotation_conflicts(request, dataset_name):
     label_function = request.GET['user']
     category = request.GET['category']
 
+    dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
+
     filter_args = dict(
         dataset_item__in=dataset_items,
         label_type='klabel_perframe'
     )
     if not category == 'all':
         filter_args['label_category'] = category
-
-    dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
     anns = Annotation.objects.filter(**filter_args)
 
     data = defaultdict(list)
