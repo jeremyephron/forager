@@ -15,8 +15,11 @@ class DatasetItem(models.Model):
 class Annotation(models.Model):
     dataset_item = models.ForeignKey(DatasetItem, on_delete=models.CASCADE)
     label_function = models.CharField(max_length=300)
+    label_category = models.CharField(max_length=300)
     label_type = models.CharField(max_length=300)
     label_data = models.CharField(max_length=5000)
+    created = models.DateTimeField(auto_now_add=True)
+    last_updated = models.DateTimeField(auto_now=True)
 
 
 class EmbeddingSet(models.Model):

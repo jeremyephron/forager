@@ -176,9 +176,11 @@ def get_dataset_info(request, dataset_name, dataset=None):
     if not dataset:
         dataset = get_object_or_404(Dataset, name=dataset_name)
 
+    filter_args = dict(dataset=dataset)
+
     bucket_name = dataset.directory[len('gs://'):].split('/')[0]
     path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
-    dataset_items = DatasetItem.objects.filter(dataset=dataset)[:100]
+    dataset_items = DatasetItem.objects.filter()[:100]
     dataset_item_paths = [path_template.format(di.path) for di in dataset_items]
     dataset_item_identifiers = [di.pk for di in dataset_items]
 
@@ -223,10 +225,7 @@ def get_annotations(request, dataset_name):
         filter_args['category'] = category
 
     dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
-    anns = Annotation.objects.filter(
-        dataset_item__in=dataset_items,
-        label_function=label_function,
-        label_category=category)
+    anns = Annotation.objects.filter(filter_args**)
 
     data = defaultdict(list)
     for ann in anns:
@@ -235,6 +234,52 @@ def get_annotations(request, dataset_name):
         data[ann.dataset_item.pk].append(label_data)
 
     return JsonResponse(data)
+
+
+@api_view(['GET'])
+@csrf_exempt
+def get_annotation_conflicts(request, dataset_name):
+    image_identifiers = request.GET['identifiers'].split(',')
+    label_function = request.GET['user']
+    category = request.GET['category']
+
+    filter_args = dict(
+        dataset_item__in=dataset_items
+        label_type='klabel_perframe'
+    )
+    if not category == 'all':
+        filter_args['label_category'] = category
+
+    dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
+    anns = Annotation.objects.filter(filter_args**)
+
+    data = defaultdict(list)
+    anns_by_image = defaultdict(list)
+    for ann in anns:
+        label_data = json.loads(ann.label_data)
+        label_data['identifier'] = ann.pk
+        data[ann.dataset_item.pk].append(label_data)
+
+    # Analyze conflicts
+    conflict_data = defaultdict(list)
+    for image_id, labels for data.items():
+        has_user_label = False
+        user_annotation = None
+        for ann in labels:
+            if ann.label_function == label_function:
+                has_user_label = True
+                user_annotation = ann
+                break
+        if not has_user_label:
+            continue
+        for ann in labels:
+            if ann == user_annotation:
+                continue
+            if ann.label_data != user_annotation.label_data:
+                conflict_data[image_id] = labels
+                break
+
+    return JsonResponse(conflict_data)
 
 
 @api_view(['POST'])
@@ -304,6 +349,7 @@ def lookup_knn(request, dataset_name):
                             for ann in query_annotations]]
 
     # 3. Send paths and patches to /query_index
+    # NOTE(fpoms): embedding computation does not support black/white images rn.
     cluster_id = request.session['cluster_id']
     index_id = request.session['index_id']
     headers = {"Content-type": "application/x-www-form-urlencoded",
