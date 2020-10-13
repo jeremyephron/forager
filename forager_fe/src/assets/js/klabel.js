@@ -34,6 +34,10 @@ export class PerFrameAnnotation extends Annotation {
 		super(Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY);
 		this.value = value;
 	}
+
+	static parse(obj) {
+		return Object.setPrototypeOf(obj, PerFrameAnnotation.prototype);
+	}
 }
 
 export class PointAnnotation extends Annotation {
@@ -120,7 +124,7 @@ export class ImageLabeler {
 		this.frames = [];
 
 		// annotation state
-		this.annotation_mode = Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX;
+		this.annotation_mode = Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY;
 		this.category_to_name = [];
 		this.category_to_color = [];
 		this.in_progress_points = [];
@@ -306,13 +310,16 @@ export class ImageLabeler {
 			}
 		}
 
+		var newAnnotation = new PerFrameAnnotation(cat_idx);
 		if (cat_idx !== Annotation.INVALID_CATEGORY) {
-			cur_frame.data.annotations.push(new PerFrameAnnotation(cat_idx));
+			cur_frame.data.annotations.push(newAnnotation);
 			//console.log("KLabeler: set per-frame annotation: " + this.category_to_name[cat_idx]);
+			this.add_annotation(newAnnotation);
 		}
 
-		if (this.annotation_changed_callback !== null)
-			this.annotation_changed_callback();
+		// will need to add an annotation_changed_callback
+		//if (this.annotation_changed_callback !== null)
+		//	this.annotation_changed_callback();
 	}
 
 	add_annotation(ann) {

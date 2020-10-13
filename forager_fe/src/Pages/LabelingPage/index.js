@@ -66,6 +66,7 @@ function LabelingPage() {
   const datasetName = location.state.datasetName;
   const [paths, setPaths] = useState(location.state.paths);
   const [identifiers, setIdentifiers] = useState(location.state.identifiers);
+  var currIdentifiers = location.state.identifiers;
   const [imageSize, setImageSize] = useState(150);
   const [visibility, setVisibility] = useState(new Array(location.state.paths.length).fill(true,0,location.state.paths.length))
   var currVisibility = new Array(location.state.paths.length).fill(true,0,location.state.paths.length);
@@ -99,6 +100,7 @@ function LabelingPage() {
 
   // Category keymap
   const filterMap = {'positive': 1, 'negative': 2, 'hard_negative': 3, 'unsure': 4}
+  const labelTypeStrings = {0: 'klabel_frame', 1: 'klabel_point', 2: 'klabel_box', 3: 'klabel_extreme'}
 
   const image_data = [];
   for (let i=0; i<paths.length; i++) {
@@ -231,7 +233,6 @@ function LabelingPage() {
         labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_POINT);
       } else if (select.value.localeCompare("per_frame") === 0) {
         labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY);
-        labeler.set_categories( { positive: { value: 1, color: "#67bf5c" }, negative: {value:2, color: "#ed665d"}, hard_negative: {value:3, color: "#ffff00"}, unsure: {value:4, color: "#ffa500"} } );
       }
     }
 
@@ -253,7 +254,8 @@ function LabelingPage() {
       let body = {
         user: user,
         category: category,
-        annotation: annotation
+        annotation: annotation,
+        label_type: labelTypeStrings[annotation.type]
       }
 
       const identifer = await fetch(endpoint.toString(), {
@@ -266,9 +268,18 @@ function LabelingPage() {
 
       annotation.identifier = identifer;
 
+      // Make a copy of currFrame.data.annotations without full-frame
+      var filteredAnnotations = []
+      for (var i = 0; i < currFrame.data.annotations.length; i++) {
+        if (currFrame.data.annotations[i].type !== Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+          filteredAnnotations.push(currFrame.data.annotations[i])
+        }
+      }
+      console.log(filteredAnnotations)
+
       let url = new URL(lookupKnnUrl);
       url.search = new URLSearchParams({
-        ann_identifiers:  currFrame.data.annotations.map(ann => ann.identifier)
+        ann_identifiers:  filteredAnnotations.map(ann => ann.identifier)
       }).toString();
       const res = await fetch(url, {method: "GET",
         credentials: 'include',
@@ -377,8 +388,6 @@ function LabelingPage() {
           for (var j = 0; j < labeler.frames[i].data.annotations.length; j++) {
             if (labeler.frames[i].data.annotations[j].type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
               if (labeler.frames[i].data.annotations[j].value === filterMap[select.value]) {
-                console.log(select.value)
-                console.log(filterMap)
                 show[i] = true;
               } else  {
                 show[i] = false;
@@ -395,13 +404,13 @@ function LabelingPage() {
     const klabelRun = async () => {
       const main_canvas = document.getElementById(main_canvas_id);
       labeler.init(main_canvas);
-
+      labeler.set_categories( { positive: { value: 1, color: "#67bf5c" }, negative: {value:2, color: "#ed665d"}, hard_negative: {value:3, color: "#ffff00"}, unsure: {value:4, color: "#ffa500"} } );
+      
       let user = document.getElementById("currUser").value;
       let category = document.getElementById("currCategory").value;
 
       let url = new URL(getAnnotationsUrl);
       url.search = new URLSearchParams({identifiers: identifiers, user: user, category: category}).toString();
-      console.log(identifiers);
       const annotations = await fetch(url, {
         method: "GET",
         credentials: 'include',
@@ -442,7 +451,7 @@ function LabelingPage() {
       labeler.load_image_stack(imageData);
       labeler.set_focus();
 
-      labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX);
+      labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY);
       labeler.annotation_added_callback = handle_annotation_added;
       labeler.annotation_deleted_callback = handle_annotation_deleted;
 
