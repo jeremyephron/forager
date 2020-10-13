@@ -247,7 +247,7 @@ def get_annotation_conflicts(request, dataset_name):
     dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
     filter_args = dict(
         dataset_item__in=dataset_items,
-        label_type='klabel_perframe'
+        label_type='klabel_frame'
     )
     if not category == 'all':
         filter_args['label_category'] = category
@@ -257,12 +257,10 @@ def get_annotation_conflicts(request, dataset_name):
     data = defaultdict(list)
     anns_by_image = defaultdict(list)
     for ann in anns:
-        label_data = json.loads(ann.label_data)
-        label_data['identifier'] = ann.pk
-        data[ann.dataset_item.pk].append(label_data)
+        data[ann.dataset_item.pk].append(ann)
 
     # Analyze conflicts
-    conflict_data = defaultdict(list)
+    conflict_data = defaultdict(set)
     for image_id, labels in data.items():
         has_user_label = False
         user_annotation = None
@@ -276,11 +274,13 @@ def get_annotation_conflicts(request, dataset_name):
         for ann in labels:
             if ann == user_annotation:
                 continue
+            print(ann.label_data, user_annotation.label_data)
             if ann.label_data != user_annotation.label_data:
-                conflict_data[image_id] = labels
+                for ann in labels:
+                    conflict_data[image_id].add(ann.label_function)
                 break
 
-    return JsonResponse(conflict_data)
+    return JsonResponse({k: list(v) for k,v in conflict_data.items()})
 
 
 @api_view(['POST'])
@@ -294,6 +294,8 @@ def add_annotation(request, dataset_name, image_identifier):
     body = json.loads(request.body) # request.body.decode('utf-8')
     label_function = body['user']
     category = body['category']
+    label_type = body['label_type']
+
     annotation = json.dumps(body['annotation'])
 
     dataset_item = DatasetItem.objects.get(pk=image_identifier)
@@ -301,7 +303,7 @@ def add_annotation(request, dataset_name, image_identifier):
         dataset_item=dataset_item,
         label_function=label_function,
         label_category=category,
-        label_type='klabel',
+        label_type=label_type,
         label_data=annotation)
     ann.save()
 
