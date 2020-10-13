@@ -97,6 +97,9 @@ function LabelingPage() {
   // Annotating vs Exploring
   var forager_mode = 'forager_annotate';
 
+  // Category keymap
+  const filterMap = {'positive': 1, 'negative': 2, 'hard_negative': 3, 'unsure': 4}
+
   const image_data = [];
   for (let i=0; i<paths.length; i++) {
     const data = new ImageData();
@@ -228,7 +231,7 @@ function LabelingPage() {
         labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_POINT);
       } else if (select.value.localeCompare("per_frame") === 0) {
         labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY);
-        labeler.set_categories( { true: { value: 1, color: "#67bf5c" }, false: {value:2, color: "#ed665d"} } );
+        labeler.set_categories( { positive: { value: 1, color: "#67bf5c" }, negative: {value:2, color: "#ed665d"}, hard_negative: {value:3, color: "#ffff00"}, unsure: {value:4, color: "#ffa500"} } );
       }
     }
 
@@ -360,31 +363,21 @@ function LabelingPage() {
           show[i] = true
         } else if (select.value.localeCompare("unlabeled") === 0) {
           show[i] = (labeler.frames[i].data.annotations.length === 0);
-        } else if (select.value.localeCompare("positive") === 0) {
-          for (var j = 0; j < labeler.frames[i].data.annotations.length; j++) {
-            // var labeltype = labeler.frames[i].data.annotations[j].type;
-            if (labeler.frames[i].data.annotations[j].type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
-              if (labeler.frames[i].data.annotations[j].value === 1) {
-                show[i] = true;
-              } else if (labeler.frames[i].data.annotations[j].value === 2) {
-                show[i] = false;
-              }
-            }
-          }
-        } else if (select.value.localeCompare("negative") === 0) {
-          for (var j = 0; j < labeler.frames[i].data.annotations.length; j++) {
-            if (labeler.frames[i].data.annotations[j].type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
-              if (labeler.frames[i].data.annotations[j].value === 1) {
-                show[i] = false;
-              } else if (labeler.frames[i].data.annotations[j].value === 2) {
-                show[i] = true;
-              }
-            }
-          }
-        } 
-        else if (select.value.localeCompare("conflict") === 0) {
+        } else if (select.value.localeCompare("conflict") === 0) {
           if (labeler.frames[i].identifer in conflicts) {
             show[i] = true;
+          }
+        } else  {
+          for (var j = 0; j < labeler.frames[i].data.annotations.length; j++) {
+            if (labeler.frames[i].data.annotations[j].type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+              if (labeler.frames[i].data.annotations[j].value === filterMap[select.value]) {
+                console.log(select.value)
+                console.log(filterMap)
+                show[i] = true;
+              } else  {
+                show[i] = false;
+              }
+            }
           }
         } 
       }
@@ -510,6 +503,8 @@ function LabelingPage() {
           <option value="unlabeled">Unlabeled</option>
           <option value="positive">Positive</option>
           <option value="negative">Negative</option>
+          <option value="hard_negative">Hard Negative</option>
+          <option value="unsure">Unsure</option>
           <option value="conflict">Conflict</option>
         </OptionsSelect>
         <input type="text" list="users" id="currUser" onChange={onUser} />
