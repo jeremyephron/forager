@@ -1,17 +1,19 @@
 import asyncio
 import functools
-import uuid
 import json
+import uuid
+import signal
 
+from halo import Halo
 import numpy as np
 from sanic import Sanic
 import sanic.response as resp
 
 from typing import Dict, Any
 
+from knn import utils
 from knn.jobs import MapReduceJob, MapperSpec
 from knn.reducers import Reducer
-from knn.utils import base64_to_numpy
 from knn.clusters import GKECluster
 
 from interactive_index import InteractiveIndex
@@ -27,7 +29,7 @@ class EmbeddingDictReducer(Reducer):
 
     def handle_result(self, input, output):
         try:
-            self.embeddings[input["image"]] = base64_to_numpy(
+            self.embeddings[input["image"]] = utils.base64_to_numpy(
                 output[self.embedding_layer]
             )
         except Exception as e:
@@ -49,10 +51,8 @@ current_queries = {}  # type: Dict[str, MapReduceJob]
 current_indexes = {}  # type: Dict[str, LabeledIndex]
 
 
-async def _start_cluster(cluster_id):
-    cluster_data = current_clusters[cluster_id]
+async def _start_cluster(cluster_data):
     cluster = cluster_data["cluster"]
-
     await cluster.start()
     deployment_id, service_url = await cluster.create_deployment(
         container=config.MAPPER_CONTAINER, num_replicas=cluster_data["n_nodes"]
@@ -61,6 +61,14 @@ async def _start_cluster(cluster_id):
     cluster_data["deployment_id"] = deployment_id
     cluster_data["service_url"] = service_url
     cluster_data["deployed"].set()
+
+
+async def _stop_cluster(cluster_data):
+    await cluster_data["deployed"].wait()
+
+    cluster = cluster_data["cluster"]
+    await cluster.delete_deployment(cluster_data["deployment_id"])
+    await cluster.stop()
 
 
 @app.route("/start_cluster", methods=["POST"])
@@ -73,17 +81,18 @@ async def start_cluster(request):
         config.GCP_MACHINE_TYPE,
         n_nodes,
     )
-    cluster_id = cluster.cluster_id
 
-    current_clusters[cluster_id] = {
+    cluster_data = {
         "cluster": cluster,
         "deployed": asyncio.Event(),
         "deployment_id": None,
         "service_url": None,
         "n_nodes": n_nodes,
     }
-    app.add_task(_start_cluster(cluster_id))
+    app.add_task(_start_cluster(cluster_data))
 
+    cluster_id = cluster.cluster_id
+    current_clusters[cluster_id] = cluster_data
     return resp.json({"cluster_id": cluster_id})
 
 
@@ -100,12 +109,7 @@ async def cluster_status(request):
 async def stop_cluster(request):
     cluster_id = request.form["cluster_id"][0]
     cluster_data = current_clusters.pop(cluster_id)
-    cluster = cluster_data["cluster"]
-
-    await cluster_data["deployed"].wait()
-    await cluster.delete_deployment(cluster_data["deployment_id"])
-    await cluster.stop()
-
+    await _stop_cluster(cluster_data)
     return resp.text("", status=204)
 
 
@@ -258,5 +262,23 @@ async def delete_index(request):
     return resp.text("", status=204)
 
 
+# CLEANUP
+@utils.unasync
+async def cleanup(*args, **kwargs):
+    print("Stopping...")
+    await _cleanup_clusters()
+
+
+async def _cleanup_clusters():
+    if not current_clusters:
+        return
+
+    print(f"Terminating {len(current_clusters)} cluster(s)")
+    for cluster_id, cluster_data in current_clusters.items():
+        with Halo(text=cluster_id):
+            await _stop_cluster(cluster_data)
+
+
 if __name__ == "__main__":
+    signal.signal(signal.SIGINT, cleanup)
     app.run(host="0.0.0.0", port=5000)
