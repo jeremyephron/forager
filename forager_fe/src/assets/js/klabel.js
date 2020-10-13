@@ -704,6 +704,21 @@ export class ImageLabeler {
 
 	handle_keydown(event, prevFrame, nextFrame) {
 		//console.log("KeyDown: " + event.keyCode);
+		if (this.is_annotation_mode_per_frame_category()) {
+
+			// number key: 0-9
+			if (event.keyCode >= 48 && event.keyCode <= 57) {
+				var key_pressed = event.keyCode - 48;
+				var category_name = this.category_to_name[key_pressed];
+
+				// ignore keys if image hasn't loaded yet
+				var cur_frame = this.get_current_frame();
+				if (cur_frame.image_load_complete && category_name !== "") {
+					this.set_per_frame_category_annotation(key_pressed);
+				}
+				this.set_current_frame_num(nextFrame);
+			}
+		}
 
 		if (event.keyCode === 37) {   // left arrow
 			if (this.current_frame_index > 0)
@@ -750,21 +765,6 @@ export class ImageLabeler {
 	}
 
 	handle_keyup = event => {
-
-		if (this.is_annotation_mode_per_frame_category()) {
-
-			// number key: 0-9
-			if (event.keyCode >= 48 && event.keyCode <= 57) {
-				var key_pressed = event.keyCode - 48;
-				var category_name = this.category_to_name[key_pressed];
-
-				// ignore keys if image hasn't loaded yet
-				var cur_frame = this.get_current_frame();
-				if (cur_frame.image_load_complete && category_name !== "") {
-					this.set_per_frame_category_annotation(key_pressed);
-				}
-			}
-		}
 
 		if (event.keyCode === 8) {            // delete/bksp key
 			this.delete_annotation();

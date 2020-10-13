@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 
 import { colors } from "../../Constants";
-import { MainCanvas, ImageGrid, QuickLabeler } from "./Components";
+import { MainCanvas, ImageGrid } from "./Components";
 import { Button, Select } from "../../Components";
 import {
   BBox2D,
@@ -41,15 +41,6 @@ const ImageGridContainer = styled.div`
   border-radius: 5px;
 `;
 
-const QuickLabelContainer = styled.div`
-  width: 100%;
-  height: 75vh;
-  margin-top: 2vh;
-  margin-right: 3vw;
-  margin-left: 3vw;
-  border-radius: 5px;
-`;
-
 const TitleHeader = styled.h1`
   font-family: "AirBnbCereal-Medium";
   font-size: 24px;
@@ -76,8 +67,8 @@ function LabelingPage() {
   const [paths, setPaths] = useState(location.state.paths);
   const [identifiers, setIdentifiers] = useState(location.state.identifiers);
   const [imageSize, setImageSize] = useState(150);
-  const [propQuickLabels, setPropQuickLabels] = useState(new Array(location.state.paths.length).fill(1,0,location.state.paths.length))
-  var quickLabels = new Array(location.state.paths.length).fill(1,0,location.state.paths.length);
+  const [visibility, setVisibility] = useState(new Array(location.state.paths.length).fill(true,0,location.state.paths.length))
+  var currVisibility = new Array(location.state.paths.length).fill(true,0,location.state.paths.length);
   const [imageSubset, setImageSubset] = useState(7);
   // Can't get it to work with just useState(paths), and can fix later
   var currPaths = location.state.identifiers;
@@ -144,7 +135,7 @@ function LabelingPage() {
     var nextFrame = labeler.current_frame_index + 1;
     //console.log(nextFrame)
     while (nextFrame < paths.length) {
-      if (currImageSubset & quickLabels[nextFrame]) {
+      if (currVisibility[nextFrame]) {
         // labeler.current_frame_index = nextFrame;
         // break;
         return nextFrame;
@@ -159,7 +150,7 @@ function LabelingPage() {
     // Move currFrame to prev, behavior dependent on mode
     var prevFrame = labeler.current_frame_index - 1;
     while (prevFrame > 0) {
-      if (currImageSubset & quickLabels[prevFrame]) {
+      if (currVisibility[prevFrame]) {
         //labeler.current_frame_index = prevFrame;
         //break;
         return prevFrame;
@@ -173,7 +164,7 @@ function LabelingPage() {
   const getFirstFrame = () => {
     var firstFrame = 0;
     while (firstFrame < paths.length) {
-      if (currImageSubset & quickLabels[firstFrame]) {
+      if (currVisibility[firstFrame]) {
         //labeler.current_frame_index = nextFrame;
         //break;
         return firstFrame;
@@ -187,7 +178,7 @@ function LabelingPage() {
   const getLastFrame = () => {
     var lastFrame = paths.length - 1;
     while (lastFrame > 0) {
-      if (currImageSubset & quickLabels[lastFrame]) {
+      if (currImageSubset & currVisibility[lastFrame]) {
         return lastFrame;
       } else {
         lastFrame -= 1;
@@ -291,7 +282,7 @@ function LabelingPage() {
         if (data.identifier in annotations) {
           annotations[data.identifier].map(ann => {
             if (ann.type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
-              // TODO: how to handle?
+              data.annotations.push(PerFrameAnnotation.parse(ann));
             } else if (ann.type === Annotation.ANNOTATION_MODE_POINT) {
               data.annotations.push(PointAnnotation.parse(ann));
             } else if (ann.type === Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX) {
@@ -331,42 +322,52 @@ function LabelingPage() {
       const select = document.getElementById("select_forager_mode");
       const klabeldiv = document.getElementById("klabel_wrapper");
       const explorediv = document.getElementById("explore_grid");
-      const quicklabeldiv = document.getElementById("quick_labeler_container");
       if (select.value.localeCompare("forager_annotate") === 0) {
         forager_mode = "forager_annotate"
         klabeldiv.style.display = "flex"
         explorediv.style.display = "flex"
-        quicklabeldiv.style.display = "none"
       } else if (select.value.localeCompare("forager_explore") === 0) {
         forager_mode = "forager_explore"
         klabeldiv.style.display = "none"
         explorediv.style.display = "flex"
-        quicklabeldiv.style.display = "none"
-      } else if (select.value.localeCompare("forager_quicklabel") === 0) {
-        forager_mode = "forager_quicklabel"
-        klabeldiv.style.display = "none"
-        explorediv.style.display = "flex"
-        quicklabeldiv.style.display = "flex"
       } 
     }
 
     const handle_image_subset_change = () => {
       const select = document.getElementById("select_image_subset");
-      if (select.value.localeCompare("all") === 0) {
-        setImageSubset(7);
-        currImageSubset = 7;
-      } else if (select.value.localeCompare("unlabeled") === 0) {
-        setImageSubset(1);
-        currImageSubset = 1;
-      } else if (select.value.localeCompare("positive") === 0) {
-        setImageSubset(2);
-        currImageSubset = 2;
-      } else if (select.value.localeCompare("negative") === 0) {
-        setImageSubset(4);
-        currImageSubset = 4;
-      } 
-      setPropQuickLabels(quickLabels);
-      console.log(getFirstFrame());
+      // Calculate the desired subset of images from annotations, then pass to currVisibility
+      let show = new Array(labeler.frames.length).fill(false,0,labeler.frames.length)
+      for (var i = 0; i < labeler.frames.length; i++) {
+        if (select.value.localeCompare("all") === 0) {
+          show[i] = true
+        } else if (select.value.localeCompare("unlabeled") === 0) {
+          show[i] = (labeler.frames[i].data.annotations.length === 0);
+        } else if (select.value.localeCompare("positive") === 0) {
+          for (var j = 0; j < labeler.frames[i].data.annotations.length; j++) {
+            // var labeltype = labeler.frames[i].data.annotations[j].type;
+            if (labeler.frames[i].data.annotations[j].type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+              if (labeler.frames[i].data.annotations[j].value === 1) {
+                show[i] = true;
+              } else if (labeler.frames[i].data.annotations[j].value === 2) {
+                show[i] = false;
+              }
+            }
+          }
+        } else if (select.value.localeCompare("negative") === 0) {
+          for (var j = 0; j < labeler.frames[i].data.annotations.length; j++) {
+            if (labeler.frames[i].data.annotations[j].type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+              if (labeler.frames[i].data.annotations[j].value === 1) {
+                show[i] = false;
+              } else if (labeler.frames[i].data.annotations[j].value === 2) {
+                show[i] = true;
+              }
+            }
+          }
+        } 
+      }
+      setVisibility(show);
+      currVisibility = show;
+      console.log(show);
       labeler.current_frame_index = getFirstFrame();
     }
 
@@ -398,7 +399,8 @@ function LabelingPage() {
         if (data.identifier in annotations) {
           annotations[data.identifier].map(ann => {
             if (ann.type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
-              // Use this for fast binary labeling (quicklabel)
+              // Use this for fast binary labeling
+              data.annotations.push(PerFrameAnnotation.parse(ann));
             } else if (ann.type === Annotation.ANNOTATION_MODE_POINT) {
               data.annotations.push(PointAnnotation.parse(ann));
             } else if (ann.type === Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX) {
@@ -457,20 +459,7 @@ function LabelingPage() {
         var nextFrame = getNextFrame();
         if (forager_mode === "forager_annotate") {
           labeler.handle_keydown(e, prevFrame, nextFrame);
-        } else {
-          if (e.key === "ArrowUp") {   
-            // Yes
-            quickLabels[labeler.current_frame_index] = 2;
-            labeler.current_frame_index = nextFrame;
-          } else if (e.key === "ArrowDown") {  
-            // No
-            quickLabels[labeler.current_frame_index] = 4;
-            labeler.current_frame_index = nextFrame;
-          } else {
-            labeler.handle_keydown(e, prevFrame, nextFrame);
-          }
-        }
-        document.getElementById("quick_labeler").src = currPaths[labeler.current_frame_index];
+        } 
       });
 
       window.addEventListener("keyup", function(e) {
@@ -493,13 +482,13 @@ function LabelingPage() {
         <OptionsSelect alt="true" id="select_forager_mode">
           <option value="forager_annotate">Annotate</option>
           <option value="forager_explore">Explore</option>
-          <option value="forager_quicklabel">QuickLabel</option>
         </OptionsSelect>
         <OptionsSelect alt="true" id="select_image_subset">
           <option value="all">All</option>
           <option value="unlabeled">Unlabeled</option>
           <option value="positive">Positive</option>
           <option value="negative">Negative</option>
+          <option value="conflict">Conflict</option>
         </OptionsSelect>
         <input type="text" list="users" id="currUser" onChange={onUser} />
         <datalist id="users">
@@ -518,11 +507,8 @@ function LabelingPage() {
       </SubContainer>
       <SubContainer>
         <MainCanvas/>
-        <QuickLabelContainer id="quick_labeler_container" style={{"display": 'none'}}>
-          <QuickLabeler imagePaths={paths} currentIndex={labeler.current_frame_index}/>
-        </QuickLabelContainer>
         <ImageGridContainer id="explore_grid">
-          <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} labels={propQuickLabels} show={imageSubset}/>
+          <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} visibility={visibility}/>
         </ImageGridContainer>
       </SubContainer>
     </Container>

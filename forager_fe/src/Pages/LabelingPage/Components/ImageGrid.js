@@ -28,8 +28,7 @@ const ImageGrid = ({
   onImageClick,
   imagePaths,
   imageHeight,
-  labels,
-  show
+  visibility
 }) => {
   // const imagesUrl = "http://127.0.0.1:8000/api/get_results/" + datasetName;
   // const [loading, setLoading] = useState(false);
@@ -51,7 +50,7 @@ const ImageGrid = ({
 
   return (
     <Grid>
-      {imagePaths.map((path, idx) => <Image key={idx} src={path} onClick={() => onImageClick(idx)} style={{ height: imageHeight + 'px' , display: (labels[idx] & show ? "flex" : "none")}}/>)}
+      {imagePaths.map((path, idx) => <Image key={idx} src={path} onClick={() => onImageClick(idx)} style={{ height: imageHeight + 'px' , display: (visibility[idx] ? "flex" : "none")}}/>)}
     </Grid>
   );
 }
