@@ -519,7 +519,8 @@ export class ImageLabeler {
 		//
 		// draw the image being labeled
 		//
-
+		//console.log(cur_frame.image_load_complete)
+		//console.log(cur_frame.source_image.onload)
 		if (cur_frame.image_load_complete) {
 
 			var visible_box = this.visible_image_region.scale(cur_frame.source_image.width, cur_frame.source_image.height);

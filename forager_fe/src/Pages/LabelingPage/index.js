@@ -72,7 +72,7 @@ function LabelingPage() {
   var currVisibility = new Array(location.state.paths.length).fill(true,0,location.state.paths.length);
   const [imageSubset, setImageSubset] = useState(7);
   // Can't get it to work with just useState(paths), and can fix later
-  var currPaths = location.state.identifiers;
+  var currPaths = location.state.paths;
   // Same thing with imagesubset
   var currImageSubset = 7;
   const [categories, setCategories] = useState(["Hello","There"]);
@@ -114,7 +114,7 @@ function LabelingPage() {
     //setCurrentImage(idx);
   }
 
-  const onCategory = event => {
+  const onCategory = async(event) => {
     // If empty, refresh list to include any new categories actually labeled
     if (event.target.value === "") {
       console.log("Handle this")
@@ -122,9 +122,43 @@ function LabelingPage() {
     // Set currentCategory to contents of text field
     setCurrentCategory(event.target.value);
     //category = event.target.value;
+
+    let user = document.getElementById("currUser").value;
+    var url = new URL(getAnnotationsUrl);
+    url.search = new URLSearchParams({identifiers: currIdentifiers, user: user, category: event.target.value}).toString();
+    const annotations = await fetch(url, {
+      method: "GET",
+      credentials: 'include',
+    })
+    .then(results => results.json());
+
+    const imageData = [];
+    for (let i=0; i<currPaths.length; i++) {
+      const data = new ImageData();
+      data.source_url = currPaths[i];
+      data.identifier = currIdentifiers[i];
+
+      if (data.identifier in annotations) {
+        annotations[data.identifier].map(ann => {
+          if (ann.type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+            data.annotations.push(PerFrameAnnotation.parse(ann));
+          } else if (ann.type === Annotation.ANNOTATION_MODE_POINT) {
+            data.annotations.push(PointAnnotation.parse(ann));
+          } else if (ann.type === Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX) {
+            data.annotations.push(TwoPointBoxAnnotation.parse(ann));
+          } else if (ann.type === Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX) {
+            data.annotations.push(ExtremeBoxAnnnotation.parse(ann));
+          }
+        });
+      }
+      imageData.push(data);
+    }
+
+    labeler.load_image_stack(imageData);
+    labeler.set_focus();
   }
 
-  const onUser = event => {
+  const onUser = async(event) => {
     // If empty, refresh list to include any new categories actually labeled
     if (event.target.value === "") {
       console.log("Handle this")
@@ -133,6 +167,43 @@ function LabelingPage() {
     setCurrentUser(event.target.value);
     //user = event.target.value;
     //console.log(user);
+
+    let category = document.getElementById("currCategory").value;
+    var url = new URL(getAnnotationsUrl);
+    url.search = new URLSearchParams({identifiers: currIdentifiers, user: event.target.value, category: category}).toString();
+    const annotations = await fetch(url, {
+      method: "GET",
+      credentials: 'include',
+    })
+    .then(results => results.json());
+
+    const imageData = [];
+    for (let i=0; i<currPaths.length; i++) {
+      const data = new ImageData();
+      data.source_url = currPaths[i];
+      data.identifier = currIdentifiers[i];
+      console.log(data.identifier)
+      console.log(annotations)
+
+      if (data.identifier in annotations) {
+        console.log(data.identifier)
+        console.log("Trying to add annotation")
+        annotations[data.identifier].map(ann => {
+          if (ann.type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+            data.annotations.push(PerFrameAnnotation.parse(ann));
+          } else if (ann.type === Annotation.ANNOTATION_MODE_POINT) {
+            data.annotations.push(PointAnnotation.parse(ann));
+          } else if (ann.type === Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX) {
+            data.annotations.push(TwoPointBoxAnnotation.parse(ann));
+          } else if (ann.type === Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX) {
+            data.annotations.push(ExtremeBoxAnnnotation.parse(ann));
+          }
+        });
+      }
+      imageData.push(data);
+    }
+    labeler.load_image_stack(imageData);
+    labeler.set_focus();
   }
 
   const getNextFrame = () => {
@@ -275,7 +346,6 @@ function LabelingPage() {
           filteredAnnotations.push(currFrame.data.annotations[i])
         }
       }
-      console.log(filteredAnnotations)
 
       let url = new URL(lookupKnnUrl);
       url.search = new URLSearchParams({
@@ -364,7 +434,7 @@ function LabelingPage() {
 
         // Assume this returns a list of conflicting identifiers
         let url = new URL(getConflictsUrl);
-        url.search = new URLSearchParams({user: user, category: category}).toString();
+        url.search = new URLSearchParams({identifiers:currIdentifiers, user: user, category: category}).toString();
         console.log(identifiers);
         conflicts = fetch(url, {
           method: "GET",
@@ -419,6 +489,8 @@ function LabelingPage() {
         }
       })
       .then(results => results.json());
+
+      console.log(annotations)
 
       const imageData = [];
       for (let i=0; i<paths.length; i++) {
