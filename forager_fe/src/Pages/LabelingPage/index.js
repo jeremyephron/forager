@@ -186,8 +186,6 @@ function LabelingPage() {
       console.log(annotations)
 
       if (data.identifier in annotations) {
-        console.log(data.identifier)
-        console.log("Trying to add annotation")
         annotations[data.identifier].map(ann => {
           if (ann.type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
             data.annotations.push(PerFrameAnnotation.parse(ann));
@@ -423,7 +421,7 @@ function LabelingPage() {
       } 
     }
 
-    const handle_image_subset_change = () => {
+    const handle_image_subset_change = async() => {
       const select = document.getElementById("select_image_subset");
       // Calculate the desired subset of images from annotations, then pass to currVisibility
       let show = new Array(labeler.frames.length).fill(false,0,labeler.frames.length)
@@ -435,8 +433,7 @@ function LabelingPage() {
         // Assume this returns a list of conflicting identifiers
         let url = new URL(getConflictsUrl);
         url.search = new URLSearchParams({identifiers:currIdentifiers, user: user, category: category}).toString();
-        console.log(identifiers);
-        conflicts = fetch(url, {
+        conflicts = await fetch(url, {
           method: "GET",
           credentials: 'include',
           headers: {
@@ -444,6 +441,7 @@ function LabelingPage() {
           }
         })
         .then(results => results.json());
+        console.log(conflicts)
       }
       for (var i = 0; i < labeler.frames.length; i++) {
         if (select.value.localeCompare("all") === 0) {
