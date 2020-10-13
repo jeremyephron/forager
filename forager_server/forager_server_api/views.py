@@ -1,8 +1,6 @@
 import json
 import os
 import http.client
-import urllib
-import json
 import time
 import requests
 
@@ -10,13 +8,14 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from google.cloud import storage
 from django.core.exceptions import ValidationError
 from django.views.decorators.csrf import csrf_exempt
-from django.shortcuts import  get_object_or_404, get_list_or_404
+from django.shortcuts import get_object_or_404
 from django.conf import settings
 from rest_framework import status
 from rest_framework.decorators import api_view
 from collections import defaultdict
 
 from .models import Dataset, DatasetItem, Annotation
+
 
 @api_view(['GET'])
 @csrf_exempt
@@ -349,7 +348,6 @@ def lookup_knn(request, dataset_name):
                             for ann in query_annotations]]
 
     # 3. Send paths and patches to /query_index
-    # NOTE(fpoms): embedding computation does not support black/white images rn.
     cluster_id = request.session['cluster_id']
     index_id = request.session['index_id']
     headers = {"Content-type": "application/x-www-form-urlencoded",

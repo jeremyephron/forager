@@ -59,7 +59,7 @@ class ResNetBackboneMapper(Mapper):
                 image = Image.open(image_buffer)
 
                 # Preprocess
-                assert image.mode == "RGB"
+                image = image.convert("RGB")
                 image = torch.as_tensor(
                     np.asarray(image), dtype=torch.float32
                 )  # -> tensor
