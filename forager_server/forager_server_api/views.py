@@ -225,7 +225,7 @@ def get_annotations(request, dataset_name):
         filter_args['category'] = category
 
     dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
-    anns = Annotation.objects.filter(filter_args**)
+    anns = Annotation.objects.filter(**filter_args)
 
     data = defaultdict(list)
     for ann in anns:
@@ -244,14 +244,14 @@ def get_annotation_conflicts(request, dataset_name):
     category = request.GET['category']
 
     filter_args = dict(
-        dataset_item__in=dataset_items
+        dataset_item__in=dataset_items,
         label_type='klabel_perframe'
     )
     if not category == 'all':
         filter_args['label_category'] = category
 
     dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
-    anns = Annotation.objects.filter(filter_args**)
+    anns = Annotation.objects.filter(**filter_args)
 
     data = defaultdict(list)
     anns_by_image = defaultdict(list)
@@ -262,7 +262,7 @@ def get_annotation_conflicts(request, dataset_name):
 
     # Analyze conflicts
     conflict_data = defaultdict(list)
-    for image_id, labels for data.items():
+    for image_id, labels in data.items():
         has_user_label = False
         user_annotation = None
         for ann in labels:
