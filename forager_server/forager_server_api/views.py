@@ -291,10 +291,10 @@ def add_annotation(request, dataset_name, image_identifier):
     #   'type': 2,
     #   'bbox': {'bmin': {'x': 0.2, 'y': 0.5}, 'bmax': {'x': 0.5, 'y': 0.7}}
     # }
-    body = request.body.decode('utf-8')
+    body = json.loads(request.body) # request.body.decode('utf-8')
     label_function = body['user']
     category = body['category']
-    annotation = body['annotation']
+    annotation = json.dumps(body['annotation'])
 
     dataset_item = DatasetItem.objects.get(pk=image_identifier)
     ann = Annotation(
