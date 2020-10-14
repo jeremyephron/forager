@@ -289,6 +289,9 @@ function LabelingPage() {
   }
 
   const handle_image_subset_change = async() => {
+    if (labeler.get_num_frames() == 0) {
+      return;
+    }
     let select = document.getElementById("select_image_subset").value;
     if (select.localeCompare('knn') === 0) {
       select = 'all';

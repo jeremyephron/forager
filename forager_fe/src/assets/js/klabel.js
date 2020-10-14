@@ -516,6 +516,9 @@ export class ImageLabeler {
 		ctx.fillStyle = this.color_background;
 		ctx.fillRect(0, 0, this.main_canvas_el.width, this.main_canvas_el.height);
 		
+        if (this.frames.length == 0) {
+          return;
+        }
 		var cur_frame = this.get_current_frame();
 
 		//
@@ -684,10 +687,12 @@ export class ImageLabeler {
 
 	}
 
-	handle_image_load(image_index) {
+	handle_image_load(source_url, image_index) {
 		//console.log("KLabeler: Image " + image_index + " loaded.");
-		this.frames[image_index].image_load_complete = true;
-		this.render();
+        if (image_index < this.frames.length && this.frames[image_index].data.source_url == source_url) {
+		  this.frames[image_index].image_load_complete = true;
+		  this.render();
+        }
 	}
 
 	handle_canvas_mousemove = event => {
@@ -966,15 +971,17 @@ export class ImageLabeler {
 		this.annotation_changed_callback = func;
 	}
 
-	make_image_load_handler(x) {
+	make_image_load_handler(source_url, x) {
 		return event => {
-			this.handle_image_load(x);
+			this.handle_image_load(source_url, x);
 		}
 	}
 
 	load_image_stack(image_dataset) {
 		console.log('KLabeler: loading set of ' + image_dataset.length + ' images.');
-		this.set_current_frame_num(0);
+        if (this.frames.length > 0) {
+		  this.set_current_frame_num(0);
+        }
 
 		this.frames = [];
 		var image_index = 0;
@@ -983,7 +990,7 @@ export class ImageLabeler {
 
 			// kick off the image load
 			frame.image_load_started = true;
-			frame.source_image.onload = this.make_image_load_handler(image_index);
+			frame.source_image.onload = this.make_image_load_handler(img.source_url, image_index);
 			frame.source_image.src = frame.data.source_url;
 			this.frames.push(frame);
 			image_index++;
@@ -994,7 +1001,9 @@ export class ImageLabeler {
 		this.visible_image_region = new BBox2D(0.0, 0.0, 1.0, 1.0);
 		this.clear_in_progress_points();
 		this.clear_zoom_corner_points();
-		this.set_current_frame_num(0);
+        if (this.frames.length > 0) {
+		  this.set_current_frame_num(0);
+        }
 	}
 
 	get_annotations() {
