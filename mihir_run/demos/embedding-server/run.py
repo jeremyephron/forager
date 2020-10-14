@@ -73,11 +73,7 @@ app.update_config({"RESPONSE_TIMEOUT": 10 * 60})  # 10 minutes
 async def start_cluster(request):
     n_nodes = int(request.form["n_nodes"][0])
     cluster = GKECluster(
-        config.GCP_PROJECT,
-        config.GCP_ZONE,
-        config.GCP_CLUSTER_NAME,
-        config.GCP_MACHINE_TYPE,
-        n_nodes,
+        config.GCP_PROJECT, config.GCP_ZONE, config.GCP_MACHINE_TYPE, n_nodes
     )
     cluster_data = ClusterData(cluster, n_nodes)
     app.add_task(_start_cluster(cluster_data))
@@ -122,8 +118,7 @@ async def stop_cluster(request):
 
 
 async def _stop_cluster(cluster_data):
-    await cluster_data.deployed.wait()
-    await cluster_data.cluster.delete_deployment(cluster_data.deployment_id)
+    await cluster_data.started.wait()
     await cluster_data.cluster.stop()
 
 
