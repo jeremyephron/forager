@@ -258,8 +258,8 @@ async def delete_index(request):
 
 
 # CLEANUP
-@utils.unasync
-async def cleanup(*args, **kwargs):
+@app.listener("after_server_stop")
+async def cleanup(app, loop):
     print("Terminating:")
     await _cleanup_jobs()
     await _cleanup_indexes()
@@ -287,5 +287,4 @@ async def _cleanup_clusters():
 
 
 if __name__ == "__main__":
-    signal.signal(signal.SIGINT, cleanup)
     app.run(host="0.0.0.0", port=5000)
