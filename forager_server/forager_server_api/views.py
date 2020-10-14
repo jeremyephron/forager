@@ -431,6 +431,8 @@ def delete_annotation(request, dataset_name, image_identifier, ann_identifier):
 @csrf_exempt
 def lookup_knn(request, dataset_name):
     ann_identifiers = [int(x) for x in request.GET['ann_identifiers'].split(',')]
+    cluster_id = request.GET['cluster_id']
+    index_id = request.GET['index_id']
 
     # 1. Retrieve dataset info from db
     dataset = Dataset.objects.get(name=dataset_name)
@@ -450,10 +452,6 @@ def lookup_knn(request, dataset_name):
                             for ann in query_annotations]]
 
     # 3. Send paths and patches to /query_index
-    cluster_id = request.session['cluster_id']
-    index_id = request.session['index_id']
-    headers = {"Content-type": "application/x-www-form-urlencoded",
-               "Accept": "application/json"}
     params = {
         "cluster_id": cluster_id,
         "index_id": index_id,
@@ -464,7 +462,7 @@ def lookup_knn(request, dataset_name):
     }
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/query_index",
-        data=params, headers=headers
+        data=params, headers=POST_HEADERS
     )
     response_data = r.json()
     response = {

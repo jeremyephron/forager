@@ -54,7 +54,7 @@ class LabeledIndex:
     def query(self, query_vector, num_results, num_probes):
         dists, inds = self.index.query(query_vector, num_results, n_probes=num_probes)
         assert len(inds) == 1 and len(dists) == 1
-        return [(self.labels[i], dist) for i, dist in zip(inds[0], dists[0])]
+        return [(self.labels[i], dist) for i, dist in zip(inds[0], dists[0]) if i >= 0]
 
 
 # Global data
