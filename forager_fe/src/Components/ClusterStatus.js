@@ -30,7 +30,7 @@ const SubText = styled.div`
 const API_BASE = "https://127.0.0.1:8000/api";
 const START_CLUSTER_ENDPOINT = "/start_cluster";
 const STOP_CLUSTER_ENDPOINT = "/stop_cluster";
-const STATUS_POLL_INTERVAL = 2500;  // ms
+const STATUS_POLL_INTERVAL = 3000;  // ms
 
 function ClusterStatus() {
   const cluster = useSelector(state => state.cluster);

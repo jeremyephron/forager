@@ -94,8 +94,9 @@ def create_index(request, dataset_name, dataset=None):
     dataset_items = DatasetItem.objects.filter(dataset=dataset)[:100]
     dataset_item_raw_paths = [di.path for di in dataset_items]
 
+    data = json.loads(request.body)
     params = {
-        "cluster_id": request.session["cluster_id"],
+        "cluster_id": data["cluster_id"],
         "bucket": bucket_name,
         "paths": dataset_item_raw_paths,
     }

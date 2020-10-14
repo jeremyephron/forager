@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { useSelector, useDispatch } from 'react-redux';
 import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 
 import { colors } from "../../Constants";
-import { MainCanvas, ImageGrid } from "./Components";
+import { MainCanvas, ImageGrid, BuildIndex } from "./Components";
 import { Button, Select } from "../../Components";
 import {
   BBox2D,
@@ -73,6 +74,7 @@ const Checkbox = styled.input`
 `
 
 function LabelingPage() {
+  const globalState = useSelector(state => state);
   const location = useLocation();
   const datasetName = location.state.datasetName;
   const [paths, setPaths] = useState(location.state.paths);
@@ -319,7 +321,7 @@ function LabelingPage() {
             }
           }
         }
-      } 
+      }
     }
     setVisibility(show);
     currVisibility = show;
@@ -406,7 +408,7 @@ function LabelingPage() {
 
     const toggle_letterbox = () => {
       const button = document.getElementById("toggle_letterbox_button");
-      const new_status = !button.toggle_status; 
+      const new_status = !button.toggle_status;
       labeler.set_letterbox(new_status);
       button.toggle_status = new_status;
 
@@ -479,7 +481,9 @@ function LabelingPage() {
 
       let url = new URL(lookupKnnUrl);
       url.search = new URLSearchParams({
-        ann_identifiers:  filteredAnnotations.map(ann => ann.identifier)
+        ann_identifiers:  filteredAnnotations.map(ann => ann.identifier),
+        cluster_id: globalState.cluster.id,
+        index_id: globalState.indexes[datasetName].id,
       }).toString();
       const res = await fetch(url, {method: "GET",
         credentials: 'include',
@@ -542,7 +546,7 @@ function LabelingPage() {
         }
       });
     }
-    
+
     const handle_forager_change = () => {
       const select = document.getElementById("select_forager_mode");
       const klabeldiv = document.getElementById("klabel_wrapper");
@@ -555,14 +559,14 @@ function LabelingPage() {
         forager_mode = "forager_explore"
         klabeldiv.style.display = "none"
         explorediv.style.display = "flex"
-      } 
+      }
     }
 
     const klabelRun = async () => {
       const main_canvas = document.getElementById(main_canvas_id);
       labeler.init(main_canvas);
       labeler.set_categories( { positive: { value: 1, color: "#67bf5c" }, negative: {value:2, color: "#ed665d"}, hard_negative: {value:3, color: "#ffff00"}, unsure: {value:4, color: "#ffa500"} } );
-      
+
       let user = document.getElementById("currUser").value;
       let category = document.getElementById("currCategory").value;
 
@@ -653,7 +657,7 @@ function LabelingPage() {
         var nextFrame = getNextFrame();
         if (forager_mode === "forager_annotate") {
           labeler.handle_keydown(e, prevFrame, nextFrame);
-        } 
+        }
       });
 
       window.addEventListener("keyup", function(e) {
@@ -685,22 +689,25 @@ function LabelingPage() {
           <option value="hard_negative">Hard Negative</option>
           <option value="unsure">Unsure</option>
           <option value="conflict">Conflict</option>
-          <option value="knn">KNN</option>
+          {globalState.cluster.status === 'CLUSTER_STARTED' &&
+           datasetName in globalState.indexes &&
+           globalState.indexes[datasetName].status == 'INDEX_BUILT' &&
+           <option value="knn">KNN</option>}
         </OptionsSelect>
-        <input type="text" list="users" id="currUser" onChange={onUser} />
+        <input type="text" list="users" id="currUser" onChange={onUser} placeholder="User" />
         <datalist id="users">
           {users.map((item, key) =>
             <option key={key} value={item} />
           )}
         </datalist>
-        <input type="text" list="categories" id="currCategory" onChange={onCategory} />
+        <input type="text" list="categories" id="currCategory" onChange={onCategory} placeholder="Category" />
         <datalist id="categories">
           {categories.map((item, key) =>
             <option key={key} value={item} />
           )}
         </datalist>
         <FetchButton id="fetch_button">Fetch More Images</FetchButton>
-        <label style={{"fontSize": '25px',"marginLeft": "100px"}}>Image Size</label>
+        <BuildIndex dataset={datasetName} />
         <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
       </SubContainer>
       <SubContainer>
