@@ -64,9 +64,13 @@ const Slider = styled.input`
 const FetchButton = styled(Button)`
   font-size: 13px;
   height: 28px;
-  width: 200px;
+  width: 150px;
   padding: 0 5px;
 `;
+
+const Checkbox = styled.input`
+  type: "checkbox";
+`
 
 function LabelingPage() {
   const location = useLocation();
@@ -397,6 +401,13 @@ function LabelingPage() {
 
       annotation.identifier = identifer;
 
+      // Return KNN images only when in KNN mode
+      console.log(document.getElementById("select_image_subset").value)
+      if (document.getElementById("select_image_subset").value.localeCompare("knn") != 0) {
+        console.log("Not KNN")
+        return;
+      }
+
       // Make a copy of currFrame.data.annotations without full-frame
       var filteredAnnotations = []
       for (var i = 0; i < currFrame.data.annotations.length; i++) {
@@ -449,6 +460,10 @@ function LabelingPage() {
 
       labeler.load_image_stack(imageData);
       labeler.set_focus();
+
+      // Set filter back to all
+      document.getElementById("select_image_subset").value = "all";
+      handle_image_subset_change();
     }
 
     const handle_annotation_deleted = async (currFrame, annotation) => {
@@ -656,6 +671,7 @@ function LabelingPage() {
           <option value="hard_negative">Hard Negative</option>
           <option value="unsure">Unsure</option>
           <option value="conflict">Conflict</option>
+          <option value="knn">KNN</option>
         </OptionsSelect>
         <input type="text" list="users" id="currUser" onChange={onUser} />
         <datalist id="users">
