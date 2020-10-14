@@ -304,6 +304,10 @@ def get_results(request, dataset_name):
 @api_view(['GET'])
 @csrf_exempt
 def get_annotations(request, dataset_name):
+    print(request.GET['identifiers'])
+    if len(request.GET['identifiers']) == 0:
+        return JsonResponse({})
+
     image_identifiers = request.GET['identifiers'].split(',')
     label_function = request.GET['user']
     category = request.GET['category']
@@ -358,7 +362,7 @@ def get_annotation_conflicts_helper(dataset_items, label_function, category):
             continue
         user_label_value = json.loads(user_annotation.label_data)
         for ann in labels:
-            if ann == user_annotation:
+            if ann.label_function == user_annotation.label_function:
                 continue
             label_value = json.loads(ann.label_data)
             if label_value['value'] != user_label_value['value']:
@@ -371,6 +375,9 @@ def get_annotation_conflicts_helper(dataset_items, label_function, category):
 @api_view(['GET'])
 @csrf_exempt
 def get_annotation_conflicts(request, dataset_name):
+    if len(request.GET['identifiers']) == 0:
+        return JsonResponse({})
+
     image_identifiers = request.GET['identifiers'].split(',')
     label_function = request.GET['user']
     category = request.GET['category']
