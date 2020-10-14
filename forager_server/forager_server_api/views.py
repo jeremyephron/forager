@@ -243,29 +243,41 @@ def get_next_images(request, dataset_name, dataset=None):
         label_category=category,
         label_type='klabel_frame')
 
-    images_with_label = set()
-    if label_value == 'unlabeled':
+    next_images = []
+    if label_value == 'all':
+        next_images = dataset_items
+    elif label_value == 'unlabeled':
+        images_with_label = set()
         for ann in annotations:
             images_with_label.add(ann.dataset_item)
+
+        # Get all images which are not in images_with_label
+        for ditem in dataset_items:
+            if not ditem in images_with_label:
+                next_images.append(ditem)
+    elif label_value == 'conflict':
+        conflict_data = get_annotation_conflicts_helper(
+            dataset_items, label_function, category)
+        for ditem in dataset_items:
+            if ditem.pk in conflict_data:
+                next_images.append(ditem)
     else:
         cat_value = CATEGORIES[label_value]
+        images_with_label = set()
         for ann in annotations:
             label_value = json.loads(ann.label_data)
             if label_value['value'] != cat_value:
                 continue
             images_with_label.add(ann.dataset_item)
+        for ditem in dataset_items:
+            if ditem in images_with_label:
+                next_images.append(ditem)
 
-    # Get all images which are not in images_with_label
-    not_images = []
-    for ditem in dataset_items:
-        if not ditem in images_with_label:
-            not_images.append(ditem)
-
-    not_images = not_images[:100]
+    next_images = next_images[:100]
 
     # Find all dataset items which do not have an annotation of the type
-    dataset_item_paths = [path_template.format(di.path) for di in not_images]
-    dataset_item_identifiers = [di.pk for di in not_images]
+    dataset_item_paths = [path_template.format(di.path) for di in next_images]
+    dataset_item_identifiers = [di.pk for di in next_images]
 
     return JsonResponse({
         'paths': dataset_item_paths,
@@ -318,14 +330,7 @@ def get_annotations(request, dataset_name):
     return JsonResponse(data)
 
 
-@api_view(['GET'])
-@csrf_exempt
-def get_annotation_conflicts(request, dataset_name):
-    image_identifiers = request.GET['identifiers'].split(',')
-    label_function = request.GET['user']
-    category = request.GET['category']
-
-    dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
+def get_annotation_conflicts_helper(dataset_items, label_function, category):
     filter_args = dict(
         dataset_item__in=dataset_items,
         label_type='klabel_frame'
@@ -360,6 +365,20 @@ def get_annotation_conflicts(request, dataset_name):
                 for ann in labels:
                     conflict_data[image_id].add(ann.label_function)
                 break
+    return conflict_data
+
+
+@api_view(['GET'])
+@csrf_exempt
+def get_annotation_conflicts(request, dataset_name):
+    image_identifiers = request.GET['identifiers'].split(',')
+    label_function = request.GET['user']
+    category = request.GET['category']
+
+    dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
+
+    conflict_data = get_annotation_conflicts_helper(
+        dataset_items, label_function, category)
 
     return JsonResponse({k: list(v) for k,v in conflict_data.items()})
 

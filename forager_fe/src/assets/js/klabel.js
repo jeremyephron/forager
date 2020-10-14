@@ -972,6 +972,7 @@ export class ImageLabeler {
 
 	load_image_stack(image_dataset) {
 		console.log('KLabeler: loading set of ' + image_dataset.length + ' images.');
+		this.set_current_frame_num(0);
 
 		this.frames = [];
 		var image_index = 0;
