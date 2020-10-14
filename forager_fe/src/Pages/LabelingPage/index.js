@@ -295,7 +295,7 @@ function LabelingPage() {
       console.log(conflicts)
       console.log(Object.keys(conflicts))
     }
-    console.log(conflicts)
+    console.log(conflicts);
     for (var i = 0; i < labeler.frames.length; i++) {
       if (select.value.localeCompare("all") === 0) {
         show[i] = true
@@ -320,7 +320,7 @@ function LabelingPage() {
     setVisibility(show);
     currVisibility = show;
     console.log(show)
-    labeler.current_frame_index = getFirstFrame();
+    labeler.set_current_frame_num(getFirstFrame());
   }
 
   const handle_fetch_images = async() => {
@@ -596,9 +596,12 @@ function LabelingPage() {
       }
 
       url = new URL(getUsersAndCategoriesUrl);
-      /*const usersAndCategories = await fetch(url, {method: "GET",
-        credentials: 'include',
-      }).then(results => results.json());*/
+      const usersAndCategories = await fetch(
+        url, {method: "GET", credentials: 'include',}
+      ).then(results => results.json());
+
+      setUsers(usersAndCategories['users']);
+      setCategories(usersAndCategories['categories']);
 
       labeler.load_image_stack(imageData);
       labeler.set_focus();

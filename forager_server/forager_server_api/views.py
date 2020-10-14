@@ -194,6 +194,30 @@ def get_dataset_info(request, dataset_name, dataset=None):
 
 @api_view(['GET'])
 @csrf_exempt
+def get_users_and_categories(request, dataset_name):
+    dataset = Dataset.objects.get(name=dataset_name)
+
+    annotations = Annotation.objects.filter(
+        dataset_item__in=dataset.datasetitem_set.filter())
+
+    users = set()
+    categories = set()
+    for ann in annotations:
+        users.add(ann.label_function)
+        categories.add(ann.label_category)
+
+    users = sorted(list(users))
+    categories = sorted(list(categories))
+    result = dict(
+        users=users,
+        categories=categories
+    )
+
+    return JsonResponse(result)
+
+
+@api_view(['GET'])
+@csrf_exempt
 def get_next_images(request, dataset_name, dataset=None):
     if not dataset:
         dataset = get_object_or_404(Dataset, name=dataset_name)
