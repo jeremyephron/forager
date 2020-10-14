@@ -324,6 +324,9 @@ function LabelingPage() {
 
     labeler.load_image_stack(imageData);
     labeler.set_focus();
+
+    document.getElementById("select_image_subset").value = "all";
+    handle_image_subset_change();
   }
 
   useEffect(() => {
