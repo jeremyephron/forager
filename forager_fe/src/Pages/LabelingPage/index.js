@@ -439,6 +439,10 @@ function LabelingPage() {
       let user = document.getElementById("currUser").value;
       let category = document.getElementById("currCategory").value;
 
+      if (annotation.type == Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+        annotation.labeling_time = currFrame.data.labeling_time;
+      }
+
       let endpoint = new URL(addAnnotationUrl + '/' + currFrame.data.identifier);
       endpoint.search = new URLSearchParams({
         user: user,

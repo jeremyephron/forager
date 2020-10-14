@@ -357,11 +357,12 @@ def get_annotation_conflicts_helper(dataset_items, label_function, category):
                 break
         if not has_user_label:
             continue
+        user_label_value = json.loads(user_annotation.label_data)
         for ann in labels:
             if ann == user_annotation:
                 continue
-            print(ann.label_data, user_annotation.label_data)
-            if ann.label_data != user_annotation.label_data:
+            label_value = json.loads(ann.label_data)
+            if label_value['value'] != user_label_value['value']:
                 for ann in labels:
                     conflict_data[image_id].add(ann.label_function)
                 break

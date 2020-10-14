@@ -162,8 +162,9 @@ export class ImageLabeler {
 	}
 
 	update_labeling_time() {
-		this.get_current_frame().data.labeling_time += performance.now() - this.current_frame_start_time;
-		this.current_frame_start_time = performance.now();		
+	  this.frames[this.get_current_frame_num()].data.labeling_time += (
+        performance.now() - this.current_frame_start_time);
+		this.current_frame_start_time = performance.now();
 	}
 
 	// Clamp the cursor to the image dimensions so that clicks,
@@ -174,7 +175,8 @@ export class ImageLabeler {
 	}
 
 	get_current_frame() {
-		return this.frames[this.current_frame_index];
+		this.update_labeling_time();
+		return this.frames[this.get_current_frame_num()];
 	}
 
 	clamp_to_visible_region(pt) {
@@ -1008,8 +1010,6 @@ export class ImageLabeler {
 	}
 
 	get_current_frame_data() {
-		this.update_labeling_time();
-
 		return this.get_current_frame().data
 	}
 
