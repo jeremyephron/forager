@@ -272,6 +272,57 @@ function LabelingPage() {
     return currPaths.length - 1;
   }
 
+  const handle_image_subset_change = async() => {
+    const select = document.getElementById("select_image_subset");
+    // Calculate the desired subset of images from annotations, then pass to currVisibility
+    let show = new Array(labeler.frames.length).fill(false,0,labeler.frames.length)
+    let conflicts = {};
+    if (select.value.localeCompare("conflict") === 0) {
+      let user = document.getElementById("currUser").value;
+      let category = document.getElementById("currCategory").value;
+
+      // Assume this returns a list of conflicting identifiers
+      let url = new URL(getConflictsUrl);
+      url.search = new URLSearchParams({identifiers:currIdentifiers, user: user, category: category}).toString();
+      conflicts = await fetch(url, {
+        method: "GET",
+        credentials: 'include',
+        headers: {
+        'Content-Type': 'application/json'
+        }
+      })
+      .then(results => results.json());
+      console.log(conflicts)
+      console.log(Object.keys(conflicts))
+    }
+    console.log(conflicts)
+    for (var i = 0; i < labeler.frames.length; i++) {
+      if (select.value.localeCompare("all") === 0) {
+        show[i] = true
+      } else if (select.value.localeCompare("unlabeled") === 0) {
+        show[i] = (labeler.frames[i].data.annotations.length === 0);
+      } else if (select.value.localeCompare("conflict") === 0) {
+        if (labeler.frames[i].data.identifier in conflicts) {
+          show[i] = true;
+        }
+      } else  {
+        for (var j = 0; j < labeler.frames[i].data.annotations.length; j++) {
+          if (labeler.frames[i].data.annotations[j].type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+            if (labeler.frames[i].data.annotations[j].value === filterMap[select.value]) {
+              show[i] = true;
+            } else  {
+              show[i] = false;
+            }
+          }
+        }
+      } 
+    }
+    setVisibility(show);
+    currVisibility = show;
+    console.log(show)
+    labeler.current_frame_index = getFirstFrame();
+  }
+
   const handle_fetch_images = async() => {
     let filter = document.getElementById("select_image_subset").value;
     let user = document.getElementById("currUser").value;
@@ -499,57 +550,6 @@ function LabelingPage() {
         klabeldiv.style.display = "none"
         explorediv.style.display = "flex"
       } 
-    }
-
-    const handle_image_subset_change = async() => {
-      const select = document.getElementById("select_image_subset");
-      // Calculate the desired subset of images from annotations, then pass to currVisibility
-      let show = new Array(labeler.frames.length).fill(false,0,labeler.frames.length)
-      let conflicts = {};
-      if (select.value.localeCompare("conflict") === 0) {
-        let user = document.getElementById("currUser").value;
-        let category = document.getElementById("currCategory").value;
-
-        // Assume this returns a list of conflicting identifiers
-        let url = new URL(getConflictsUrl);
-        url.search = new URLSearchParams({identifiers:currIdentifiers, user: user, category: category}).toString();
-        conflicts = await fetch(url, {
-          method: "GET",
-          credentials: 'include',
-          headers: {
-          'Content-Type': 'application/json'
-          }
-        })
-        .then(results => results.json());
-        console.log(conflicts)
-        console.log(Object.keys(conflicts))
-      }
-      console.log(conflicts)
-      for (var i = 0; i < labeler.frames.length; i++) {
-        if (select.value.localeCompare("all") === 0) {
-          show[i] = true
-        } else if (select.value.localeCompare("unlabeled") === 0) {
-          show[i] = (labeler.frames[i].data.annotations.length === 0);
-        } else if (select.value.localeCompare("conflict") === 0) {
-          if (labeler.frames[i].data.identifier in conflicts) {
-            show[i] = true;
-          }
-        } else  {
-          for (var j = 0; j < labeler.frames[i].data.annotations.length; j++) {
-            if (labeler.frames[i].data.annotations[j].type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
-              if (labeler.frames[i].data.annotations[j].value === filterMap[select.value]) {
-                show[i] = true;
-              } else  {
-                show[i] = false;
-              }
-            }
-          }
-        } 
-      }
-      setVisibility(show);
-      currVisibility = show;
-      console.log(show)
-      labeler.current_frame_index = getFirstFrame();
     }
 
     const klabelRun = async () => {
