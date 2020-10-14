@@ -219,7 +219,7 @@ function LabelingPage() {
     // Move currFrame to next, behavior dependent on mode
     var nextFrame = labeler.current_frame_index + 1;
     //console.log(nextFrame)
-    while (nextFrame < paths.length) {
+    while (nextFrame < currPaths.length) {
       if (currVisibility[nextFrame]) {
         // labeler.current_frame_index = nextFrame;
         // break;
@@ -248,7 +248,7 @@ function LabelingPage() {
 
   const getFirstFrame = () => {
     var firstFrame = 0;
-    while (firstFrame < paths.length) {
+    while (firstFrame < currPaths.length) {
       if (currVisibility[firstFrame]) {
         //labeler.current_frame_index = nextFrame;
         //break;
@@ -261,7 +261,7 @@ function LabelingPage() {
   }
 
   const getLastFrame = () => {
-    var lastFrame = paths.length - 1;
+    var lastFrame = currPaths.length - 1;
     while (lastFrame > 0) {
       if (currImageSubset & currVisibility[lastFrame]) {
         return lastFrame;
@@ -269,7 +269,7 @@ function LabelingPage() {
         lastFrame -= 1;
       }
     }
-    return paths.length - 1;
+    return currPaths.length - 1;
   }
 
   const handle_fetch_images = async() => {
