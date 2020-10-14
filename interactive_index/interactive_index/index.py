@@ -11,7 +11,7 @@ import faiss
 import numpy as np
 
 from interactive_index.config import read_config, CONFIG_DEFAULTS
-from interactive_index.utils import (merge_on_disk, 
+from interactive_index.utils import (merge_on_disk,
                                      to_all_gpus,
                                      cantor_pairing,
                                      invert_cantor_pairing)
@@ -23,13 +23,13 @@ if not hasattr(faiss, 'GpuMultipleClonerOptions'):
 
 class InteractiveIndex:
     """
-    This class is a sharded, on-disk index that can be iteratively trained, 
+    This class is a sharded, on-disk index that can be iteratively trained,
     added to, merged, and searched.
 
-    The vectors are stored in partial (or shard) indexes that are in separate 
-    files. When `merge_partial_indexes()` is called, the indexes are merged 
-    on disk, and the underlying data is extracted to a separate ".ivfdata" 
-    file. The search is done on this merged index without  having to load all 
+    The vectors are stored in partial (or shard) indexes that are in separate
+    files. When `merge_partial_indexes()` is called, the indexes are merged
+    on disk, and the underlying data is extracted to a separate ".ivfdata"
+    file. The search is done on this merged index without  having to load all
     the underlying data into memory.
 
     TODO: explain construction, attributes
@@ -44,7 +44,7 @@ class InteractiveIndex:
     SUPPORTED_DIM_PER_SUBQ = [1, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24, 28, 32]
 
     _invert_cantor_pairing_vec = np.vectorize(invert_cantor_pairing)
-    
+
     def __init__(self, config_fpath: str = None, **kwargs) -> None:
         """
         TODO: explain usage, kwargs
@@ -70,18 +70,18 @@ class InteractiveIndex:
         self.use_float16 = self.cfg['use_float16']
         self.use_float16_quantizer = self.cfg['use_float16_quantizer']
         self.use_precomputed_codes = self.cfg['use_precomputed_codes']
-        
+
         self.transform = self.cfg['transform']
         self.transform_args = self.cfg['transform_args']
         self.encoding = self.cfg['encoding']
         self.encoding_args = self.cfg['encoding_args']
-        
+
         self.index_str = self._create_index_str(
             self.n_centroids,
-            self.encoding, self.encoding_args, 
+            self.encoding, self.encoding_args,
             self.transform, self.transform_args
         )
-        
+
         if self.use_gpu:
             self.co = self._create_co(
                 self.use_float16,
@@ -94,7 +94,7 @@ class InteractiveIndex:
         self.multi_id = self.cfg['multi_id']
 
         self.create(self.index_str)
-    
+
     def create(self, index_str: str) -> None:
         """
         Creates the empty index specified by index_str and writes to disk.
@@ -118,8 +118,8 @@ class InteractiveIndex:
         Trains the clustering layer of the index.
 
         Args:
-            xt_src: The source of the training vectors. Can be the name of a 
-                file output by np.ndarray.tofile(), a numpy array, or a list 
+            xt_src: The source of the training vectors. Can be the name of a
+                file output by np.ndarray.tofile(), a numpy array, or a list
                 of floats.
 
         """
@@ -158,24 +158,24 @@ class InteractiveIndex:
         Adds the given vectors to the index.
 
         Args:
-            xb_src: The source of the vectors to add to the partial indexes. 
-                Can be the name of a file output by np.ndarray.tofile(), a 
+            xb_src: The source of the vectors to add to the partial indexes.
+                Can be the name of a file output by np.ndarray.tofile(), a
                 numpy array, or a list of floats.
-            ids: The integer IDs used to identify each vector added. If not 
-                specified will just increment sequentially starting from the 
+            ids: The integer IDs used to identify each vector added. If not
+                specified will just increment sequentially starting from the
                 the number of vectors in the index.
-            ids_extra: The extra id field if multi_id is True. This allows you 
+            ids_extra: The extra id field if multi_id is True. This allows you
                 to identify a vector through two different fields.
 
-                E.g., you might have two embeddings for each image, so you 
-                could make the ID the image number, and the ID extra a 0 or 1 
+                E.g., you might have two embeddings for each image, so you
+                could make the ID the image number, and the ID extra a 0 or 1
                 for each embedding.
 
         """
 
         if not self.is_trained:
             raise RuntimeError('Cannot add to untrained index.')
-        
+
         xb = self._convert_src_to_numpy(xb_src)
 
         if self.n_vectors % self.vectors_per_index == 0:
@@ -198,7 +198,7 @@ class InteractiveIndex:
             self.vectors_per_index - (self.n_vectors % self.vectors_per_index),
             xb.shape[0]
         )
-        
+
         if ids is None:
             ids = np.arange(self.n_vectors, self.n_vectors + end_idx)
         else:
@@ -209,7 +209,7 @@ class InteractiveIndex:
                 ids_extra = np.full(len(ids), ids_extra)
             else:
                 ids_extra = np.array(ids_extra)
-            
+
             ids = np.array([
                 cantor_pairing(ids[i], ids_extra[i]) for i in range(len(ids))
             ])
@@ -217,9 +217,9 @@ class InteractiveIndex:
         index.add_with_ids(xb[:end_idx], ids)
         self.n_vectors += end_idx
 
-        
+
         faiss.write_index(
-            faiss.index_gpu_to_cpu(index) if self.use_gpu else index, 
+            faiss.index_gpu_to_cpu(index) if self.use_gpu else index,
             str(self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num))
         )
 
@@ -249,7 +249,7 @@ class InteractiveIndex:
 
     def query(
         self,
-        xq_src: Union[str, np.ndarray, List[float]], 
+        xq_src: Union[str, np.ndarray, List[float]],
         k: int = 1,
         n_probes: Optional[int] = None
     ) -> Tuple[np.ndarray, np.ndarray]:
@@ -262,13 +262,13 @@ class InteractiveIndex:
         index = faiss.read_index(str(self.tempdir/self.MERGED_INDEX_NAME))
         index.nprobe = n_probes if n_probes else self.n_probes
         dists, inds = index.search(xq, k)
-        
+
         if self.multi_id:
             inds = self._invert_cantor_pairing_vec(inds)
 
         return dists, inds
 
-    def cleanup() -> None:
+    def cleanup(self) -> None:
         """Deletes all persistent files associated with this index."""
 
         (self.tempdir/self.TRAINED_INDEX_NAME).unlink(missing_ok=True)
@@ -342,7 +342,7 @@ class InteractiveIndex:
                 assert isinstance(transform_args[0], int)
 
                 transform_str += str(transform_args[0])
-            
+
         encoding_str = encoding
         if encoding_args:
             if encoding in ['SQ', 'PQ']:
@@ -361,7 +361,7 @@ class InteractiveIndex:
                 if encoding_args[0] == 'rotate':
                     encoding_str += 'r'
 
-        search_str = f'IVF{n_centroids}' 
-       
+        search_str = f'IVF{n_centroids}'
+
         return ','.join([transform_str, search_str, encoding_str])
 
