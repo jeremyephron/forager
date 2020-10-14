@@ -1,7 +1,6 @@
 import asyncio
 import functools
 import json
-import signal
 
 import numpy as np
 from sanic import Sanic
@@ -76,7 +75,7 @@ async def start_cluster(request):
         config.GCP_PROJECT, config.GCP_ZONE, config.GCP_MACHINE_TYPE, n_nodes
     )
     cluster_data = ClusterData(cluster, n_nodes)
-    app.add_task(_start_cluster(cluster_data))
+    asyncio.create_task(_start_cluster(cluster_data))
 
     cluster_id = cluster.cluster_id
     current_clusters[cluster_id] = cluster_data
@@ -177,7 +176,7 @@ async def _handle_job_result(embedding_dict, index_id):
         vectors_per_index=config.INDEX_SUBINDEX_SIZE,
         use_gpu=config.INDEX_USE_GPU,
     )
-    app.add_task(_cleanup_job(index_id))
+    asyncio.create_task(_cleanup_job(index_id))
 
 
 async def _cleanup_job(index_id):

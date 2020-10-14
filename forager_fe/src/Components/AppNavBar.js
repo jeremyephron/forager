@@ -2,6 +2,8 @@ import React from "react";
 import { NavLink } from "react-router-dom";
 import styled from "styled-components";
 
+import ClusterStatus from "./ClusterStatus";
+
 import { colors } from "../Constants";
 
 const Container = styled.div`
@@ -9,7 +11,6 @@ const Container = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 0px 20px;
-  width: 100%;
   height: 50px;
   position: sticky;
   top: 0;
@@ -30,6 +31,7 @@ function AppNavBar() {
   return (
     <Container className="flex-row">
       <HomeLink to="/" activeClassName="home">forager</HomeLink>
+      <ClusterStatus />
     </Container>
   );
 }

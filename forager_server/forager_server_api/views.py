@@ -251,7 +251,7 @@ def get_next_images(request, dataset_name, dataset=None):
 
         # Get all images which are not in images_with_label
         for ditem in dataset_items:
-            if not ditem in images_with_label:
+            if ditem not in images_with_label:
                 next_images.append(ditem)
     elif label_value == 'conflict':
         conflict_data = get_annotation_conflicts_helper(
