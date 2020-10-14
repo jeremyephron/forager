@@ -180,13 +180,70 @@ def get_dataset_info(request, dataset_name, dataset=None):
 
     bucket_name = dataset.directory[len('gs://'):].split('/')[0]
     path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
-    dataset_items = DatasetItem.objects.filter()[:100]
+    dataset_items = DatasetItem.objects.filter(dataset=dataset).order_by('pk')[:100]
     dataset_item_paths = [path_template.format(di.path) for di in dataset_items]
     dataset_item_identifiers = [di.pk for di in dataset_items]
 
     return JsonResponse({
         'status': 'success',
         'datasetName': dataset.name,
+        'paths': dataset_item_paths,
+        'identifiers': dataset_item_identifiers
+    })
+
+
+@api_view(['GET'])
+@csrf_exempt
+def get_next_images(request, dataset_name, dataset=None):
+    if not dataset:
+        dataset = get_object_or_404(Dataset, name=dataset_name)
+
+    CATEGORIES = {
+        'positive': 1,
+        'negative': 2,
+        'hard_negative': 3,
+        'unsure': 4,
+    }
+    label_function = request.GET['user']
+    category = request.GET['category']
+    label_value = request.GET['filter']
+
+    bucket_name = dataset.directory[len('gs://'):].split('/')[0]
+    path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
+    dataset_items = DatasetItem.objects.filter(dataset=dataset).order_by('pk')
+
+    # Find all annotations for the user and category in this dataset
+    annotations = Annotation.objects.filter(
+        dataset_item__in=dataset_items,
+        label_function=label_function,
+        label_category=category,
+        label_type='klabel_frame')
+
+    images_with_label = set()
+    if label_value == 'unlabeled':
+        for ann in annotations:
+            images_with_label.add(ann.dataset_item)
+    else:
+        cat_value = CATEGORIES[label_value]
+        for ann in annotations:
+            label_value = json.loads(ann.label_data)
+            if label_value['value'] != cat_value:
+                continue
+            images_with_label.add(ann.dataset_item)
+
+    # Get all images which are not in images_with_label
+    not_images = []
+    for ditem in dataset_items:
+        if not ditem in images_with_label:
+            not_images.append(ditem)
+
+    not_images = not_images[:100]
+
+    # Find all dataset items which do not have an annotation of the type
+    dataset_item_paths = [path_template.format(di.path) for di in not_images]
+    dataset_item_identifiers = [di.pk for di in not_images]
+
+    return JsonResponse({
         'paths': dataset_item_paths,
         'identifiers': dataset_item_identifiers
     })
