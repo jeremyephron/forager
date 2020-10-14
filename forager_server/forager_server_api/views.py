@@ -91,7 +91,7 @@ def create_index(request, dataset_name, dataset=None):
         dataset = get_object_or_404(Dataset, name=dataset_name)
 
     bucket_name = dataset.directory[len('gs://'):].split('/')[0]
-    dataset_items = DatasetItem.objects.filter(dataset=dataset)[:100]
+    dataset_items = DatasetItem.objects.filter(dataset=dataset)
     dataset_item_raw_paths = [di.path for di in dataset_items]
 
     data = json.loads(request.body)

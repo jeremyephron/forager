@@ -166,11 +166,11 @@ async def start_job(request):
     return resp.json({"index_id": index_id})
 
 
-async def _handle_job_result(embedding_dict, index_id):
+def _handle_job_result(embedding_dict, index_id):
     # Create index
     current_indexes[index_id] = LabeledIndex(
         embedding_dict,
-        tempdir="f/tmp/{index_id}/",
+        tempdir=f"/tmp/{index_id}/",
         d=config.EMBEDDING_DIM,
         n_centroids=config.INDEX_NUM_CENTROIDS,
         vectors_per_index=config.INDEX_SUBINDEX_SIZE,

@@ -55,9 +55,9 @@ function ClusterStatus() {
 
   const handleClick = async () => {
     let endpoint;
-    if (cluster.status == 'CLUSTER_NOT_STARTED') {
+    if (cluster.status === 'CLUSTER_NOT_STARTED') {
       endpoint = START_CLUSTER_ENDPOINT;
-    } else if (cluster.status == 'CLUSTER_STARTED') {
+    } else if (cluster.status === 'CLUSTER_STARTED') {
       endpoint = STOP_CLUSTER_ENDPOINT;
     } else {
       return;

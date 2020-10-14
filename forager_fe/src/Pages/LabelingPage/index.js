@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useSelector, useDispatch } from 'react-redux';
 import { useLocation } from "react-router-dom";
 import styled from "styled-components";
@@ -74,7 +74,6 @@ const Checkbox = styled.input`
 `
 
 function LabelingPage() {
-  const globalState = useSelector(state => state);
   const location = useLocation();
   const datasetName = location.state.datasetName;
   const [paths, setPaths] = useState(location.state.paths);
@@ -94,6 +93,20 @@ function LabelingPage() {
   const [currentUser, setCurrentUser] = useState("");
   //var user = "";
   //var category = "";
+
+  const cluster = useSelector(state => state.cluster);
+  const index = useSelector(state => state.indexes[datasetName] || {
+    id: undefined,
+    status: 'INDEX_NOT_BUILT',
+  });
+
+  const clusterRef = useRef();
+  const indexRef = useRef();
+
+  useEffect(() => {
+    clusterRef.current = cluster;
+    indexRef.current = index;
+  }, [cluster, index]);
 
   const baseUrl = "https://127.0.0.1:8000/api"
   const getAnnotationsUrl = baseUrl + "/get_annotations/" + datasetName;
@@ -482,8 +495,8 @@ function LabelingPage() {
       let url = new URL(lookupKnnUrl);
       url.search = new URLSearchParams({
         ann_identifiers:  filteredAnnotations.map(ann => ann.identifier),
-        cluster_id: globalState.cluster.id,
-        index_id: globalState.indexes[datasetName].id,
+        cluster_id: clusterRef.current.id,
+        index_id: indexRef.current.id,
       }).toString();
       const res = await fetch(url, {method: "GET",
         credentials: 'include',
@@ -689,9 +702,8 @@ function LabelingPage() {
           <option value="hard_negative">Hard Negative</option>
           <option value="unsure">Unsure</option>
           <option value="conflict">Conflict</option>
-          {globalState.cluster.status === 'CLUSTER_STARTED' &&
-           datasetName in globalState.indexes &&
-           globalState.indexes[datasetName].status == 'INDEX_BUILT' &&
+          {cluster.status === 'CLUSTER_STARTED' &&
+           index.status == 'INDEX_BUILT' &&
            <option value="knn">KNN</option>}
         </OptionsSelect>
         <input type="text" list="users" id="currUser" onChange={onUser} placeholder="User" />

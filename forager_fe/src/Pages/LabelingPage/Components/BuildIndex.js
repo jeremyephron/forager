@@ -30,7 +30,7 @@ function BuildIndex({ dataset }) {
 
   if (cluster.status === 'CLUSTER_STARTED') {
     if (index.id) {
-      if (index.status == 'INDEX_BUILT') {
+      if (index.status === 'INDEX_BUILT') {
         text = 'KNN index built!'
       } else {
         text = 'Building...'
@@ -59,9 +59,12 @@ function BuildIndex({ dataset }) {
   };
 
   const updateStatus = async () => {
+    if (!index.id) return;
+
     const response = await fetch(API_BASE + '/index/' + index.id, {
       credentials: 'include',
     }).then(response => response.json());
+    console.log(response);
     dispatch({
       'type': 'SET_INDEX_STATUS',
       'dataset': dataset,
