@@ -27,10 +27,10 @@ const OptionsBar = () => {
   return (
     <OptionsContainer>
       <OptionsSelect alt="true" id="select_annotation_mode">
+        <option value="per_frame">Per Frame</option>
         <option value="box_extreme_points">Box (via extreme points)</option>
         <option value="box_two_points">Box (via two corner clicks)</option>
         <option value="point">Point</option>
-        <option value="per_frame">Per Frame</option>
       </OptionsSelect>
       <OptionsButton alt="true" id="clear_button">Clear Annotations</OptionsButton> <span>---</span> 
       <OptionsButton alt="true" id="toggle_pt_viz_button">Hide Extreme Points</OptionsButton>

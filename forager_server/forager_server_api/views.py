@@ -178,13 +178,106 @@ def get_dataset_info(request, dataset_name, dataset=None):
 
     bucket_name = dataset.directory[len('gs://'):].split('/')[0]
     path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
-    dataset_items = DatasetItem.objects.filter(dataset=dataset)[:100]
+    dataset_items = DatasetItem.objects.filter(dataset=dataset).order_by('pk')[:100]
     dataset_item_paths = [path_template.format(di.path) for di in dataset_items]
     dataset_item_identifiers = [di.pk for di in dataset_items]
 
     return JsonResponse({
         'status': 'success',
         'datasetName': dataset.name,
+        'paths': dataset_item_paths,
+        'identifiers': dataset_item_identifiers
+    })
+
+
+@api_view(['GET'])
+@csrf_exempt
+def get_users_and_categories(request, dataset_name):
+    dataset = Dataset.objects.get(name=dataset_name)
+
+    annotations = Annotation.objects.filter(
+        dataset_item__in=dataset.datasetitem_set.filter())
+
+    users = set()
+    categories = set()
+    for ann in annotations:
+        users.add(ann.label_function)
+        categories.add(ann.label_category)
+
+    users = sorted(list(users))
+    categories = sorted(list(categories))
+    result = dict(
+        users=users,
+        categories=categories
+    )
+
+    return JsonResponse(result)
+
+
+@api_view(['GET'])
+@csrf_exempt
+def get_next_images(request, dataset_name, dataset=None):
+    if not dataset:
+        dataset = get_object_or_404(Dataset, name=dataset_name)
+
+    CATEGORIES = {
+        'positive': 1,
+        'negative': 2,
+        'hard_negative': 3,
+        'unsure': 4,
+    }
+    label_function = request.GET['user']
+    category = request.GET['category']
+    label_value = request.GET['filter']
+
+    bucket_name = dataset.directory[len('gs://'):].split('/')[0]
+    path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
+    dataset_items = DatasetItem.objects.filter(dataset=dataset).order_by('pk')
+
+    # Find all annotations for the user and category in this dataset
+    annotations = Annotation.objects.filter(
+        dataset_item__in=dataset_items,
+        label_function=label_function,
+        label_category=category,
+        label_type='klabel_frame')
+
+    next_images = []
+    if label_value == 'all':
+        next_images = dataset_items
+    elif label_value == 'unlabeled':
+        images_with_label = set()
+        for ann in annotations:
+            images_with_label.add(ann.dataset_item)
+
+        # Get all images which are not in images_with_label
+        for ditem in dataset_items:
+            if not ditem in images_with_label:
+                next_images.append(ditem)
+    elif label_value == 'conflict':
+        conflict_data = get_annotation_conflicts_helper(
+            dataset_items, label_function, category)
+        for ditem in dataset_items:
+            if ditem.pk in conflict_data:
+                next_images.append(ditem)
+    else:
+        cat_value = CATEGORIES[label_value]
+        images_with_label = set()
+        for ann in annotations:
+            label_value = json.loads(ann.label_data)
+            if label_value['value'] != cat_value:
+                continue
+            images_with_label.add(ann.dataset_item)
+        for ditem in dataset_items:
+            if ditem in images_with_label:
+                next_images.append(ditem)
+
+    next_images = next_images[:100]
+
+    # Find all dataset items which do not have an annotation of the type
+    dataset_item_paths = [path_template.format(di.path) for di in next_images]
+    dataset_item_identifiers = [di.pk for di in next_images]
+
+    return JsonResponse({
         'paths': dataset_item_paths,
         'identifiers': dataset_item_identifiers
     })
@@ -215,14 +308,15 @@ def get_annotations(request, dataset_name):
     category = request.GET['category']
 
     dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
-
     filter_args = dict(
         dataset_item__in=dataset_items
     )
     if not label_function == 'all':
         filter_args['label_function'] = label_function
     if not category == 'all':
-        filter_args['category'] = category
+        filter_args['label_category'] = category
+
+
     anns = Annotation.objects.filter(**filter_args)
 
     data = defaultdict(list)
@@ -234,32 +328,23 @@ def get_annotations(request, dataset_name):
     return JsonResponse(data)
 
 
-@api_view(['GET'])
-@csrf_exempt
-def get_annotation_conflicts(request, dataset_name):
-    image_identifiers = request.GET['identifiers'].split(',')
-    label_function = request.GET['user']
-    category = request.GET['category']
-
-    dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
-
+def get_annotation_conflicts_helper(dataset_items, label_function, category):
     filter_args = dict(
         dataset_item__in=dataset_items,
-        label_type='klabel_perframe'
+        label_type='klabel_frame'
     )
     if not category == 'all':
         filter_args['label_category'] = category
+
     anns = Annotation.objects.filter(**filter_args)
 
     data = defaultdict(list)
     anns_by_image = defaultdict(list)
     for ann in anns:
-        label_data = json.loads(ann.label_data)
-        label_data['identifier'] = ann.pk
-        data[ann.dataset_item.pk].append(label_data)
+        data[ann.dataset_item.pk].append(ann)
 
     # Analyze conflicts
-    conflict_data = defaultdict(list)
+    conflict_data = defaultdict(set)
     for image_id, labels in data.items():
         has_user_label = False
         user_annotation = None
@@ -273,11 +358,27 @@ def get_annotation_conflicts(request, dataset_name):
         for ann in labels:
             if ann == user_annotation:
                 continue
+            print(ann.label_data, user_annotation.label_data)
             if ann.label_data != user_annotation.label_data:
-                conflict_data[image_id] = labels
+                for ann in labels:
+                    conflict_data[image_id].add(ann.label_function)
                 break
+    return conflict_data
 
-    return JsonResponse(conflict_data)
+
+@api_view(['GET'])
+@csrf_exempt
+def get_annotation_conflicts(request, dataset_name):
+    image_identifiers = request.GET['identifiers'].split(',')
+    label_function = request.GET['user']
+    category = request.GET['category']
+
+    dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
+
+    conflict_data = get_annotation_conflicts_helper(
+        dataset_items, label_function, category)
+
+    return JsonResponse({k: list(v) for k,v in conflict_data.items()})
 
 
 @api_view(['POST'])
@@ -288,17 +389,19 @@ def add_annotation(request, dataset_name, image_identifier):
     #   'type': 2,
     #   'bbox': {'bmin': {'x': 0.2, 'y': 0.5}, 'bmax': {'x': 0.5, 'y': 0.7}}
     # }
-    body = request.body.decode('utf-8')
+    body = json.loads(request.body) # request.body.decode('utf-8')
     label_function = body['user']
     category = body['category']
-    annotation = body['annotation']
+    label_type = body['label_type']
+
+    annotation = json.dumps(body['annotation'])
 
     dataset_item = DatasetItem.objects.get(pk=image_identifier)
     ann = Annotation(
         dataset_item=dataset_item,
         label_function=label_function,
         label_category=category,
-        label_type='klabel',
+        label_type=label_type,
         label_data=annotation)
     ann.save()
 
