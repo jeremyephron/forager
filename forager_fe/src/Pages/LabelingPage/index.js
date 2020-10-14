@@ -277,7 +277,7 @@ function LabelingPage() {
     let user = document.getElementById("currUser").value;
     let category = document.getElementById("currCategory").value;
     let url = new URL(getNextImagesURL);
-    url.search = new URLSearchParams({identifiers: identifiers, user: user, category: category, filter: filter}).toString();
+    url.search = new URLSearchParams({user: user, category: category, filter: filter}).toString();
     const res = await fetch(url, {
       method: "GET",
       credentials: 'include',
@@ -318,6 +318,7 @@ function LabelingPage() {
     }
 
     setIdentifiers(res.identifiers);
+    currIdentifiers = res.identifiers;
     setPaths(res.paths)
     currPaths = res.paths;
 
@@ -455,6 +456,7 @@ function LabelingPage() {
       }
 
       setIdentifiers(res.identifiers);
+      currIdentifiers = res.identifiers;
       setPaths(res.paths)
       currPaths = res.paths;
 
