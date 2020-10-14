@@ -1,22 +1,25 @@
 import json
 import os
-import http.client
-import urllib
-import json
-import time
 import requests
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from google.cloud import storage
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.views.decorators.csrf import csrf_exempt
-from django.shortcuts import  get_object_or_404, get_list_or_404
+from django.shortcuts import get_object_or_404
 from django.conf import settings
 from rest_framework import status
 from rest_framework.decorators import api_view
 from collections import defaultdict
 
 from .models import Dataset, DatasetItem, Annotation
+
+
+POST_HEADERS = {
+    "Content-type": "application/x-www-form-urlencoded",
+    "Accept": "application/json",
+}
+
 
 @api_view(['GET'])
 @csrf_exempt
@@ -41,6 +44,87 @@ def get_datasets(request):
 
 @api_view(['POST'])
 @csrf_exempt
+def start_cluster(request):
+    params = {"n_nodes": settings.EMBEDDING_CLUSTER_NODES}
+    r = requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/start_cluster",
+        data=params,
+        headers=POST_HEADERS,
+    )
+    response_data = r.json()
+    return JsonResponse({
+        "status": "success",
+        "cluster_id": response_data["cluster_id"],
+    })
+
+
+@api_view(['GET'])
+@csrf_exempt
+def get_cluster_status(request, cluster_id):
+    params = {"cluster_id": cluster_id}
+    r = requests.get(
+        settings.EMBEDDING_SERVER_ADDRESS + "/cluster_status", params=params
+    )
+    response_data = r.json()
+    return JsonResponse(response_data)
+
+
+@api_view(['POST'])
+@csrf_exempt
+def stop_cluster(request):
+    data = json.loads(request.body)
+    params = {"cluster_id": data["cluster_id"]}
+    requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/stop_cluster",
+        data=params,
+        headers=POST_HEADERS,
+    )
+    return JsonResponse({
+        "status": "success",
+    })
+
+
+@api_view(['POST'])
+@csrf_exempt
+def create_index(request, dataset_name, dataset=None):
+    if not dataset:
+        dataset = get_object_or_404(Dataset, name=dataset_name)
+
+    bucket_name = dataset.directory[len('gs://'):].split('/')[0]
+    dataset_items = DatasetItem.objects.filter(dataset=dataset)
+    dataset_item_raw_paths = [di.path for di in dataset_items]
+
+    data = json.loads(request.body)
+    params = {
+        "cluster_id": data["cluster_id"],
+        "bucket": bucket_name,
+        "paths": dataset_item_raw_paths,
+    }
+    r = requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/start_job",
+        data=params,
+        headers=POST_HEADERS,
+    )
+    response_data = r.json()
+    return JsonResponse({
+        "status": "success",
+        "index_id": response_data["index_id"],
+    })
+
+
+@api_view(['GET'])
+@csrf_exempt
+def get_index_status(request, index_id):
+    params = {"index_id": index_id}
+    r = requests.get(
+        settings.EMBEDDING_SERVER_ADDRESS + "/job_status", params=params
+    )
+    response_data = r.json()
+    return JsonResponse(response_data)
+
+
+@api_view(['POST'])
+@csrf_exempt
 def create_dataset(request):
     try:
         data = json.loads(request.body)
@@ -50,7 +134,6 @@ def create_dataset(request):
             err = ValidationError(
                 'Directory only supports Google Storage bucket paths. '
                 'Please specify as "gs://bucket-name/path/to/data".')
-            # form.add_error('directory', err)
             raise err
 
         split_dir = data_directory[len('gs://'):].split('/')
@@ -60,7 +143,6 @@ def create_dataset(request):
         client = storage.Client()
         bucket = client.get_bucket(bucket_name)
         all_blobs = client.list_blobs(bucket, prefix=bucket_path)
-        # all_blobs = []
 
         dataset = Dataset(name=name, directory=data_directory)
         dataset.save()
@@ -79,94 +161,13 @@ def create_dataset(request):
         ]
         DatasetItem.objects.bulk_create(items)
 
-        # Start background job to start processing dataset
-        embedding_conn = http.client.HTTPConnection(
-            settings.EMBEDDING_SERVER_ADDRESS)
-        if 'cluster_id' in request.session:
-            # Check if stil exists
-            params = {'cluster_id': request.session['cluster_id']}
-            r = requests.get(
-                settings.EMBEDDING_SERVER_ADDRESS + '/cluster_status',
-                params=params
-            )
-            response_data = r.json()
-            if not response_data['has_cluster']:
-                del request.session['cluster_id']
-        if not 'cluster_id' in request.session:
-            # Create cluster if it does not exist
-            headers = {"Content-type": "application/x-www-form-urlencoded",
-                       "Accept": "application/json"}
-            params = {'n_nodes': settings.EMBEDDING_CLUSTER_NODES}
-            r = requests.post(
-                settings.EMBEDDING_SERVER_ADDRESS + '/start_cluster',
-                data=params, headers=headers)
-            response_data = r.json()
-            request.session['cluster_id'] = response_data['cluster_id']
-        # Initiate embedding computation
-        headers = {"Content-type": "application/x-www-form-urlencoded",
-                   "Accept": "application/json"}
-        params = {
-            'cluster_id': request.session['cluster_id'],
-            'n_mappers': settings.EMBEDDING_MAPPERS,
-            'bucket': bucket_name,
-            'paths': paths}
-        r = requests.post(
-            settings.EMBEDDING_SERVER_ADDRESS + '/start',
-            data=params, headers=headers)
-        response_data = r.json()
-
-        query_id = response_data['query_id']
-
-        # Track status of the embedding computation
-        value_at_last = None
-        same_as_last = 0
-        SAME_AS_ATTEMPTS = 10
-        while True:
-            params = {'query_id': query_id}
-            r = requests.get(
-                settings.EMBEDDING_SERVER_ADDRESS + '/results',
-                params=params
-            )
-            response_data = r.json()
-
-            if 'progress' in response_data:
-                n_processed = response_data['progress']['n_processed']
-                n_total = response_data['progress']['n_total']
-                n_skipped = response_data['progress']['n_skipped']
-                print('{:d}/{:d} ({:d} skipped)'.format(
-                    n_processed, n_total, n_skipped))
-                if n_processed == value_at_last and n_processed != 0:
-                    same_as_last += 1
-                    if same_as_last == SAME_AS_ATTEMPTS:
-                        break
-                else:
-                    value_at_last = n_processed
-                    same_as_last = 0
-            if response_data['progress']['finished']:
-                break
-            time.sleep(5)
-
-        # Create index using the embedding results
-        headers = {"Content-type": "application/x-www-form-urlencoded",
-                   "Accept": "application/json"}
-        params = {"query_id": query_id}
-        r = requests.post(
-            settings.EMBEDDING_SERVER_ADDRESS + "/create_index",
-            data=params, headers=headers
-        )
-        response_data = r.json()
-        request.session["index_id"] = response_data["index_id"]
-
-        # return HttpResponse(json.dumps({'status': 'success'}), content_type='application/json')
         req = HttpRequest()
         req.method = 'GET'
         return get_dataset_info(req, name, dataset)
-    except ValidationError as e:
-        # Redisplay the question voting form.
+    except ValidationError:
         return JsonResponse({
             'status': 'failure',
-            'message': ('Something went wrong. Make sure the directory path is '
-                       'valid.')
+            'message': 'Something went wrong. Make sure the directory path is valid.',
         })
 
 
@@ -175,8 +176,6 @@ def create_dataset(request):
 def get_dataset_info(request, dataset_name, dataset=None):
     if not dataset:
         dataset = get_object_or_404(Dataset, name=dataset_name)
-
-    filter_args = dict(dataset=dataset)
 
     bucket_name = dataset.directory[len('gs://'):].split('/')[0]
     path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
@@ -253,7 +252,7 @@ def get_next_images(request, dataset_name, dataset=None):
 
         # Get all images which are not in images_with_label
         for ditem in dataset_items:
-            if not ditem in images_with_label:
+            if ditem not in images_with_label:
                 next_images.append(ditem)
     elif label_value == 'conflict':
         conflict_data = get_annotation_conflicts_helper(
@@ -434,6 +433,8 @@ def delete_annotation(request, dataset_name, image_identifier, ann_identifier):
 @csrf_exempt
 def lookup_knn(request, dataset_name):
     ann_identifiers = [int(x) for x in request.GET['ann_identifiers'].split(',')]
+    cluster_id = request.GET['cluster_id']
+    index_id = request.GET['index_id']
 
     # 1. Retrieve dataset info from db
     dataset = Dataset.objects.get(name=dataset_name)
@@ -453,11 +454,6 @@ def lookup_knn(request, dataset_name):
                             for ann in query_annotations]]
 
     # 3. Send paths and patches to /query_index
-    # NOTE(fpoms): embedding computation does not support black/white images rn.
-    cluster_id = request.session['cluster_id']
-    index_id = request.session['index_id']
-    headers = {"Content-type": "application/x-www-form-urlencoded",
-               "Accept": "application/json"}
     params = {
         "cluster_id": cluster_id,
         "index_id": index_id,
@@ -468,7 +464,7 @@ def lookup_knn(request, dataset_name):
     }
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/query_index",
-        data=params, headers=headers
+        data=params, headers=POST_HEADERS
     )
     response_data = r.json()
     response = {
