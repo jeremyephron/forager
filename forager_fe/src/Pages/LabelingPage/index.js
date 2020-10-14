@@ -93,14 +93,15 @@ function LabelingPage() {
   //var user = "";
   //var category = "";
 
-  const getAnnotationsUrl = "https://127.0.0.1:8000/api/get_annotations/" + datasetName;
-  const addAnnotationUrl = "https://127.0.0.1:8000/api/add_annotation/" + datasetName;
-  const deleteAnnotationUrl = "https://127.0.0.1:8000/api/delete_annotation/" + datasetName;
-  const lookupKnnUrl = "https://127.0.0.1:8000/api/lookup_knn/" + datasetName;
-  // can modify the other urls like this 
-  const getConflictsUrl = "https://127.0.0.1:8000/api/get_conflicts/" + datasetName;
-  const getNextImagesURL = "https://127.0.0.1:8000/api/get_next_images/" + datasetName;
-  const getUsersAndCategoriesUrl = "https://127.0.0.1:8000/api/get_users_and_categories/" + datasetName;
+  const baseUrl = "https://127.0.0.1:8000/api"
+  const getAnnotationsUrl = baseUrl + "/get_annotations/" + datasetName;
+  const addAnnotationUrl = baseUrl + "/add_annotation/" + datasetName;
+  const deleteAnnotationUrl = baseUrl + "/delete_annotation/" + datasetName;
+  const lookupKnnUrl = baseUrl + "/lookup_knn/" + datasetName;
+  // can modify the other urls like this
+  const getConflictsUrl = baseUrl + "/get_conflicts/" + datasetName;
+  const getNextImagesURL = baseUrl + "/get_next_images/" + datasetName;
+  const getUsersAndCategoriesUrl = baseUrl + "/get_users_and_categories/" + datasetName;
 
   /* Klabel stuff */
   const labeler = useMemo(() => new ImageLabeler(), []);
