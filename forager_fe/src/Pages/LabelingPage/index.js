@@ -273,11 +273,14 @@ function LabelingPage() {
   }
 
   const handle_image_subset_change = async() => {
-    const select = document.getElementById("select_image_subset");
+    let select = document.getElementById("select_image_subset").value;
+    if (select.localeCompare('knn') === 0) {
+      select = 'all';
+    }
     // Calculate the desired subset of images from annotations, then pass to currVisibility
     let show = new Array(labeler.frames.length).fill(false,0,labeler.frames.length)
     let conflicts = {};
-    if (select.value.localeCompare("conflict") === 0) {
+    if (select.localeCompare("conflict") === 0) {
       let user = document.getElementById("currUser").value;
       let category = document.getElementById("currCategory").value;
 
@@ -297,18 +300,18 @@ function LabelingPage() {
     }
     console.log(conflicts);
     for (var i = 0; i < labeler.frames.length; i++) {
-      if (select.value.localeCompare("all") === 0) {
+      if (select.localeCompare("all") === 0) {
         show[i] = true
-      } else if (select.value.localeCompare("unlabeled") === 0) {
+      } else if (select.localeCompare("unlabeled") === 0) {
         show[i] = (labeler.frames[i].data.annotations.length === 0);
-      } else if (select.value.localeCompare("conflict") === 0) {
+      } else if (select.localeCompare("conflict") === 0) {
         if (labeler.frames[i].data.identifier in conflicts) {
           show[i] = true;
         }
       } else  {
         for (var j = 0; j < labeler.frames[i].data.annotations.length; j++) {
           if (labeler.frames[i].data.annotations[j].type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
-            if (labeler.frames[i].data.annotations[j].value === filterMap[select.value]) {
+            if (labeler.frames[i].data.annotations[j].value === filterMap[select]) {
               show[i] = true;
             } else  {
               show[i] = false;
@@ -325,6 +328,9 @@ function LabelingPage() {
 
   const handle_fetch_images = async() => {
     let filter = document.getElementById("select_image_subset").value;
+    if (filter.localeCompare('knn') === 0) {
+      filter = 'all';
+    }
     let user = document.getElementById("currUser").value;
     let category = document.getElementById("currCategory").value;
     let url = new URL(getNextImagesURL);
@@ -457,7 +463,7 @@ function LabelingPage() {
 
       // Return KNN images only when in KNN mode
       console.log(document.getElementById("select_image_subset").value)
-      if (document.getElementById("select_image_subset").value.localeCompare("knn") != 0) {
+      if (document.getElementById("select_image_subset").value.localeCompare("knn") !== 0) {
         console.log("Not KNN")
         return;
       }
