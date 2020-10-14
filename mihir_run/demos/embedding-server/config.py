@@ -6,7 +6,7 @@ OUTPUT_FILENAME = "lvis-embeddings.npy"
 MAPPER_CONTAINER = "gcr.io/visualdb-1046/mihir-demo-full-image-embedding"
 
 JOB_CLEANUP_TIME = 60 * 60  # 1 hour
-N_RETRIES = 3
+N_RETRIES = 1
 
 UPDATE_INTERVAL = 1
 
