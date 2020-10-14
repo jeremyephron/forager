@@ -442,14 +442,16 @@ function LabelingPage() {
         })
         .then(results => results.json());
         console.log(conflicts)
+        console.log(Object.keys(conflicts))
       }
+      console.log(conflicts)
       for (var i = 0; i < labeler.frames.length; i++) {
         if (select.value.localeCompare("all") === 0) {
           show[i] = true
         } else if (select.value.localeCompare("unlabeled") === 0) {
           show[i] = (labeler.frames[i].data.annotations.length === 0);
         } else if (select.value.localeCompare("conflict") === 0) {
-          if (labeler.frames[i].identifer in conflicts) {
+          if (labeler.frames[i].data.identifier in conflicts) {
             show[i] = true;
           }
         } else  {
@@ -466,6 +468,7 @@ function LabelingPage() {
       }
       setVisibility(show);
       currVisibility = show;
+      console.log(show)
       labeler.current_frame_index = getFirstFrame();
     }
 
