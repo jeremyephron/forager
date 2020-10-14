@@ -261,8 +261,8 @@ async def delete_index(request):
 async def cleanup(app, loop):
     print("Terminating:")
     await _cleanup_jobs()
-    await _cleanup_indexes()
     await _cleanup_clusters()
+    await _cleanup_indexes()
 
 
 async def _cleanup_jobs():
@@ -271,18 +271,18 @@ async def _cleanup_jobs():
     print(f"- stopped {n} jobs")
 
 
-async def _cleanup_indexes():
-    n = len(current_indexes)
-    for index in current_indexes.values():
-        index.delete()
-    print(f"- deleted {n} indexes")
-
-
 async def _cleanup_clusters():
     n = len(current_clusters)
     for cluster_data in current_clusters.values():
         await _stop_cluster(cluster_data)
     print(f"- killed {n} clusters")
+
+
+async def _cleanup_indexes():
+    n = len(current_indexes)
+    for index in current_indexes.values():
+        index.delete()
+    print(f"- deleted {n} indexes")
 
 
 if __name__ == "__main__":
