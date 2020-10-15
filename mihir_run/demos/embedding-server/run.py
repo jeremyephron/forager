@@ -233,6 +233,7 @@ async def query_index(request):
         PoolingReducer(extract_func=_extract_embedding_from_mapper_output),
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
+        chunk_size=1,
     )
     query_vector = await job.run_until_complete(
         [
