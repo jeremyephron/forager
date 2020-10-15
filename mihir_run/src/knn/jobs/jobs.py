@@ -82,15 +82,18 @@ class MapReduceJob:
         *,
         n_retries: int = defaults.N_RETRIES,
         chunk_size: int = defaults.CHUNK_SIZE,
+        request_timeout: int = defaults.REQUEST_TIMEOUT,
     ) -> None:
         self.job_id = str(uuid.uuid4())
 
-        self.n_retries = n_retries
-        self.chunk_size = chunk_size
         self.mapper = mapper
         self.mapper_args = mapper_args
 
         self.reducer = reducer
+
+        self.n_retries = n_retries
+        self.chunk_size = chunk_size
+        self.request_timeout = request_timeout
 
         # Performance stats
         self._n_requests = 0
@@ -137,7 +140,7 @@ class MapReduceJob:
 
         async with self.mapper as mapper_url:
             connector = aiohttp.TCPConnector(limit=0)
-            timeout = aiohttp.ClientTimeout(total=45)
+            timeout = aiohttp.ClientTimeout(total=self.request_timeout)
             async with aiohttp.ClientSession(
                 connector=connector, timeout=timeout
             ) as session:
