@@ -4,6 +4,7 @@ import functools
 import heapq
 import json
 import operator
+import uuid
 
 import numpy as np
 from sanic import Sanic
@@ -35,56 +36,72 @@ class ClusterData:
 class LabeledIndex:
     def __init__(self, embedding_dict, **kwargs):
         self.labels = list(embedding_dict.keys())
-        vectors = np.concatenate(
+
+        full_image_vectors = np.stack(
+            [
+                spatial_embeddings.mean(axis=(1, 2))
+                for spatial_embeddings in embedding_dict.values()
+            ]
+        )
+
+        self.full_image_index = InteractiveIndex(
+            tempdir=f"/tmp/{uuid.uuid4()}/", **kwargs
+        )
+        self.full_image_index.train(full_image_vectors)
+        self.full_image_index.add(full_image_vectors)
+        self.full_image_index.merge_partial_indexes()
+
+        spatial_vectors = np.concatenate(
             [
                 spatial_embeddings.reshape(config.EMBEDDING_DIM, -1).T
                 for spatial_embeddings in embedding_dict.values()
             ]
         )
-        ids = [
+        spatial_ids = [
             i
             for i, (c, h, w) in enumerate(map(np.shape, embedding_dict.values()))
             for _ in range(h * w)
         ]
 
-        self.index = InteractiveIndex(**kwargs)
-
-        # Train
-        # TODO(mihirg): Train only on a subset of the data
-        self.index.train(vectors)
-
-        # Add
         # TODO(mihirg): Add incrementally as results come back
-        self.index.add(vectors, ids)
-
-        self.index.merge_partial_indexes()
+        self.spatial_index = InteractiveIndex(tempdir=f"/tmp/{uuid.uuid4()}/", **kwargs)
+        self.spatial_index.train(spatial_vectors)
+        self.spatial_index.add(spatial_vectors, spatial_ids)
+        self.spatial_index.merge_partial_indexes()
 
     def delete(self):
-        self.index.cleanup()
+        self.full_image_index.cleanup()
+        self.spatial_index.cleanup()
 
-    def query(self, query_vector, num_results, num_probes):
-        dists, ids = self.index.query(
-            query_vector,
-            config.QUERY_NUM_RESULTS_MULTIPLE * num_results,
-            n_probes=num_probes,
-        )
-        assert len(ids) == 1 and len(dists) == 1
+    def query(self, query_vector, num_results, num_probes, use_full_image=False):
+        if use_full_image:
+            dists, ids = self.full_image_index.query(
+                query_vector, num_results, n_probes=num_probes
+            )
+            sorted_id_dist_tuples = [(i, d) for i, d in zip(ids[0], dists[0]) if i >= 0]
+        else:
+            dists, ids = self.spatial_index.query(
+                query_vector,
+                config.QUERY_NUM_RESULTS_MULTIPLE * num_results,
+                n_probes=num_probes,
+            )
+            assert len(ids) == 1 and len(dists) == 1
 
-        # Gather lowest QUERY_PATCHES_PER_IMAGE distances for each image
-        dists_by_id = defaultdict(list)
-        for i, d in zip(ids[0], dists[0]):
-            if i >= 0 and len(dists_by_id[i]) < config.QUERY_PATCHES_PER_IMAGE:
-                dists_by_id[i].append(d)
+            # Gather lowest QUERY_PATCHES_PER_IMAGE distances for each image
+            dists_by_id = defaultdict(list)
+            for i, d in zip(ids[0], dists[0]):
+                if i >= 0 and len(dists_by_id[i]) < config.QUERY_PATCHES_PER_IMAGE:
+                    dists_by_id[i].append(d)
 
-        # Average them and resort
-        id_dist_tuple_gen = (
-            (i, sum(ds) / len(ds))
-            for i, ds in dists_by_id.items()
-            if len(ds) == config.QUERY_PATCHES_PER_IMAGE
-        )
-        sorted_id_dist_tuples = heapq.nsmallest(
-            num_results, id_dist_tuple_gen, operator.itemgetter(1)
-        )
+            # Average them and resort
+            id_dist_tuple_gen = (
+                (i, sum(ds) / len(ds))
+                for i, ds in dists_by_id.items()
+                if len(ds) == config.QUERY_PATCHES_PER_IMAGE
+            )
+            sorted_id_dist_tuples = heapq.nsmallest(
+                num_results, id_dist_tuple_gen, operator.itemgetter(1)
+            )
 
         return [(self.labels[i], d) for i, d in sorted_id_dist_tuples]
 
@@ -201,7 +218,6 @@ def _handle_job_result(embedding_dict, index_id):
     # Create index
     current_indexes[index_id] = LabeledIndex(
         embedding_dict,
-        tempdir=f"/tmp/{index_id}/",
         d=config.EMBEDDING_DIM,
         n_centroids=config.INDEX_NUM_CENTROIDS,
         vectors_per_index=config.INDEX_SUBINDEX_SIZE,
@@ -258,6 +274,7 @@ async def query_index(request):
     ]  # [0, 1]^2
     index_id = request.form["index_id"][0]
     num_results = int(request.form["num_results"][0])
+    use_full_image = bool(request.form.get(["use_full_image"], (False,))[0])
 
     cluster_data = current_clusters[cluster_id]
     await cluster_data.ready.wait()
@@ -279,7 +296,7 @@ async def query_index(request):
 
     # Run query and return results
     query_results = current_indexes[index_id].query(
-        query_vector, num_results, config.INDEX_NUM_QUERY_PROBES
+        query_vector, num_results, config.INDEX_NUM_QUERY_PROBES, use_full_image
     )
     paths = [x[0] for x in query_results]
     return resp.json({"results": paths})
