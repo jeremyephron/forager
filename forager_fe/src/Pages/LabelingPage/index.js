@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 
-import { colors } from "../../Constants";
+import { colors, baseUrl } from "../../Constants";
 import { MainCanvas, ImageGrid, BuildIndex } from "./Components";
 import { Button, Select } from "../../Components";
 import {
@@ -108,7 +108,6 @@ function LabelingPage() {
     indexRef.current = index;
   }, [cluster, index]);
 
-  const baseUrl = "https://127.0.0.1:8000/api"
   const getAnnotationsUrl = baseUrl + "/get_annotations/" + datasetName;
   const addAnnotationUrl = baseUrl + "/add_annotation/" + datasetName;
   const deleteAnnotationUrl = baseUrl + "/delete_annotation/" + datasetName;
