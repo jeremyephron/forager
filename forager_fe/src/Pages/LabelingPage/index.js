@@ -292,9 +292,6 @@ function LabelingPage() {
       return;
     }
     let select = document.getElementById("select_image_subset").value;
-    if (select.localeCompare('knn') === 0) {
-      select = 'all';
-    }
     // Calculate the desired subset of images from annotations, then pass to currVisibility
     let show = new Array(labeler.frames.length).fill(false,0,labeler.frames.length)
     let conflicts = {};
@@ -346,21 +343,49 @@ function LabelingPage() {
 
   const handle_fetch_images = async() => {
     let filter = document.getElementById("select_image_subset").value;
-    if (filter.localeCompare('knn') === 0) {
-      filter = 'all';
+    let method = document.getElementById("fetch_image_mode").value;
+
+    // If KNN fetch, then default to fetching all? We can decide whether to reset the filter later
+    if (method.localeCompare("knn") === 0) {
+      filter = "all";
     }
+
     let user = document.getElementById("currUser").value;
     let category = document.getElementById("currCategory").value;
-    let url = new URL(getNextImagesURL);
-    url.search = new URLSearchParams({user: user, category: category, filter: filter}).toString();
-    const res = await fetch(url, {
-      method: "GET",
-      credentials: 'include',
-      headers: {
-      'Content-Type': 'application/json'
+
+    var url;
+    var res;
+    if (method.localeCompare("knn") === 0) {
+      // Make a copy of currFrame.data.annotations without full-frame
+      var currFrame = labeler.get_current_frame();
+      var filteredAnnotations = []
+      for (var i = 0; i < currFrame.data.annotations.length; i++) {
+        if (currFrame.data.annotations[i].type !== Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+          filteredAnnotations.push(currFrame.data.annotations[i])
+        }
       }
-    })
-    .then(results => results.json());
+
+      url = new URL(lookupKnnUrl);
+      url.search = new URLSearchParams({
+        ann_identifiers:  filteredAnnotations.map(ann => ann.identifier),
+        cluster_id: clusterRef.current.id,
+        index_id: indexRef.current.id,
+      }).toString();
+      res = await fetch(url, {method: "GET",
+        credentials: 'include',
+      }).then(results => results.json());
+    } else {
+      url = new URL(getNextImagesURL);
+      url.search = new URLSearchParams({user: user, category: category, filter: filter, method: method}).toString();
+      res = await fetch(url, {
+        method: "GET",
+        credentials: 'include',
+        headers: {
+        'Content-Type': 'application/json'
+        }
+      })
+      .then(results => results.json());
+    }
 
     url = new URL(getAnnotationsUrl);
     url.search = new URLSearchParams({identifiers: res.identifiers, user: user, category: category}).toString();
@@ -645,10 +670,6 @@ function LabelingPage() {
       button.toggle_status = true;
       labeler.set_extreme_points_viz(button.toggle_status);
 
-      button = document.getElementById("toggle_sound_button");
-      button.toggle_status = false;
-      labeler.set_play_audio(button.toggle_status);
-
       button = document.getElementById("toggle_letterbox_button");
       button.onclick = toggle_letterbox;
       button.toggle_status = true;
@@ -708,9 +729,6 @@ function LabelingPage() {
           <option value="hard_negative">Hard Negative</option>
           <option value="unsure">Unsure</option>
           <option value="conflict">Conflict</option>
-          {cluster.status === 'CLUSTER_STARTED' &&
-           index.status == 'INDEX_BUILT' &&
-           <option value="knn">KNN</option>}
         </OptionsSelect>
         <input type="text" list="users" id="currUser" onChange={onUser} placeholder="User" />
         <datalist id="users">
@@ -725,6 +743,12 @@ function LabelingPage() {
           )}
         </datalist>
         <FetchButton id="fetch_button">Fetch More Images</FetchButton>
+        <OptionsSelect alt="true" id="fetch_image_mode">
+          <option value="random">Random</option>
+          {cluster.status === 'CLUSTER_STARTED' &&
+           index.status == 'INDEX_BUILT' &&
+           <option value="knn">KNN</option>}
+        </OptionsSelect>
         <BuildIndex dataset={datasetName} />
         <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
       </SubContainer>
