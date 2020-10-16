@@ -116,6 +116,8 @@ function LabelingPage() {
   const getConflictsUrl = baseUrl + "/get_conflicts/" + datasetName;
   const getNextImagesURL = baseUrl + "/get_next_images/" + datasetName;
   const getUsersAndCategoriesUrl = baseUrl + "/get_users_and_categories/" + datasetName;
+  const setNotesUrl = baseUrl + "/set_notes/" + datasetName;
+  const getNotesUrl = baseUrl + "/get_notes/" + datasetName;
 
   /* Klabel stuff */
   const labeler = useMemo(() => new ImageLabeler(), []);
@@ -180,6 +182,7 @@ function LabelingPage() {
       imageData.push(data);
     }
 
+    //get_notes(false);
     labeler.load_image_stack(imageData);
     labeler.set_focus();
   }
@@ -226,6 +229,8 @@ function LabelingPage() {
       }
       imageData.push(data);
     }
+
+    //get_notes(false);
     labeler.load_image_stack(imageData);
     labeler.set_focus();
   }
@@ -426,6 +431,61 @@ function LabelingPage() {
     labeler.set_focus();
 
     handle_image_subset_change();
+  }
+
+  const handle_save_notes = async() => {
+    let user = document.getElementById("currUser").value;
+    let category = document.getElementById("currCategory").value;
+    const notes = document.getElementById("user_notes").value;
+    
+    let endpoint = new URL(setNotesUrl);
+    endpoint.search = new URLSearchParams({
+      user: user,
+      category: category
+    }).toString();
+
+    let body = {
+      user: user,
+      category: category,
+      notes: notes
+    }
+
+    const res = await fetch(endpoint.toString(), {
+      method: "POST",
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(body)
+    })
+    .then(response => response.text());
+  }
+
+  const get_notes = async(ownNotes) => {
+    let user = document.getElementById("currUser").value;
+    let category = document.getElementById("currCategory").value;
+    
+    let endpoint = new URL(getNotesUrl);
+    endpoint.search = new URLSearchParams({
+      user: user,
+      category: category
+    }).toString();
+
+    const notes = await fetch(endpoint, {method: "GET",
+      credentials: 'include',
+    }).then(response => response.json());
+
+    if (ownNotes) {
+      let notesDiv = document.getElementById("user_notes");
+      if (user in notes) {
+        notesDiv.value = notes[user];
+      }
+    } 
+    var otherNotes = ""
+    let otherNotesDiv = document.getElementById("other_user_notes");
+    // Loop through entries and build up notes field
+    for (var otherUser in notes) {
+      otherNotes += notes[otherUser] + "/n";
+    }
+    otherNotesDiv.value=otherNotes;
   }
 
   useEffect(() => {
@@ -658,6 +718,8 @@ function LabelingPage() {
       setUsers(usersAndCategories['users']);
       setCategories(usersAndCategories['categories']);
 
+      //get_notes(true); // Get own notes as well
+
       labeler.load_image_stack(imageData);
       labeler.set_focus();
 
@@ -681,6 +743,8 @@ function LabelingPage() {
       button.onclick = handle_get_annotations;
       button = document.getElementById("fetch_button");
       button.onclick = handle_fetch_images;
+      //button = document.getElementById("notes_button");
+      //button.onclick = handle_save_notes;
 
       let select = document.getElementById("select_annotation_mode")
       select.onchange = handle_mode_change;

@@ -32,6 +32,7 @@ const OptionsBar = () => {
         <option value="box_two_points">Box (via two corner clicks)</option>
         <option value="point">Point</option>
       </OptionsSelect>
+      <OptionsButton alt="true" id="notes_button">Save Notes</OptionsButton>
       <OptionsButton alt="true" id="clear_button">Clear Annotations</OptionsButton> <span>---</span> 
       <OptionsButton alt="true" id="toggle_pt_viz_button">Hide Extreme Points</OptionsButton>
       <OptionsButton alt="true" id="toggle_letterbox_button">Use Scaled View</OptionsButton> ---
@@ -61,6 +62,8 @@ const MainCanvas = () => {
     <Container id="klabel_wrapper">
       <Canvas width="960" height="500" id="main_canvas" tabindex="0"/>
       <OptionsBar />
+      <textarea type="text" id="user_notes" placeholder="My notes: "></textarea>
+      <div id="other_user_notes"></div>
     </Container>
   );
 }
