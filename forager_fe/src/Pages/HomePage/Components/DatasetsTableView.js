@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useHistory } from 'react-router-dom';
 import styled from "styled-components";
 
-import { colors } from "../../../Constants";
+import { colors, baseUrl } from "../../../Constants";
 import { Button } from "../../../Components";
 
 const Container = styled.div`
@@ -60,7 +60,7 @@ const Table = styled.table`
 
 const DatasetsTable = ({ datasets }) => {
   const history = useHistory();
-  const datasetInfoUrlBase = "https://127.0.0.1:8000/api/dataset/";
+  const datasetInfoUrlBase = baseUrl + "/dataset/";
 
   const fetchDatasetInfo = async ( datasetName ) => {
     const datasetInfo = await fetch(datasetInfoUrlBase + datasetName, {
@@ -125,7 +125,7 @@ const DatasetsTable = ({ datasets }) => {
 }
 
 const DatasetsTableView = () => {
-  const datasetsUrl = "https://127.0.0.1:8000/api/get_datasets";
+  const datasetsUrl = baseUrl + "/get_datasets";
   const history = useHistory();
   // const [loading, setLoading] = useState(false); // for future use
   const [datasets, setDatasets] = useState([]);

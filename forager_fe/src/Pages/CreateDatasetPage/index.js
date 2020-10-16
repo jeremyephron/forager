@@ -3,7 +3,7 @@ import { withRouter } from 'react-router-dom';
 import styled from "styled-components";
 
 import { Button, Spinner } from "../../Components";
-import { colors } from "../../Constants";
+import { colors, baseUrl } from "../../Constants";
 import { sleep } from "../../Utils";
 
 const Container = styled.div`
@@ -51,7 +51,7 @@ const SubmitButton = styled(Button)`
 class NewDatasetForm extends React.Component {
   constructor(props) {
     super(props);
-    this.createDatasetUrl = "https://127.0.0.1:8000/api/create_dataset";
+    this.createDatasetUrl = baseUrl + "/create_dataset";
     this.state = {loading: false};
 
     this.handleSubmit = this.handleSubmit.bind(this);
