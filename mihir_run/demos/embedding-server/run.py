@@ -1,6 +1,9 @@
 import asyncio
+from collections import defaultdict
 import functools
+import heapq
 import json
+import operator
 
 import numpy as np
 from sanic import Sanic
@@ -32,18 +35,27 @@ class ClusterData:
 class LabeledIndex:
     def __init__(self, embedding_dict, **kwargs):
         self.labels = list(embedding_dict.keys())
-        vectors = np.stack(list(embedding_dict.values()))
+        vectors = np.concatenate(
+            [
+                spatial_embeddings.reshape(config.EMBEDDING_DIM, -1).T
+                for spatial_embeddings in embedding_dict.values()
+            ]
+        )
+        ids = [
+            i
+            for i, (c, h, w) in enumerate(map(np.shape, embedding_dict.values()))
+            for _ in range(h * w)
+        ]
 
         self.index = InteractiveIndex(**kwargs)
 
         # Train
-        # TODO(mihirg): Train only on the first few results and add incrementally
-        # to index as more come back
+        # TODO(mihirg): Train only on a subset of the data
         self.index.train(vectors)
 
         # Add
         # TODO(mihirg): Add incrementally as results come back
-        self.index.add(vectors)
+        self.index.add(vectors, ids)
 
         self.index.merge_partial_indexes()
 
@@ -51,9 +63,30 @@ class LabeledIndex:
         self.index.cleanup()
 
     def query(self, query_vector, num_results, num_probes):
-        dists, inds = self.index.query(query_vector, num_results, n_probes=num_probes)
-        assert len(inds) == 1 and len(dists) == 1
-        return [(self.labels[i], dist) for i, dist in zip(inds[0], dists[0]) if i >= 0]
+        dists, ids = self.index.query(
+            query_vector,
+            config.QUERY_NUM_RESULTS_MULTIPLE * num_results,
+            n_probes=num_probes,
+        )
+        assert len(ids) == 1 and len(dists) == 1
+
+        # Gather lowest QUERY_PATCHES_PER_IMAGE distances for each image
+        dists_by_id = defaultdict(list)
+        for i, d in zip(ids[0], dists[0]):
+            if i >= 0 and len(dists_by_id[i]) < config.QUERY_PATCHES_PER_IMAGE:
+                dists_by_id[i].append(d)
+
+        # Average them and resort
+        id_dist_tuple_gen = (
+            (i, sum(ds) / len(ds))
+            for i, ds in dists_by_id.items()
+            if len(ds) == config.QUERY_PATCHES_PER_IMAGE
+        )
+        sorted_id_dist_tuples = heapq.nsmallest(
+            num_results, id_dist_tuple_gen, operator.itemgetter(1)
+        )
+
+        return [(self.labels[i], d) for i, d in sorted_id_dist_tuples]
 
 
 # Global data
@@ -122,17 +155,15 @@ async def _stop_cluster(cluster_data):
 
 
 # EMBEDDING COMPUTATION
-def _extract_embedding_from_mapper_output(output):
-    return utils.base64_to_numpy(output[config.EMBEDDING_LAYER])
-
-
 class EmbeddingDictReducer(Reducer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.embeddings = {}
 
     def handle_result(self, input, output):
-        self.embeddings[input["image"]] = _extract_embedding_from_mapper_output(output)
+        self.embeddings[input["image"]] = utils.base64_to_numpy(
+            output[config.EMBEDDING_LAYER]
+        )
 
     @property
     def result(self):
@@ -212,6 +243,10 @@ async def stop_job(request):
 
 
 # INDEX MANAGEMENT
+def _extract_pooled_embedding_from_mapper_output(output):
+    return utils.base64_to_numpy(output[config.EMBEDDING_LAYER]).mean(axis=(1, 2))
+
+
 @app.route("/query_index", methods=["POST"])
 async def query_index(request):
     cluster_id = request.form["cluster_id"][0]
@@ -230,7 +265,7 @@ async def query_index(request):
     # Generate query vector as average of patch embeddings
     job = MapReduceJob(
         MapperSpec(url=cluster_data.service_url, n_mappers=1),
-        PoolingReducer(extract_func=_extract_embedding_from_mapper_output),
+        PoolingReducer(extract_func=_extract_pooled_embedding_from_mapper_output),
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
         chunk_size=1,

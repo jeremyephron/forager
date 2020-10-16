@@ -30,10 +30,9 @@ class ImageEmbeddingMapper(ResNetBackboneMapper):
                 x2 = int(math.ceil(x2f * w))
                 y2 = int(math.ceil(y2f * h))
 
-                embedding = (
-                    spatial_embeddings[0, :, y1:y2, x1:x2].mean(dim=-1).mean(dim=-1)
+                result[layer] = utils.numpy_to_base64(
+                    spatial_embeddings[0, :, y1:y2, x1:x2].numpy()
                 )
-                result[layer] = utils.numpy_to_base64(embedding.numpy())
 
             return result
 
