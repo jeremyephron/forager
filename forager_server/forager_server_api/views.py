@@ -442,6 +442,7 @@ def lookup_knn(request, dataset_name):
     ann_identifiers = [int(x) for x in request.GET['ann_identifiers'].split(',')]
     cluster_id = request.GET['cluster_id']
     index_id = request.GET['index_id']
+    use_full_image = 'use_full_image' in request.GET
 
     # 1. Retrieve dataset info from db
     dataset = Dataset.objects.get(name=dataset_name)
@@ -468,6 +469,7 @@ def lookup_knn(request, dataset_name):
         "paths": paths,
         "patches": json.dumps(patches),
         "num_results": 100,
+        "use_full_image": use_full_image,
     }
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/query_index",
