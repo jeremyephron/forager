@@ -41,6 +41,22 @@ const OptionsBar = () => {
   );
 }
 
+const StatsContainer = styled.div`
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1vh;
+`;
+
+const StatsBar = (props) => {
+  return (
+    <StatsContainer>
+      <div>Total selected images: {props.numTotalFilteredImages}</div>
+    </StatsContainer>
+  );
+}
+
 const Container = styled.div`
   display: flex;
   flex-direction: column;
@@ -57,11 +73,12 @@ const Canvas = styled.canvas`
   box-sizing: border-box;
 `;
 
-const MainCanvas = () => {
+const MainCanvas = (props) => {
   return (
     <Container id="klabel_wrapper">
       <Canvas width="960" height="500" id="main_canvas" tabindex="0"/>
       <OptionsBar />
+      <StatsBar numTotalFilteredImages={props.numTotalFilteredImages}/>
       <textarea type="text" id="user_notes" placeholder="My notes: "></textarea>
       <div id="other_user_notes"></div>
     </Container>

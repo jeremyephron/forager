@@ -91,6 +91,7 @@ function LabelingPage() {
   const [currentCategory, setCurrentCategory] = useState("");
   const [users, setUsers] = useState(["Kenobi"]);
   const [currentUser, setCurrentUser] = useState("");
+  const [numTotalFilteredImages, setNumTotalFilteredImages] = useState(0);
   //var user = "";
   //var category = "";
 
@@ -118,6 +119,8 @@ function LabelingPage() {
   const getUsersAndCategoriesUrl = baseUrl + "/get_users_and_categories/" + datasetName;
   const setNotesUrl = baseUrl + "/set_notes/" + datasetName;
   const getNotesUrl = baseUrl + "/get_notes/" + datasetName;
+
+  const PAGINATION_NUM = 500;
 
   /* Klabel stuff */
   const labeler = useMemo(() => new ImageLabeler(), []);
@@ -381,7 +384,13 @@ function LabelingPage() {
       }).then(results => results.json());
     } else {
       url = new URL(getNextImagesURL);
-      url.search = new URLSearchParams({user: user, category: category, filter: filter, method: method}).toString();
+      url.search = new URLSearchParams({
+        user: user,
+        category: category,
+        filter: filter,
+        method: method,
+        num: PAGINATION_NUM,
+      }).toString();
       res = await fetch(url, {
         method: "GET",
         credentials: 'include',
@@ -392,8 +401,11 @@ function LabelingPage() {
       .then(results => results.json());
     }
 
+    setNumTotalFilteredImages(res.num_total);
+
     url = new URL(getAnnotationsUrl);
-    url.search = new URLSearchParams({identifiers: res.identifiers, user: user, category: category}).toString();
+    url.search = new URLSearchParams({
+      identifiers: res.identifiers, user: user, category: category}).toString();
     const annotations = await fetch(url, {
       method: "GET",
       credentials: 'include',
@@ -818,7 +830,7 @@ function LabelingPage() {
         <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
       </SubContainer>
       <SubContainer>
-        <MainCanvas/>
+        <MainCanvas numTotalFilteredImages={numTotalFilteredImages}/>
         <ImageGridContainer id="explore_grid">
           <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} visibility={visibility}/>
         </ImageGridContainer>

@@ -230,6 +230,8 @@ def get_next_images(request, dataset_name, dataset=None):
     label_function = request.GET['user']
     category = request.GET['category']
     label_value = request.GET['filter']
+    offset_to_return = int(request.GET.get('offset', 0))
+    num_to_return = int(request.GET.get('num', 100))
 
     bucket_name = dataset.directory[len('gs://'):].split('/')[0]
     path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
@@ -272,15 +274,16 @@ def get_next_images(request, dataset_name, dataset=None):
             if ditem in images_with_label:
                 next_images.append(ditem)
 
-    next_images = next_images[:100]
+    ret_images = next_images[offset_to_return:offset_to_return+num_to_return]
 
     # Find all dataset items which do not have an annotation of the type
-    dataset_item_paths = [path_template.format(di.path) for di in next_images]
-    dataset_item_identifiers = [di.pk for di in next_images]
+    dataset_item_paths = [path_template.format(di.path) for di in ret_images]
+    dataset_item_identifiers = [di.pk for di in ret_images]
 
     return JsonResponse({
         'paths': dataset_item_paths,
-        'identifiers': dataset_item_identifiers
+        'identifiers': dataset_item_identifiers,
+        'num_total': len(next_images),
     })
 
 
