@@ -792,6 +792,7 @@ function LabelingPage() {
           <option value="negative">Negative</option>
           <option value="hard_negative">Hard Negative</option>
           <option value="unsure">Unsure</option>
+          <option value="interesting">Interesting</option>
           <option value="conflict">Conflict</option>
         </OptionsSelect>
         <input type="text" list="users" id="currUser" onChange={onUser} placeholder="User" />

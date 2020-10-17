@@ -731,7 +731,8 @@ export class ImageLabeler {
 				if (cur_frame.image_load_complete && category_name !== "") {
 					this.set_per_frame_category_annotation(key_pressed);
 				}
-				this.set_current_frame_num(nextFrame);
+				//this.render();
+				setTimeout(() => {this.set_current_frame_num(nextFrame)},200);
 			}
 		}
 
