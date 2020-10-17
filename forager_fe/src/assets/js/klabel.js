@@ -732,7 +732,7 @@ export class ImageLabeler {
 					this.set_per_frame_category_annotation(key_pressed);
 				}
 				//this.render();
-				setTimeout(() => {this.set_current_frame_num(nextFrame)},200);
+				setTimeout(() => {this.set_current_frame_num(nextFrame)},50);
 			}
 		}
 
