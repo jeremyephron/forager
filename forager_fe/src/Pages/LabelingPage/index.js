@@ -105,6 +105,10 @@ function LabelingPage() {
   //var category = "";
   const  [selected, setSelected] = useState([0]);
   var currSelected = [0];
+  const [keyIdentifiers, setKeyIdentifiers] = useState([]);
+  const [keyPaths, setKeyPaths] = useState([]);
+  var currKeyPaths = [];
+  var currKeyIdentifiers = [];
 
   const cluster = useSelector(state => state.cluster);
   const index = useSelector(state => state.indexes[datasetName] || {
@@ -130,6 +134,8 @@ function LabelingPage() {
   const getUsersAndCategoriesUrl = baseUrl + "/get_users_and_categories/" + datasetName;
   const setNotesUrl = baseUrl + "/set_notes/" + datasetName;
   const getNotesUrl = baseUrl + "/get_notes/" + datasetName;
+  const setMarkedUrl = baseUrl + "/set_marked/" + datasetName;
+  const getMarkedUrl = baseUrl + "/get_marked/" + datasetName;
 
   const PAGINATION_NUM = 500;
 
@@ -150,6 +156,26 @@ function LabelingPage() {
     data.source_url = paths[i];
     image_data.push(data);
   }
+
+  const [OnKeyImageClick, SetOnKeyImageClick] = useState(() => (e, idx) => {})
+  
+  useEffect(() => {
+    SetOnKeyImageClick ( () => (e, idx) => {
+      // This works, now do something useful with it
+      var identifier = keyIdentifiers[idx];
+      var idx = identifiers.indexOf(identifier);
+      if (idx >= 0) {
+        labeler.set_current_frame_num(idx);
+        if (e.shiftKey) {
+          labeler.current_indices.push(idx);
+        } else {
+          labeler.current_indices = [idx];
+        }
+        setSelected(currSelected);
+      }
+      // Decide how to handle the else
+    });
+  }, [keyPaths, keyIdentifiers, identifiers])
 
   const onImageClick = (e, idx) => {
     labeler.set_current_frame_num(idx);
@@ -800,6 +826,20 @@ function LabelingPage() {
         //e.preventDefault(); // If we prevent default it stops typing, only prevent default maybe for arrow keys
         var prevFrame = getPrevFrame();
         var nextFrame = getNextFrame();
+        if (e.key.localeCompare("k") === 0) {
+          // Mark interesting
+          var currIdentifier = labeler.frames[labeler.get_current_frame_num()].data.identifier;
+          var keyIndex = currKeyIdentifiers.indexOf(currIdentifier)
+          if (keyIndex >= 0) {
+            currKeyIdentifiers.splice(keyIndex, 1)
+            currKeyPaths.splice(keyIndex, 1)
+          } else {
+            currKeyIdentifiers.push(labeler.frames[labeler.get_current_frame_num()].data.identifier);
+            currKeyPaths.push(labeler.frames[labeler.get_current_frame_num()].data.source_url);
+          }
+          setKeyPaths(currKeyPaths.slice());
+          setKeyIdentifiers(currKeyIdentifiers.slice())
+        }
         if (forager_mode === "forager_annotate") {
           labeler.handle_keydown(e, prevFrame, nextFrame);
           setSelected(labeler.current_indices)
@@ -865,6 +905,10 @@ function LabelingPage() {
           <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} visibility={visibility} currentIndex={labeler.current_frame_index} selectedIndices={labeler.current_indices}/>
         </ImageGridContainer>
       </SubContainer>
+      <hr style={{width:"95%"}}/>
+      <ImageRowContainer id="explore_grid">
+          <ImageGrid onImageClick={OnKeyImageClick} imagePaths={keyPaths} imageHeight={imageSize}/>
+      </ImageRowContainer>
     </Container>
   );
 };
