@@ -28,12 +28,14 @@ const ImageGrid = ({
   onImageClick,
   imagePaths,
   imageHeight,
-  visibility
+  visibility,
+  currentIndex,
+  selectedIndices
 }) => {
   
   return (
     <Grid>
-      {imagePaths.map((path, idx) => <Image key={idx} src={path} onClick={() => onImageClick(idx)} style={{ height: imageHeight + 'px' , display: (visibility[idx] ? "flex" : "none")}}/>)}
+      {imagePaths.map((path, idx) => <Image key={idx} src={path} onClick={(e) => onImageClick(e, idx)} style={{ height: imageHeight + 'px' , display: (visibility[idx] ? "flex" : "none"), "borderStyle": (currentIndex == idx ? "solid" : "none"), "filter": (selectedIndices.includes(idx) ? "opacity(40%)" : "none")}}/>)}
     </Grid>
   );
 }

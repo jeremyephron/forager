@@ -35,7 +35,16 @@ const SubContainer = styled.div`
 
 const ImageGridContainer = styled.div`
   width: 100%;
-  height: 75vh;
+  height: 65vh;
+  margin-top: 2vh;
+  margin-right: 3vw;
+  margin-left: 3vw;
+  border-radius: 5px;
+`;
+
+const ImageRowContainer = styled.div`
+  width: 94%;
+  height: 15vh;
   margin-top: 2vh;
   margin-right: 3vw;
   margin-left: 3vw;
@@ -94,6 +103,8 @@ function LabelingPage() {
   const [numTotalFilteredImages, setNumTotalFilteredImages] = useState(0);
   //var user = "";
   //var category = "";
+  const  [selected, setSelected] = useState([0]);
+  var currSelected = [0];
 
   const cluster = useSelector(state => state.cluster);
   const index = useSelector(state => state.indexes[datasetName] || {
@@ -140,9 +151,14 @@ function LabelingPage() {
     image_data.push(data);
   }
 
-  const onImageClick = (idx) => {
+  const onImageClick = (e, idx) => {
     labeler.set_current_frame_num(idx);
-    //setCurrentImage(idx);
+    if (e.shiftKey) {
+      labeler.current_indices.push(idx);
+    } else {
+      labeler.current_indices = [idx];
+    }
+    setSelected(currSelected);
   }
 
   const onCategory = async(event) => {
@@ -364,14 +380,29 @@ function LabelingPage() {
     var url;
     var res;
     if (method.localeCompare("knn") === 0) {
+      // Get relevant frames
+      if (labeler.current_indices.length === 0) {
+        labeler.current_indices = [labeler.get_current_frame_num()]
+      }
+      console.log(labeler.current_indices)
+      var filteredAnnotations = [];
+      for (var j = 0; j < labeler.current_indices.length; j++) {
+        var k = labeler.current_indices[j];
+        for (var i = 0; i < labeler.frames[k].data.annotations.length; i++) {
+          if (labeler.frames[k].data.annotations[i].type !== Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+            filteredAnnotations.push(labeler.frames[k].data.annotations[i])
+          }
+        }
+      }
+
       // Make a copy of currFrame.data.annotations without full-frame
-      var currFrame = labeler.get_current_frame();
+      /*var currFrame = labeler.get_current_frame();
       var filteredAnnotations = []
       for (var i = 0; i < currFrame.data.annotations.length; i++) {
         if (currFrame.data.annotations[i].type !== Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
           filteredAnnotations.push(currFrame.data.annotations[i])
         }
-      }
+      }*/
 
       url = new URL(lookupKnnUrl);
       url.search = new URLSearchParams({
@@ -697,8 +728,6 @@ function LabelingPage() {
       })
       .then(results => results.json());
 
-      console.log(annotations)
-
       const imageData = [];
       for (let i=0; i<paths.length; i++) {
         const data = new ImageData();
@@ -773,6 +802,7 @@ function LabelingPage() {
         var nextFrame = getNextFrame();
         if (forager_mode === "forager_annotate") {
           labeler.handle_keydown(e, prevFrame, nextFrame);
+          setSelected(labeler.current_indices)
         }
       });
 
@@ -832,7 +862,7 @@ function LabelingPage() {
       <SubContainer>
         <MainCanvas numTotalFilteredImages={numTotalFilteredImages}/>
         <ImageGridContainer id="explore_grid">
-          <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} visibility={visibility}/>
+          <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} visibility={visibility} currentIndex={labeler.current_frame_index} selectedIndices={labeler.current_indices}/>
         </ImageGridContainer>
       </SubContainer>
     </Container>

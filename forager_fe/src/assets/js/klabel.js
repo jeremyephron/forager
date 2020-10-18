@@ -121,6 +121,7 @@ export class ImageLabeler {
 
 		// this structure holds the annotation data
 		this.current_frame_index = 0;
+		this.current_indices = [0];
 		this.frames = [];
 
 		// annotation state
@@ -732,15 +733,18 @@ export class ImageLabeler {
 					this.set_per_frame_category_annotation(key_pressed);
 				}
 				//this.render();
+				this.current_indices = [nextFrame]
 				setTimeout(() => {this.set_current_frame_num(nextFrame)},50);
 			}
 		}
 
 		if (event.keyCode === 37) {   // left arrow
-			if (this.current_frame_index > 0)
+			if (this.current_frame_index > 0) {
+				this.current_indices = [prevFrame]
 				this.set_current_frame_num(prevFrame);
-			else
+			} else {
 				this.update_labeling_time();
+			}
 
 			// reset the zoom
 			if (!this.retain_zoom) {
@@ -749,10 +753,12 @@ export class ImageLabeler {
 			}
 
 		} else if (event.keyCode === 39) {  // right arrow
-			if (this.current_frame_index < this.frames.length-1)
+			if (this.current_frame_index < this.frames.length-1) {
+				this.current_indices = [nextFrame]
 				this.set_current_frame_num(nextFrame);
-			else
+			} else {
 				this.update_labeling_time();
+			}
 
 			// reset the zoom
 			if (!this.retain_zoom) {
@@ -956,6 +962,7 @@ export class ImageLabeler {
 		this.update_labeling_time();
 
 		this.current_frame_index = frame_num;
+		//this.current_indices = [frame_num];
 		this.clear_in_progress_points();
 		this.clear_zoom_corner_points();
 		this.render();
