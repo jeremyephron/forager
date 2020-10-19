@@ -257,6 +257,51 @@ async def delete_index(request):
     return resp.text("", status=204)
 
 
+# SVM Management
+@app.route("/query_svm", methods=["POST"])
+async def query_svm(request):
+    cluster_id = request.form["cluster_id"][0]
+    index_id = request.form["index_id"][0]
+    bucket = request.form["bucket"][0]
+    pos_image_paths = request.form["positive_paths"]
+    pos_patches = [
+        [float(patch[k]) for k in ("x1", "y1", "x2", "y2")]
+        for patch in json.loads(request.form["positive_patches"][0])
+    ]  # [0, 1]^2
+    neg_imamge_paths = request.form["negative_paths"]
+    num_results = int(request.form["num_results"][0])
+
+    cluster_data = current_clusters[cluster_id]
+    await cluster_data.ready.wait()
+
+    # Get embeddings from index
+    embedding_keys = current_indexes[index_id].labels
+    embedding = current_indexes[index_id].values
+
+    # Generate query vector as average of patch embeddings
+    job = MapReduceJob(
+        MapperSpec(url=cluster_data.service_url, n_mappers=1),
+        PoolingReducer(extract_func=_extract_embedding_from_mapper_output),
+        {"input_bucket": bucket},
+        n_retries=config.N_RETRIES,
+        chunk_size=1,
+    )
+    query_vector = await job.run_until_complete(
+        [
+            {"image": image_path, "patch": patch}
+            for image_path, patch in zip(image_paths, patches)
+        ]
+    )
+
+    # Train the SVM using pos/neg + their corresponding embeddings
+
+    # Evaluate the SVM
+
+    # Return top N results
+
+    paths = [x[0] for x in query_results]
+    return resp.json({"results": paths})
+
 # CLEANUP
 @app.listener("after_server_stop")
 async def cleanup(app, loop):
