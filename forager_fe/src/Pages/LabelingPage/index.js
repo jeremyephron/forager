@@ -136,6 +136,7 @@ function LabelingPage() {
   const getNotesUrl = baseUrl + "/get_notes/" + datasetName;
   const setKeyUrl = baseUrl + "/set_marked/" + datasetName;
   const getKeyUrl = baseUrl + "/get_marked/" + datasetName;
+  const querySvmUrl = baseUrl + "/query_svm/" + datasetName;
 
   const PAGINATION_NUM = 500;
 
@@ -435,6 +436,20 @@ function LabelingPage() {
         url = new URL(lookupKnnUrl);
         url.search = new URLSearchParams({
           ann_identifiers:  filteredAnnotations.map(ann => ann.identifier),
+          cluster_id: clusterRef.current.id,
+          index_id: indexRef.current.id,
+          use_full_image: (method.localeCompare("knn") === 0)
+        }).toString();
+        res = await fetch(url, {method: "GET",
+          credentials: 'include',
+        }).then(results => results.json());
+      } else if (method.localeCompare("svm") === 0) {
+        // Get positive image paths, positive patches, negative image paths?
+        // For now makes more sense to pass the user/category, the backend should be able to find the corresponding labels and paths
+        url = new URL(querySvmUrl);
+        url.search = new URLSearchParams({
+          user: user,
+          category: filterCategory,
           cluster_id: clusterRef.current.id,
           index_id: indexRef.current.id,
           use_full_image: (method.localeCompare("knn") === 0)
@@ -866,6 +881,9 @@ function LabelingPage() {
           {cluster.status === 'CLUSTER_STARTED' &&
           index.status == 'INDEX_BUILT' &&
           <option value="spatialKnn">Spatial KNN</option>}
+          {cluster.status === 'CLUSTER_STARTED' &&
+          index.status == 'INDEX_BUILT' &&
+          <option value="svm">Category SVM</option>}
         </OptionsSelect>
         <FetchButton id="fetch_button">Fetch More Images</FetchButton>
         <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
