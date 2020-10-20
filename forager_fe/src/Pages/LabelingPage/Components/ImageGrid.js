@@ -28,29 +28,14 @@ const ImageGrid = ({
   onImageClick,
   imagePaths,
   imageHeight,
-  visibility
+  visibility,
+  currentIndex,
+  selectedIndices
 }) => {
-  // const imagesUrl = "http://127.0.0.1:8000/api/get_results/" + datasetName;
-  // const [loading, setLoading] = useState(false);
-  // const [images, setImages] = useState(images);
-
-  // useEffect(() => {
-  //   const fetchImages = async () => {
-  //     // setLoading(true)
-  //     const newImages = await fetch(imagesUrl, {credentials: 'include'}).then(results => results.json());
-  //     setImages(newImages);
-  //     // setLoading(false);
-  //   }
-  //   fetchImages()
-  // }, [imagesUrl, setImages])
-
-  // if (loading) {
-  //     // return spinner
-  // }
-
+  
   return (
     <Grid>
-      {imagePaths.map((path, idx) => <Image key={idx} src={path} onClick={() => onImageClick(idx)} style={{ height: imageHeight + 'px' , display: (visibility[idx] ? "flex" : "none")}}/>)}
+      {imagePaths.map((path, idx) => <Image key={idx} src={path} onClick={(e) => onImageClick(e, idx)} style={{ height: imageHeight + 'px' , display: (!visibility || visibility[idx] ? "flex" : "none"), "borderStyle": (currentIndex && currentIndex === idx ? "solid" : "none"), "filter": (selectedIndices && selectedIndices.includes(idx) ? "opacity(40%)" : "none")}}/>)}
     </Grid>
   );
 }

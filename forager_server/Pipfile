@@ -13,6 +13,7 @@ Pillow = "*"
 django-cors-headers = "*"
 djangorestframework = "*"
 django-sslserver = "*"
+uvicorn = "*"
 
 [requires]
 python_version = "3.7"

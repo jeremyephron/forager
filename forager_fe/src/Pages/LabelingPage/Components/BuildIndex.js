@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import styled from "styled-components";
 
 import { Button, Select } from "../../../Components";
-import { colors } from "../../../Constants";
+import { colors, baseUrl } from "../../../Constants";
 
 const BuildButton = styled(Button)`
   font-size: 13px;
@@ -13,7 +13,7 @@ const BuildButton = styled(Button)`
   margin-left: 20px;
 `;
 
-const API_BASE = "https://127.0.0.1:8000/api";
+const API_BASE = baseUrl;
 const CREATE_INDEX_ENDPOINT = "/create_index/";
 const STATUS_POLL_INTERVAL = 3000;  // ms
 

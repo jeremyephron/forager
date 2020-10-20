@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 
-import { colors } from "../../Constants";
+import { colors, baseUrl } from "../../Constants";
 import { MainCanvas, ImageGrid, BuildIndex } from "./Components";
 import { Button, Select } from "../../Components";
 import {
@@ -29,13 +29,22 @@ const SubContainer = styled.div`
   display: flex;
   flex-direction: row;
   background-color: white;
-  margin-left: 3vw;
-  margin-top: 3vh;
+  margin-left: 1vw;
+  margin-top: 1vh;
 `;
 
 const ImageGridContainer = styled.div`
   width: 100%;
-  height: 75vh;
+  height: 65vh;
+  margin-top: 2vh;
+  margin-right: 3vw;
+  margin-left: 3vw;
+  border-radius: 5px;
+`;
+
+const ImageRowContainer = styled.div`
+  width: 94%;
+  height: 15vh;
   margin-top: 2vh;
   margin-right: 3vw;
   margin-left: 3vw;
@@ -59,7 +68,7 @@ const Slider = styled.input`
   width: 20%; /* Full-width */
   height: 25px; /* Specified height */
   border-radius: 5px;
-  margin-left: 20px;
+  margin-left: 420px;
 `;
 
 const FetchButton = styled(Button)`
@@ -91,8 +100,15 @@ function LabelingPage() {
   const [currentCategory, setCurrentCategory] = useState("");
   const [users, setUsers] = useState(["Kenobi"]);
   const [currentUser, setCurrentUser] = useState("");
+  const [numTotalFilteredImages, setNumTotalFilteredImages] = useState(0);
   //var user = "";
   //var category = "";
+  const  [selected, setSelected] = useState([0]);
+  var currSelected = [0];
+  const [keyIdentifiers, setKeyIdentifiers] = useState([]);
+  const [keyPaths, setKeyPaths] = useState([]);
+  var currKeyPaths = [];
+  var currKeyIdentifiers = [];
 
   const cluster = useSelector(state => state.cluster);
   const index = useSelector(state => state.indexes[datasetName] || {
@@ -108,7 +124,6 @@ function LabelingPage() {
     indexRef.current = index;
   }, [cluster, index]);
 
-  const baseUrl = "https://127.0.0.1:8000/api"
   const getAnnotationsUrl = baseUrl + "/get_annotations/" + datasetName;
   const addAnnotationUrl = baseUrl + "/add_annotation/" + datasetName;
   const deleteAnnotationUrl = baseUrl + "/delete_annotation/" + datasetName;
@@ -117,6 +132,13 @@ function LabelingPage() {
   const getConflictsUrl = baseUrl + "/get_conflicts/" + datasetName;
   const getNextImagesURL = baseUrl + "/get_next_images/" + datasetName;
   const getUsersAndCategoriesUrl = baseUrl + "/get_users_and_categories/" + datasetName;
+  const setNotesUrl = baseUrl + "/set_notes/" + datasetName;
+  const getNotesUrl = baseUrl + "/get_notes/" + datasetName;
+  const setKeyUrl = baseUrl + "/set_marked/" + datasetName;
+  const getKeyUrl = baseUrl + "/get_marked/" + datasetName;
+  const querySvmUrl = baseUrl + "/query_svm/" + datasetName;
+
+  const PAGINATION_NUM = 500;
 
   /* Klabel stuff */
   const labeler = useMemo(() => new ImageLabeler(), []);
@@ -136,12 +158,43 @@ function LabelingPage() {
     image_data.push(data);
   }
 
-  const onImageClick = (idx) => {
+  const [OnKeyImageClick, SetOnKeyImageClick] = useState(() => (e, idx) => {})
+  
+  useEffect(() => {
+    SetOnKeyImageClick ( () => (e, idx) => {
+      // This works, now do something useful with it
+      var identifier = keyIdentifiers[idx];
+      var idx = identifiers.indexOf(identifier);
+      if (idx >= 0) {
+        labeler.set_current_frame_num(idx);
+        if (e.shiftKey) {
+          labeler.current_indices.push(idx);
+        } else {
+          labeler.current_indices = [idx];
+        }
+        setSelected(currSelected);
+      }
+      // Decide how to handle the else
+    });
+  }, [keyPaths, keyIdentifiers, identifiers])
+
+  const onImageClick = (e, idx) => {
     labeler.set_current_frame_num(idx);
-    //setCurrentImage(idx);
+    if (e.shiftKey) {
+      labeler.current_indices.push(idx);
+    } else {
+      labeler.current_indices = [idx];
+    }
+    setSelected(currSelected);
+  }
+
+  const onFilterCategory = (event) => {
+    document.getElementById("labelCategory").value = event.target.value;
+    onCategory(event)
   }
 
   const onCategory = async(event) => {
+    console.log("onCategory")
     // If empty, refresh list to include any new categories actually labeled
     if (event.target.value === "") {
       console.log("Handle this")
@@ -181,6 +234,7 @@ function LabelingPage() {
       imageData.push(data);
     }
 
+    //get_notes(false);
     labeler.load_image_stack(imageData);
     labeler.set_focus();
   }
@@ -195,9 +249,9 @@ function LabelingPage() {
     //user = event.target.value;
     //console.log(user);
 
-    let category = document.getElementById("currCategory").value;
+    let labelCategory = document.getElementById("labelCategory").value;
     var url = new URL(getAnnotationsUrl);
-    url.search = new URLSearchParams({identifiers: currIdentifiers, user: event.target.value, category: category}).toString();
+    url.search = new URLSearchParams({identifiers: currIdentifiers, user: event.target.value, category: labelCategory}).toString();
     const annotations = await fetch(url, {
       method: "GET",
       credentials: 'include',
@@ -209,8 +263,6 @@ function LabelingPage() {
       const data = new ImageData();
       data.source_url = currPaths[i];
       data.identifier = currIdentifiers[i];
-      console.log(data.identifier)
-      console.log(annotations)
 
       if (data.identifier in annotations) {
         annotations[data.identifier].map(ann => {
@@ -227,6 +279,8 @@ function LabelingPage() {
       }
       imageData.push(data);
     }
+
+    //get_notes(false);
     labeler.load_image_stack(imageData);
     labeler.set_focus();
   }
@@ -293,19 +347,16 @@ function LabelingPage() {
       return;
     }
     let select = document.getElementById("select_image_subset").value;
-    if (select.localeCompare('knn') === 0) {
-      select = 'all';
-    }
     // Calculate the desired subset of images from annotations, then pass to currVisibility
     let show = new Array(labeler.frames.length).fill(false,0,labeler.frames.length)
     let conflicts = {};
     if (select.localeCompare("conflict") === 0) {
       let user = document.getElementById("currUser").value;
-      let category = document.getElementById("currCategory").value;
+      let labelCategory = document.getElementById("labelCategory").value;
 
       // Assume this returns a list of conflicting identifiers
       let url = new URL(getConflictsUrl);
-      url.search = new URLSearchParams({identifiers:currIdentifiers, user: user, category: category}).toString();
+      url.search = new URLSearchParams({identifiers:currIdentifiers, user: user, category: labelCategory}).toString();
       conflicts = await fetch(url, {
         method: "GET",
         credentials: 'include',
@@ -345,63 +396,203 @@ function LabelingPage() {
     labeler.set_current_frame_num(getFirstFrame());
   }
 
-  const handle_fetch_images = async() => {
-    let filter = document.getElementById("select_image_subset").value;
-    if (filter.localeCompare('knn') === 0) {
-      filter = 'all';
-    }
-    let user = document.getElementById("currUser").value;
-    let category = document.getElementById("currCategory").value;
-    let url = new URL(getNextImagesURL);
-    url.search = new URLSearchParams({user: user, category: category, filter: filter}).toString();
-    const res = await fetch(url, {
-      method: "GET",
-      credentials: 'include',
-      headers: {
-      'Content-Type': 'application/json'
+  const [HandleFetchImages, SetHandleFetchImages] = useState(()=> async() => {})
+
+  useEffect(() => {
+    console.log("Setting handleFetchImages")
+    console.log(keyIdentifiers)
+    SetHandleFetchImages ( () => async() => {
+      let filter = document.getElementById("select_image_subset").value;
+      let method = document.getElementById("fetch_image_mode").value;
+
+      // If KNN fetch, then default to fetching all? We can decide whether to reset the filter later
+      if (method.localeCompare("knn") === 0) {
+        filter = "all";
       }
-    })
-    .then(results => results.json());
 
-    url = new URL(getAnnotationsUrl);
-    url.search = new URLSearchParams({identifiers: res.identifiers, user: user, category: category}).toString();
-    const annotations = await fetch(url, {
-      method: "GET",
-      credentials: 'include',
-    })
-    .then(results => results.json());
+      let user = document.getElementById("currUser").value;
+      // Fetch images by filterCategory
+      let filterCategory = document.getElementById("filterCategory").value;
+      let labelCategory = document.getElementById("labelCategory").value;
 
-    const imageData = [];
-    for (let i=0; i<res.paths.length; i++) {
-      const data = new ImageData();
-      data.source_url = res.paths[i];
-      data.identifier = res.identifiers[i];
-
-      if (data.identifier in annotations) {
-        annotations[data.identifier].map(ann => {
-          if (ann.type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
-            data.annotations.push(PerFrameAnnotation.parse(ann));
-          } else if (ann.type === Annotation.ANNOTATION_MODE_POINT) {
-            data.annotations.push(PointAnnotation.parse(ann));
-          } else if (ann.type === Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX) {
-            data.annotations.push(TwoPointBoxAnnotation.parse(ann));
-          } else if (ann.type === Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX) {
-            data.annotations.push(ExtremeBoxAnnnotation.parse(ann));
+      var url;
+      var res;
+      if (method.localeCompare("knn") === 0 || method.localeCompare("spatialKnn")) {
+        // Get relevant frames
+        if (labeler.current_indices.length === 0) {
+          labeler.current_indices = [labeler.get_current_frame_num()]
+        }
+        console.log(labeler.current_indices)
+        var filteredAnnotations = [];
+        for (var j = 0; j < labeler.current_indices.length; j++) {
+          var k = labeler.current_indices[j];
+          for (var i = 0; i < labeler.frames[k].data.annotations.length; i++) {
+            if (labeler.frames[k].data.annotations[i].type !== Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+              filteredAnnotations.push(labeler.frames[k].data.annotations[i])
+            }
           }
-        });
+        }
+
+        url = new URL(lookupKnnUrl);
+        url.search = new URLSearchParams({
+          ann_identifiers:  filteredAnnotations.map(ann => ann.identifier),
+          cluster_id: clusterRef.current.id,
+          index_id: indexRef.current.id,
+          use_full_image: (method.localeCompare("knn") === 0)
+        }).toString();
+        res = await fetch(url, {method: "GET",
+          credentials: 'include',
+        }).then(results => results.json());
+      } else if (method.localeCompare("svm") === 0) {
+        // Get positive image paths, positive patches, negative image paths?
+        // For now makes more sense to pass the user/category, the backend should be able to find the corresponding labels and paths
+        url = new URL(querySvmUrl);
+        url.search = new URLSearchParams({
+          user: user,
+          category: filterCategory,
+          cluster_id: clusterRef.current.id,
+          index_id: indexRef.current.id,
+          use_full_image: (method.localeCompare("knn") === 0)
+        }).toString();
+        res = await fetch(url, {method: "GET",
+          credentials: 'include',
+        }).then(results => results.json());
+      } else {
+        url = new URL(getNextImagesURL);
+        url.search = new URLSearchParams({
+          user: user,
+          category: filterCategory,
+          filter: filter,
+          method: method,
+          num: PAGINATION_NUM,
+        }).toString();
+        res = await fetch(url, {
+          method: "GET",
+          credentials: 'include',
+          headers: {
+          'Content-Type': 'application/json'
+          }
+        })
+        .then(results => results.json());
       }
-      imageData.push(data);
+
+      // Add in any key images not present in identifiers (add to res.identifiers and res.paths)
+      console.log(res.identifiers)
+      console.log(keyIdentifiers)
+      for (var i = 0; i < keyIdentifiers.length; i++) {
+        if (!res.identifiers.includes(keyIdentifiers[i])) {
+          res.identifiers.push(keyIdentifiers[i])
+          res.paths.push(keyPaths[i])
+          //res.num_total += 1
+        }
+      }
+
+      setNumTotalFilteredImages(res.num_total);
+
+      url = new URL(getAnnotationsUrl);
+      url.search = new URLSearchParams({
+        identifiers: res.identifiers, user: user, category: labelCategory}).toString();
+      const annotations = await fetch(url, {
+        method: "GET",
+        credentials: 'include',
+      })
+      .then(results => results.json());
+
+      const imageData = [];
+      for (let i=0; i<res.paths.length; i++) {
+        const data = new ImageData();
+        data.source_url = res.paths[i];
+        data.identifier = res.identifiers[i];
+
+        if (data.identifier in annotations) {
+          annotations[data.identifier].map(ann => {
+            if (ann.type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+              data.annotations.push(PerFrameAnnotation.parse(ann));
+            } else if (ann.type === Annotation.ANNOTATION_MODE_POINT) {
+              data.annotations.push(PointAnnotation.parse(ann));
+            } else if (ann.type === Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX) {
+              data.annotations.push(TwoPointBoxAnnotation.parse(ann));
+            } else if (ann.type === Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX) {
+              data.annotations.push(ExtremeBoxAnnnotation.parse(ann));
+            }
+          });
+        }
+        imageData.push(data);
+      }
+
+      setIdentifiers(res.identifiers);
+      currIdentifiers = res.identifiers;
+      setPaths(res.paths)
+      currPaths = res.paths;
+
+      labeler.load_image_stack(imageData);
+      labeler.set_focus();
+
+      handle_image_subset_change();
+    });
+  }, [keyPaths, keyIdentifiers])
+  
+  useEffect(() => {
+    let button = document.getElementById("fetch_button");
+    if (button) {
+      button.onclick = HandleFetchImages;
+    }
+  },[HandleFetchImages])
+
+  const handle_save_notes = async() => {
+    let user = document.getElementById("currUser").value;
+    // For saving information, use label category
+    let labelCategory = document.getElementById("labelCategory").value;
+    const notes = document.getElementById("user_notes").value;
+    
+    let endpoint = new URL(setNotesUrl);
+    endpoint.search = new URLSearchParams({
+      user: user,
+      category: labelCategory
+    }).toString();
+
+    let body = {
+      user: user,
+      category: labelCategory,
+      notes: notes
     }
 
-    setIdentifiers(res.identifiers);
-    currIdentifiers = res.identifiers;
-    setPaths(res.paths)
-    currPaths = res.paths;
+    const res = await fetch(endpoint.toString(), {
+      method: "POST",
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(body)
+    })
+    .then(response => response.text());
+  }
 
-    labeler.load_image_stack(imageData);
-    labeler.set_focus();
+  const get_notes = async(ownNotes) => {
+    let user = document.getElementById("currUser").value;
+    let labelCategory = document.getElementById("labelCategory").value;
+    
+    let endpoint = new URL(getNotesUrl);
+    endpoint.search = new URLSearchParams({
+      user: user,
+      category: labelCategory
+    }).toString();
 
-    handle_image_subset_change();
+    const notes = await fetch(endpoint, {method: "GET",
+      credentials: 'include',
+    }).then(response => response.json());
+
+    if (ownNotes) {
+      let notesDiv = document.getElementById("user_notes");
+      if (user in notes) {
+        notesDiv.value = notes[user];
+      }
+    } 
+    var otherNotes = ""
+    let otherNotesDiv = document.getElementById("other_user_notes");
+    // Loop through entries and build up notes field
+    for (var otherUser in notes) {
+      otherNotes += notes[otherUser] + "/n";
+    }
+    otherNotesDiv.value=otherNotes;
   }
 
   useEffect(() => {
@@ -455,7 +646,8 @@ function LabelingPage() {
 
     const handle_annotation_added = async (currFrame, annotation) => {
       let user = document.getElementById("currUser").value;
-      let category = document.getElementById("currCategory").value;
+      let filterCategory = document.getElementById("filterCategory").value;
+      let labelCategory = document.getElementById("labelCategory").value;
 
       if (annotation.type == Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
         annotation.labeling_time = currFrame.data.labeling_time;
@@ -464,12 +656,12 @@ function LabelingPage() {
       let endpoint = new URL(addAnnotationUrl + '/' + currFrame.data.identifier);
       endpoint.search = new URLSearchParams({
         user: user,
-        category: category
+        category: labelCategory
       }).toString();
 
       let body = {
         user: user,
-        category: category,
+        category: labelCategory,
         annotation: annotation,
         label_type: labelTypeStrings[annotation.type]
       }
@@ -490,66 +682,6 @@ function LabelingPage() {
         console.log("Not KNN")
         return;
       }
-
-      // Make a copy of currFrame.data.annotations without full-frame
-      var filteredAnnotations = []
-      for (var i = 0; i < currFrame.data.annotations.length; i++) {
-        if (currFrame.data.annotations[i].type !== Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
-          filteredAnnotations.push(currFrame.data.annotations[i])
-        }
-      }
-
-      let url = new URL(lookupKnnUrl);
-      url.search = new URLSearchParams({
-        ann_identifiers:  filteredAnnotations.map(ann => ann.identifier),
-        cluster_id: clusterRef.current.id,
-        index_id: indexRef.current.id,
-      }).toString();
-      const res = await fetch(url, {method: "GET",
-        credentials: 'include',
-      }).then(results => results.json());
-
-      url = new URL(getAnnotationsUrl);
-      url.search = new URLSearchParams({identifiers: res.identifiers, user: user, category: category}).toString();
-      const annotations = await fetch(url, {
-        method: "GET",
-        credentials: 'include',
-      })
-      .then(results => results.json());
-
-      const imageData = [];
-      for (let i=0; i<res.paths.length; i++) {
-        const data = new ImageData();
-        data.source_url = res.paths[i];
-        data.identifier = res.identifiers[i];
-
-        if (data.identifier in annotations) {
-          annotations[data.identifier].map(ann => {
-            if (ann.type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
-              data.annotations.push(PerFrameAnnotation.parse(ann));
-            } else if (ann.type === Annotation.ANNOTATION_MODE_POINT) {
-              data.annotations.push(PointAnnotation.parse(ann));
-            } else if (ann.type === Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX) {
-              data.annotations.push(TwoPointBoxAnnotation.parse(ann));
-            } else if (ann.type === Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX) {
-              data.annotations.push(ExtremeBoxAnnnotation.parse(ann));
-            }
-          });
-        }
-        imageData.push(data);
-      }
-
-      setIdentifiers(res.identifiers);
-      currIdentifiers = res.identifiers;
-      setPaths(res.paths)
-      currPaths = res.paths;
-
-      labeler.load_image_stack(imageData);
-      labeler.set_focus();
-
-      // Set filter back to all
-      document.getElementById("select_image_subset").value = "all";
-      handle_image_subset_change();
     }
 
     const handle_annotation_deleted = async (currFrame, annotation) => {
@@ -588,10 +720,10 @@ function LabelingPage() {
       labeler.set_categories( { positive: { value: 1, color: "#67bf5c" }, negative: {value:2, color: "#ed665d"}, hard_negative: {value:3, color: "#ffff00"}, unsure: {value:4, color: "#ffa500"} } );
 
       let user = document.getElementById("currUser").value;
-      let category = document.getElementById("currCategory").value;
+      let labelCategory = document.getElementById("labelCategory").value;
 
       let url = new URL(getAnnotationsUrl);
-      url.search = new URLSearchParams({identifiers: identifiers, user: user, category: category}).toString();
+      url.search = new URLSearchParams({identifiers: identifiers, user: user, category: labelCategory}).toString();
       const annotations = await fetch(url, {
         method: "GET",
         credentials: 'include',
@@ -600,8 +732,6 @@ function LabelingPage() {
         }
       })
       .then(results => results.json());
-
-      console.log(annotations)
 
       const imageData = [];
       for (let i=0; i<paths.length; i++) {
@@ -634,6 +764,8 @@ function LabelingPage() {
       setUsers(usersAndCategories['users']);
       setCategories(usersAndCategories['categories']);
 
+      //get_notes(true); // Get own notes as well
+
       labeler.load_image_stack(imageData);
       labeler.set_focus();
 
@@ -646,10 +778,6 @@ function LabelingPage() {
       button.toggle_status = true;
       labeler.set_extreme_points_viz(button.toggle_status);
 
-      button = document.getElementById("toggle_sound_button");
-      button.toggle_status = false;
-      labeler.set_play_audio(button.toggle_status);
-
       button = document.getElementById("toggle_letterbox_button");
       button.onclick = toggle_letterbox;
       button.toggle_status = true;
@@ -659,8 +787,8 @@ function LabelingPage() {
       button.onclick = handle_clear_boxes;
       button = document.getElementById("get_annotations");
       button.onclick = handle_get_annotations;
-      button = document.getElementById("fetch_button");
-      button.onclick = handle_fetch_images;
+      //button = document.getElementById("notes_button");
+      //button.onclick = handle_save_notes;
 
       let select = document.getElementById("select_annotation_mode")
       select.onchange = handle_mode_change;
@@ -675,8 +803,26 @@ function LabelingPage() {
         //e.preventDefault(); // If we prevent default it stops typing, only prevent default maybe for arrow keys
         var prevFrame = getPrevFrame();
         var nextFrame = getNextFrame();
+        if (e.key && e.key.localeCompare("k") === 0) {
+          // Mark interesting
+          for (var i = 0; i < labeler.current_indices.length; i++) {
+            var currFrame = labeler.current_indices[i]
+            var currIdentifier = labeler.frames[currFrame].data.identifier;
+            var keyIndex = currKeyIdentifiers.indexOf(currIdentifier)
+            if (keyIndex >= 0) {
+              currKeyIdentifiers.splice(keyIndex, 1)
+              currKeyPaths.splice(keyIndex, 1)
+            } else {
+              currKeyIdentifiers.push(labeler.frames[currFrame].data.identifier);
+              currKeyPaths.push(labeler.frames[currFrame].data.source_url);
+            }
+          }
+          setKeyPaths(currKeyPaths.slice());
+          setKeyIdentifiers(currKeyIdentifiers.slice())
+        }
         if (forager_mode === "forager_annotate") {
           labeler.handle_keydown(e, prevFrame, nextFrame);
+          setSelected(labeler.current_indices)
         }
       });
 
@@ -690,6 +836,9 @@ function LabelingPage() {
       currPaths = paths; // Need this for initialization when the page loads...
     }
 
+    let button = document.getElementById("fetch_button");
+    button.onclick = HandleFetchImages;
+
     klabelRun();
   }, []);
 
@@ -701,6 +850,17 @@ function LabelingPage() {
           <option value="forager_annotate">Annotate</option>
           <option value="forager_explore">Explore</option>
         </OptionsSelect>
+        <input type="text" list="users" id="currUser" onChange={onUser} placeholder="User" />
+        <datalist id="users">
+          {users.map((item, key) =>
+            <option key={key} value={item} />
+          )}
+        </datalist>
+        <BuildIndex dataset={datasetName} />
+      </SubContainer>
+      <SubContainer>
+        <TitleHeader>Filter: </TitleHeader>
+        <input type="text" list="categories" id="filterCategory" onChange={onFilterCategory} placeholder="FilterCategory" />
         <OptionsSelect alt="true" id="select_image_subset">
           <option value="all">All</option>
           <option value="unlabeled">Unlabeled</option>
@@ -708,33 +868,39 @@ function LabelingPage() {
           <option value="negative">Negative</option>
           <option value="hard_negative">Hard Negative</option>
           <option value="unsure">Unsure</option>
+          <option value="interesting">Interesting</option>
           <option value="conflict">Conflict</option>
-          {cluster.status === 'CLUSTER_STARTED' &&
-           index.status == 'INDEX_BUILT' &&
-           <option value="knn">KNN</option>}
         </OptionsSelect>
-        <input type="text" list="users" id="currUser" onChange={onUser} placeholder="User" />
-        <datalist id="users">
-          {users.map((item, key) =>
-            <option key={key} value={item} />
-          )}
-        </datalist>
-        <input type="text" list="categories" id="currCategory" onChange={onCategory} placeholder="Category" />
         <datalist id="categories">
           {categories.map((item, key) =>
             <option key={key} value={item} />
           )}
         </datalist>
+        <OptionsSelect alt="true" id="fetch_image_mode">
+          <option value="random">Random</option>
+          {cluster.status === 'CLUSTER_STARTED' &&
+           index.status == 'INDEX_BUILT' &&
+           <option value="knn">KNN</option>}
+          {cluster.status === 'CLUSTER_STARTED' &&
+          index.status == 'INDEX_BUILT' &&
+          <option value="spatialKnn">Spatial KNN</option>}
+          {cluster.status === 'CLUSTER_STARTED' &&
+          index.status == 'INDEX_BUILT' &&
+          <option value="svm">Category SVM</option>}
+        </OptionsSelect>
         <FetchButton id="fetch_button">Fetch More Images</FetchButton>
-        <BuildIndex dataset={datasetName} />
         <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
       </SubContainer>
       <SubContainer>
-        <MainCanvas/>
+        <MainCanvas numTotalFilteredImages={numTotalFilteredImages} onCategory={onCategory}/>
         <ImageGridContainer id="explore_grid">
-          <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} visibility={visibility}/>
+          <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} visibility={visibility} currentIndex={labeler.current_frame_index} selectedIndices={labeler.current_indices}/>
         </ImageGridContainer>
       </SubContainer>
+      <hr style={{width:"95%"}}/>
+      <ImageRowContainer id="explore_grid">
+          <ImageGrid onImageClick={OnKeyImageClick} imagePaths={keyPaths} imageHeight={imageSize}/>
+      </ImageRowContainer>
     </Container>
   );
 };

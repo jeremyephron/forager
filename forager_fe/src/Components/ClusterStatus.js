@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useSelector, useDispatch } from 'react-redux';
 import styled from "styled-components";
 
-import { colors } from "../Constants";
+import { colors, baseUrl } from "../Constants";
 
 const StatusButton = styled.a`
   float: right;
@@ -27,7 +27,7 @@ const SubText = styled.div`
   line-height: 20px;
 `;
 
-const API_BASE = "https://127.0.0.1:8000/api";
+const API_BASE = baseUrl;
 const START_CLUSTER_ENDPOINT = "/start_cluster";
 const STOP_CLUSTER_ENDPOINT = "/stop_cluster";
 const STATUS_POLL_INTERVAL = 3000;  // ms

@@ -230,6 +230,8 @@ def get_next_images(request, dataset_name, dataset=None):
     label_function = request.GET['user']
     category = request.GET['category']
     label_value = request.GET['filter']
+    offset_to_return = int(request.GET.get('offset', 0))
+    num_to_return = int(request.GET.get('num', 100))
 
     bucket_name = dataset.directory[len('gs://'):].split('/')[0]
     path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
@@ -272,15 +274,16 @@ def get_next_images(request, dataset_name, dataset=None):
             if ditem in images_with_label:
                 next_images.append(ditem)
 
-    next_images = next_images[:100]
+    ret_images = next_images[offset_to_return:offset_to_return+num_to_return]
 
     # Find all dataset items which do not have an annotation of the type
-    dataset_item_paths = [path_template.format(di.path) for di in next_images]
-    dataset_item_identifiers = [di.pk for di in next_images]
+    dataset_item_paths = [path_template.format(di.path) for di in ret_images]
+    dataset_item_identifiers = [di.pk for di in ret_images]
 
     return JsonResponse({
         'paths': dataset_item_paths,
-        'identifiers': dataset_item_identifiers
+        'identifiers': dataset_item_identifiers,
+        'num_total': len(next_images),
     })
 
 
@@ -343,32 +346,30 @@ def get_annotation_conflicts_helper(dataset_items, label_function, category):
 
     anns = Annotation.objects.filter(**filter_args)
 
-    data = defaultdict(list)
-    anns_by_image = defaultdict(list)
+    data = defaultdict(dict)
     for ann in anns:
-        data[ann.dataset_item.pk].append(ann)
+        # Only use most recent perframe ann
+        k = ann.dataset_item.pk
+        u = ann.label_function
+        if k in data and u in data[k] and data[k][u].created > ann.created:
+            continue
+        data[k][u] = ann
 
     # Analyze conflicts
     conflict_data = defaultdict(set)
-    for image_id, labels in data.items():
-        has_user_label = False
-        user_annotation = None
-        for ann in labels:
-            if ann.label_function == label_function:
-                has_user_label = True
-                user_annotation = ann
-                break
-        if not has_user_label:
+    for image_id, user_labels in data.items():
+        if label_function not in user_labels:
             continue
+        user_annotation = user_labels[label_function]
         user_label_value = json.loads(user_annotation.label_data)
-        for ann in labels:
-            if ann.label_function == user_annotation.label_function:
+        for label_function, ann in user_labels.items():
+            if label_function == user_annotation.label_function:
                 continue
             label_value = json.loads(ann.label_data)
             if label_value['value'] != user_label_value['value']:
-                for ann in labels:
-                    conflict_data[image_id].add(ann.label_function)
-                break
+                print('conflict label',
+                      label_value['value'], user_label_value['value'])
+                conflict_data[image_id].add(ann.label_function)
     return conflict_data
 
 
