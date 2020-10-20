@@ -159,7 +159,7 @@ function LabelingPage() {
   }
 
   const [OnKeyImageClick, SetOnKeyImageClick] = useState(() => (e, idx) => {})
-  
+
   useEffect(() => {
     SetOnKeyImageClick ( () => (e, idx) => {
       // This works, now do something useful with it
@@ -417,7 +417,7 @@ function LabelingPage() {
 
       var url;
       var res;
-      if (method.localeCompare("knn") === 0 || method.localeCompare("spatialKnn")) {
+      if (method.localeCompare("knn") === 0 || method.localeCompare("spatialKnn") === 0) {
         // Get relevant frames
         if (labeler.current_indices.length === 0) {
           labeler.current_indices = [labeler.get_current_frame_num()]
@@ -434,12 +434,15 @@ function LabelingPage() {
         }
 
         url = new URL(lookupKnnUrl);
-        url.search = new URLSearchParams({
-          ann_identifiers:  filteredAnnotations.map(ann => ann.identifier),
+        let knnPayload = {
+          ann_identifiers: filteredAnnotations.map(ann => ann.identifier),
           cluster_id: clusterRef.current.id,
           index_id: indexRef.current.id,
-          use_full_image: (method.localeCompare("knn") === 0)
-        }).toString();
+        };
+        if (method.localeCompare("knn") === 0) {
+          knnPayload.use_full_image = true;
+        }
+        url.search = new URLSearchParams(knnPayload).toString();
         res = await fetch(url, {method: "GET",
           credentials: 'include',
         }).then(results => results.json());
@@ -452,7 +455,6 @@ function LabelingPage() {
           category: filterCategory,
           cluster_id: clusterRef.current.id,
           index_id: indexRef.current.id,
-          use_full_image: (method.localeCompare("knn") === 0)
         }).toString();
         res = await fetch(url, {method: "GET",
           credentials: 'include',
@@ -531,7 +533,7 @@ function LabelingPage() {
       handle_image_subset_change();
     });
   }, [keyPaths, keyIdentifiers])
-  
+
   useEffect(() => {
     let button = document.getElementById("fetch_button");
     if (button) {
@@ -544,7 +546,7 @@ function LabelingPage() {
     // For saving information, use label category
     let labelCategory = document.getElementById("labelCategory").value;
     const notes = document.getElementById("user_notes").value;
-    
+
     let endpoint = new URL(setNotesUrl);
     endpoint.search = new URLSearchParams({
       user: user,
@@ -569,7 +571,7 @@ function LabelingPage() {
   const get_notes = async(ownNotes) => {
     let user = document.getElementById("currUser").value;
     let labelCategory = document.getElementById("labelCategory").value;
-    
+
     let endpoint = new URL(getNotesUrl);
     endpoint.search = new URLSearchParams({
       user: user,
@@ -585,7 +587,7 @@ function LabelingPage() {
       if (user in notes) {
         notesDiv.value = notes[user];
       }
-    } 
+    }
     var otherNotes = ""
     let otherNotesDiv = document.getElementById("other_user_notes");
     // Loop through entries and build up notes field
