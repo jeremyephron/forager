@@ -21,6 +21,18 @@ POST_HEADERS = {
 }
 
 
+def filter_most_recent_anns(anns):
+    data = defaultdict(dict)
+    for ann in anns:
+        # Only use most recent perframe ann
+        k = ann.dataset_item.pk
+        u = ann.label_function
+        if k in data and u in data[k] and data[k][u].created > ann.created:
+            continue
+        data[k][u] = ann
+    return data
+
+
 @api_view(['GET'])
 @csrf_exempt
 def get_datasets(request):
@@ -336,6 +348,71 @@ def get_annotations(request, dataset_name):
     return JsonResponse(data)
 
 
+@api_view(['GET'])
+@csrf_exempt
+def get_annotations_summary(request, dataset_name):
+    dataset = Dataset.objects.get(name=dataset_name)
+    total_images = dataset.datasetitem_set.count()
+    anns = Annotation.objects.filter(
+        label_type="klabel_frame",
+        dataset_item__in=dataset.datasetitem_set.filter())
+    label_functions = [d['label_function'] for d in (anns.values("label_function").distinct())]
+    label_categories = [d['label_category'] for d in (anns.values("label_category").distinct())]
+
+    print(label_functions)
+    print(label_categories)
+    # For each (label_function, label_category) pair, get the number of
+    # annotations
+
+    # label_category -> label_function -> label_value -> total
+    ann_summary = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    # label_function -> list of label_categories
+    label_function_categories = defaultdict(set)
+    # label_function -> label_value -> total
+    label_function_values = defaultdict(lambda: defaultdict(int))
+    # label_category -> label_value -> total
+    label_category_values = defaultdict(lambda: defaultdict(int))
+    for label_function in label_functions:
+        for label_category in label_categories:
+            func_cat_anns = anns.filter(
+                label_function=label_function,
+                label_category=label_category)
+            filtered_anns = filter_most_recent_anns(func_cat_anns)
+            count = 0
+            label_value_totals = defaultdict(int)
+            # filter to most recent ann per image
+            for ann in filtered_anns.values():
+                ann = ann[label_function]
+                # Add to ann_summary
+                label_value = json.loads(ann.label_data)['value']
+                ann_summary[label_category][label_function][label_value] += 1
+                label_value_totals[label_value] += 1
+                count += 1
+            if count > 0:
+                label_function_categories[label_function].add(label_category)
+
+                # Add unlabeled as total images - count
+                label_value = 'unlabeled'
+                unlabeled_count = total_images - count
+                ann_summary[label_category][label_function][label_value] = \
+                    unlabeled_count
+                label_value_totals[label_value] = unlabeled_count
+
+            for label_value, total in label_value_totals.items():
+                label_function_values[label_function][label_value] += total
+                label_category_values[label_category][label_value] += total
+
+    data = {
+        'data': ann_summary,
+        'user_categories': {k: list(v)
+                            for k, v in label_function_categories.items()},
+        'user_totals': label_function_values,
+        'category_totals': label_category_values,
+    }
+
+    return JsonResponse(data)
+
+
 def get_annotation_conflicts_helper(dataset_items, label_function, category):
     filter_args = dict(
         dataset_item__in=dataset_items,
@@ -346,14 +423,7 @@ def get_annotation_conflicts_helper(dataset_items, label_function, category):
 
     anns = Annotation.objects.filter(**filter_args)
 
-    data = defaultdict(dict)
-    for ann in anns:
-        # Only use most recent perframe ann
-        k = ann.dataset_item.pk
-        u = ann.label_function
-        if k in data and u in data[k] and data[k][u].created > ann.created:
-            continue
-        data[k][u] = ann
+    data = filter_most_recent_anns(anns)
 
     # Analyze conflicts
     conflict_data = defaultdict(set)

@@ -54,6 +54,15 @@ const StatsBar = (props) => {
   return (
     <StatsContainer>
       <div>Total selected images: {props.numTotalFilteredImages}</div>
+      <div><p>Unlabeled images:</p>
+      {props.annotationsSummary.data && Object.keys(props.annotationsSummary.data).map(cat => (
+        <div><p><b>Category: {cat}</b></p>
+        {Object.keys(props.annotationsSummary.data[cat]).map(user => (
+          <div>{user}: {props.annotationsSummary.data[cat][user]['unlabeled']} </div>
+        ))}
+        </div>
+      ))}
+      </div>
     </StatsContainer>
   );
 }
@@ -79,10 +88,10 @@ const MainCanvas = (props) => {
     <Container id="klabel_wrapper">
       <Canvas width="960" height="500" id="main_canvas" tabindex="0"/>
       <OptionsBar onCategory={props.onCategory}/>
-      <StatsBar numTotalFilteredImages={props.numTotalFilteredImages}/>
       <div>Key bindings: "1" = positive, "2" = negative, "3" = hard negative, "4" = unsure, "k" = keep, shift-click to select multiple images</div>
       <textarea type="text" id="user_notes" placeholder="My notes: "></textarea>
       <div id="other_user_notes"></div>
+      <StatsBar numTotalFilteredImages={props.numTotalFilteredImages} annotationsSummary={props.annotationsSummary}/>
     </Container>
   );
 }

@@ -101,6 +101,7 @@ function LabelingPage() {
   const [users, setUsers] = useState(["Kenobi"]);
   const [currentUser, setCurrentUser] = useState("");
   const [numTotalFilteredImages, setNumTotalFilteredImages] = useState(0);
+  const [annotationsSummary, setAnnotationsSummary] = useState({});
   //var user = "";
   //var category = "";
   const  [selected, setSelected] = useState([0]);
@@ -124,6 +125,7 @@ function LabelingPage() {
     indexRef.current = index;
   }, [cluster, index]);
 
+  const getAnnotationsSummaryUrl = baseUrl + "/get_annotations_summary/" + datasetName;
   const getAnnotationsUrl = baseUrl + "/get_annotations/" + datasetName;
   const addAnnotationUrl = baseUrl + "/add_annotation/" + datasetName;
   const deleteAnnotationUrl = baseUrl + "/delete_annotation/" + datasetName;
@@ -488,6 +490,16 @@ function LabelingPage() {
 
       setNumTotalFilteredImages(res.num_total);
 
+      // Get ann summary
+      var url = new URL(getAnnotationsSummaryUrl);
+      const annotationsSummary = await fetch(url, {
+        method: "GET",
+        credentials: 'include',
+      }).then(results => results.json());
+
+      setAnnotationsSummary(annotationsSummary);
+
+      // Get annotations
       url = new URL(getAnnotationsUrl);
       url.search = new URLSearchParams({
         identifiers: res.identifiers, user: user, category: labelCategory}).toString();
@@ -891,7 +903,7 @@ function LabelingPage() {
         <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
       </SubContainer>
       <SubContainer>
-        <MainCanvas numTotalFilteredImages={numTotalFilteredImages} onCategory={onCategory}/>
+        <MainCanvas numTotalFilteredImages={numTotalFilteredImages} onCategory={onCategory} annotationsSummary={annotationsSummary}/>
         <ImageGridContainer id="explore_grid">
           <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} visibility={visibility} currentIndex={labeler.current_frame_index} selectedIndices={labeler.current_indices}/>
         </ImageGridContainer>
