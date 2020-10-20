@@ -400,7 +400,6 @@ function LabelingPage() {
 
   useEffect(() => {
     console.log("Setting handleFetchImages")
-    console.log(keyIdentifiers)
     SetHandleFetchImages ( () => async() => {
       let filter = document.getElementById("select_image_subset").value;
       let method = document.getElementById("fetch_image_mode").value;
@@ -417,7 +416,7 @@ function LabelingPage() {
 
       var url;
       var res;
-      if (method.localeCompare("knn") === 0 || method.localeCompare("spatialKnn")) {
+      if (method.localeCompare("knn") === 0 || method.localeCompare("spatialKnn") === 0) {
         // Get relevant frames
         if (labeler.current_indices.length === 0) {
           labeler.current_indices = [labeler.get_current_frame_num()]
