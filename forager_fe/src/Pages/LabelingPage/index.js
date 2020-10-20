@@ -400,7 +400,6 @@ function LabelingPage() {
 
   useEffect(() => {
     console.log("Setting handleFetchImages")
-    console.log(keyIdentifiers)
     SetHandleFetchImages ( () => async() => {
       let filter = document.getElementById("select_image_subset").value;
       let method = document.getElementById("fetch_image_mode").value;
