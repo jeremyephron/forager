@@ -805,14 +805,17 @@ function LabelingPage() {
         var nextFrame = getNextFrame();
         if (e.key && e.key.localeCompare("k") === 0) {
           // Mark interesting
-          var currIdentifier = labeler.frames[labeler.get_current_frame_num()].data.identifier;
-          var keyIndex = currKeyIdentifiers.indexOf(currIdentifier)
-          if (keyIndex >= 0) {
-            currKeyIdentifiers.splice(keyIndex, 1)
-            currKeyPaths.splice(keyIndex, 1)
-          } else {
-            currKeyIdentifiers.push(labeler.frames[labeler.get_current_frame_num()].data.identifier);
-            currKeyPaths.push(labeler.frames[labeler.get_current_frame_num()].data.source_url);
+          for (var i = 0; i < labeler.current_indices.length; i++) {
+            var currFrame = labeler.current_indices[i]
+            var currIdentifier = labeler.frames[currFrame].data.identifier;
+            var keyIndex = currKeyIdentifiers.indexOf(currIdentifier)
+            if (keyIndex >= 0) {
+              currKeyIdentifiers.splice(keyIndex, 1)
+              currKeyPaths.splice(keyIndex, 1)
+            } else {
+              currKeyIdentifiers.push(labeler.frames[currFrame].data.identifier);
+              currKeyPaths.push(labeler.frames[currFrame].data.source_url);
+            }
           }
           setKeyPaths(currKeyPaths.slice());
           setKeyIdentifiers(currKeyIdentifiers.slice())

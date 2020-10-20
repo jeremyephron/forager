@@ -80,6 +80,7 @@ const MainCanvas = (props) => {
       <Canvas width="960" height="500" id="main_canvas" tabindex="0"/>
       <OptionsBar onCategory={props.onCategory}/>
       <StatsBar numTotalFilteredImages={props.numTotalFilteredImages}/>
+      <div>Key bindings: "1" = positive, "2" = negative, "3" = hard negative, "4" = unsure, "k" = keep, shift-click to select multiple images</div>
       <textarea type="text" id="user_notes" placeholder="My notes: "></textarea>
       <div id="other_user_notes"></div>
     </Container>
