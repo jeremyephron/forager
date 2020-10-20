@@ -416,7 +416,7 @@ function LabelingPage() {
 
       var url;
       var res;
-      if (method.localeCompare("knn") === 0) {
+      if (method.localeCompare("knn") === 0 || method.localeCompare("spatialKnn")) {
         // Get relevant frames
         if (labeler.current_indices.length === 0) {
           labeler.current_indices = [labeler.get_current_frame_num()]
@@ -437,6 +437,7 @@ function LabelingPage() {
           ann_identifiers:  filteredAnnotations.map(ann => ann.identifier),
           cluster_id: clusterRef.current.id,
           index_id: indexRef.current.id,
+          use_full_image: (method.localeCompare("knn") === 0)
         }).toString();
         res = await fetch(url, {method: "GET",
           credentials: 'include',
@@ -862,6 +863,9 @@ function LabelingPage() {
           {cluster.status === 'CLUSTER_STARTED' &&
            index.status == 'INDEX_BUILT' &&
            <option value="knn">KNN</option>}
+          {cluster.status === 'CLUSTER_STARTED' &&
+          index.status == 'INDEX_BUILT' &&
+          <option value="spatialKnn">Spatial KNN</option>}
         </OptionsSelect>
         <FetchButton id="fetch_button">Fetch More Images</FetchButton>
         <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
