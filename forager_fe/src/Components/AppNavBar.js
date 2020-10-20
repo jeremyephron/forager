@@ -16,6 +16,7 @@ const Container = styled.div`
   top: 0;
   border-bottom: 1px solid #22282E;
   box-shadow: 0 2px 5px 0 ${colors.shadow};
+  z-index: 1000;
 `;
 
 const HomeLink = styled(NavLink)`
