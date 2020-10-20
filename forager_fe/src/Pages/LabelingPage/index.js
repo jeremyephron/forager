@@ -58,6 +58,13 @@ const TitleHeader = styled.h1`
   padding-right: 20px;
 `;
 
+const SectionHeader = styled.h1`
+  font-family: "AirBnbCereal-Medium";
+  font-size: 16px;
+  color: ${colors.primary};
+  padding-right: 10px;
+`;
+
 const OptionsSelect = styled(Select)`
   font-size: 13px;
   height: 28px;
@@ -242,9 +249,9 @@ function LabelingPage() {
     //user = event.target.value;
     //console.log(user);
 
-    let category = document.getElementById("currCategory").value;
+    let labelCategory = document.getElementById("labelCategory").value;
     var url = new URL(getAnnotationsUrl);
-    url.search = new URLSearchParams({identifiers: currIdentifiers, user: event.target.value, category: category}).toString();
+    url.search = new URLSearchParams({identifiers: currIdentifiers, user: event.target.value, category: labelCategory}).toString();
     const annotations = await fetch(url, {
       method: "GET",
       credentials: 'include',
@@ -345,11 +352,11 @@ function LabelingPage() {
     let conflicts = {};
     if (select.localeCompare("conflict") === 0) {
       let user = document.getElementById("currUser").value;
-      let category = document.getElementById("currCategory").value;
+      let labelCategory = document.getElementById("labelCategory").value;
 
       // Assume this returns a list of conflicting identifiers
       let url = new URL(getConflictsUrl);
-      url.search = new URLSearchParams({identifiers:currIdentifiers, user: user, category: category}).toString();
+      url.search = new URLSearchParams({identifiers:currIdentifiers, user: user, category: labelCategory}).toString();
       conflicts = await fetch(url, {
         method: "GET",
         credentials: 'include',
@@ -404,7 +411,9 @@ function LabelingPage() {
       }
 
       let user = document.getElementById("currUser").value;
-      let category = document.getElementById("currCategory").value;
+      // Fetch images by filterCategory
+      let filterCategory = document.getElementById("filterCategory").value;
+      let labelCategory = document.getElementById("labelCategory").value;
 
       var url;
       var res;
@@ -437,7 +446,7 @@ function LabelingPage() {
         url = new URL(getNextImagesURL);
         url.search = new URLSearchParams({
           user: user,
-          category: category,
+          category: filterCategory,
           filter: filter,
           method: method,
           num: PAGINATION_NUM,
@@ -467,7 +476,7 @@ function LabelingPage() {
 
       url = new URL(getAnnotationsUrl);
       url.search = new URLSearchParams({
-        identifiers: res.identifiers, user: user, category: category}).toString();
+        identifiers: res.identifiers, user: user, category: labelCategory}).toString();
       const annotations = await fetch(url, {
         method: "GET",
         credentials: 'include',
@@ -518,18 +527,19 @@ function LabelingPage() {
 
   const handle_save_notes = async() => {
     let user = document.getElementById("currUser").value;
-    let category = document.getElementById("currCategory").value;
+    // For saving information, use label category
+    let labelCategory = document.getElementById("labelCategory").value;
     const notes = document.getElementById("user_notes").value;
     
     let endpoint = new URL(setNotesUrl);
     endpoint.search = new URLSearchParams({
       user: user,
-      category: category
+      category: labelCategory
     }).toString();
 
     let body = {
       user: user,
-      category: category,
+      category: labelCategory,
       notes: notes
     }
 
@@ -544,12 +554,12 @@ function LabelingPage() {
 
   const get_notes = async(ownNotes) => {
     let user = document.getElementById("currUser").value;
-    let category = document.getElementById("currCategory").value;
+    let labelCategory = document.getElementById("labelCategory").value;
     
     let endpoint = new URL(getNotesUrl);
     endpoint.search = new URLSearchParams({
       user: user,
-      category: category
+      category: labelCategory
     }).toString();
 
     const notes = await fetch(endpoint, {method: "GET",
@@ -622,7 +632,8 @@ function LabelingPage() {
 
     const handle_annotation_added = async (currFrame, annotation) => {
       let user = document.getElementById("currUser").value;
-      let category = document.getElementById("currCategory").value;
+      let filterCategory = document.getElementById("filterCategory").value;
+      let labelCategory = document.getElementById("labelCategory").value;
 
       if (annotation.type == Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
         annotation.labeling_time = currFrame.data.labeling_time;
@@ -631,12 +642,12 @@ function LabelingPage() {
       let endpoint = new URL(addAnnotationUrl + '/' + currFrame.data.identifier);
       endpoint.search = new URLSearchParams({
         user: user,
-        category: category
+        category: labelCategory
       }).toString();
 
       let body = {
         user: user,
-        category: category,
+        category: labelCategory,
         annotation: annotation,
         label_type: labelTypeStrings[annotation.type]
       }
@@ -657,66 +668,6 @@ function LabelingPage() {
         console.log("Not KNN")
         return;
       }
-
-      // Make a copy of currFrame.data.annotations without full-frame
-      var filteredAnnotations = []
-      for (var i = 0; i < currFrame.data.annotations.length; i++) {
-        if (currFrame.data.annotations[i].type !== Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
-          filteredAnnotations.push(currFrame.data.annotations[i])
-        }
-      }
-
-      let url = new URL(lookupKnnUrl);
-      url.search = new URLSearchParams({
-        ann_identifiers:  filteredAnnotations.map(ann => ann.identifier),
-        cluster_id: clusterRef.current.id,
-        index_id: indexRef.current.id,
-      }).toString();
-      const res = await fetch(url, {method: "GET",
-        credentials: 'include',
-      }).then(results => results.json());
-
-      url = new URL(getAnnotationsUrl);
-      url.search = new URLSearchParams({identifiers: res.identifiers, user: user, category: category}).toString();
-      const annotations = await fetch(url, {
-        method: "GET",
-        credentials: 'include',
-      })
-      .then(results => results.json());
-
-      const imageData = [];
-      for (let i=0; i<res.paths.length; i++) {
-        const data = new ImageData();
-        data.source_url = res.paths[i];
-        data.identifier = res.identifiers[i];
-
-        if (data.identifier in annotations) {
-          annotations[data.identifier].map(ann => {
-            if (ann.type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
-              data.annotations.push(PerFrameAnnotation.parse(ann));
-            } else if (ann.type === Annotation.ANNOTATION_MODE_POINT) {
-              data.annotations.push(PointAnnotation.parse(ann));
-            } else if (ann.type === Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX) {
-              data.annotations.push(TwoPointBoxAnnotation.parse(ann));
-            } else if (ann.type === Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX) {
-              data.annotations.push(ExtremeBoxAnnnotation.parse(ann));
-            }
-          });
-        }
-        imageData.push(data);
-      }
-
-      setIdentifiers(res.identifiers);
-      currIdentifiers = res.identifiers;
-      setPaths(res.paths)
-      currPaths = res.paths;
-
-      labeler.load_image_stack(imageData);
-      labeler.set_focus();
-
-      // Set filter back to all
-      document.getElementById("select_image_subset").value = "all";
-      handle_image_subset_change();
     }
 
     const handle_annotation_deleted = async (currFrame, annotation) => {
@@ -755,10 +706,10 @@ function LabelingPage() {
       labeler.set_categories( { positive: { value: 1, color: "#67bf5c" }, negative: {value:2, color: "#ed665d"}, hard_negative: {value:3, color: "#ffff00"}, unsure: {value:4, color: "#ffa500"} } );
 
       let user = document.getElementById("currUser").value;
-      let category = document.getElementById("currCategory").value;
+      let labelCategory = document.getElementById("labelCategory").value;
 
       let url = new URL(getAnnotationsUrl);
-      url.search = new URLSearchParams({identifiers: identifiers, user: user, category: category}).toString();
+      url.search = new URLSearchParams({identifiers: identifiers, user: user, category: labelCategory}).toString();
       const annotations = await fetch(url, {
         method: "GET",
         credentials: 'include',
@@ -898,7 +849,7 @@ function LabelingPage() {
             <option key={key} value={item} />
           )}
         </datalist>
-        <input type="text" list="categories" id="currCategory" onChange={onCategory} placeholder="Category" />
+        <input type="text" list="categories" id="filterCategory" placeholder="FilterCategory" />
         <datalist id="categories">
           {categories.map((item, key) =>
             <option key={key} value={item} />
@@ -915,7 +866,7 @@ function LabelingPage() {
         <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
       </SubContainer>
       <SubContainer>
-        <MainCanvas numTotalFilteredImages={numTotalFilteredImages}/>
+        <MainCanvas numTotalFilteredImages={numTotalFilteredImages} onCategory={onCategory}/>
         <ImageGridContainer id="explore_grid">
           <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} visibility={visibility} currentIndex={labeler.current_frame_index} selectedIndices={labeler.current_indices}/>
         </ImageGridContainer>
