@@ -29,8 +29,8 @@ const SubContainer = styled.div`
   display: flex;
   flex-direction: row;
   background-color: white;
-  margin-left: 3vw;
-  margin-top: 3vh;
+  margin-left: 1vw;
+  margin-top: 1vh;
 `;
 
 const ImageGridContainer = styled.div`
@@ -58,13 +58,6 @@ const TitleHeader = styled.h1`
   padding-right: 20px;
 `;
 
-const SectionHeader = styled.h1`
-  font-family: "AirBnbCereal-Medium";
-  font-size: 16px;
-  color: ${colors.primary};
-  padding-right: 10px;
-`;
-
 const OptionsSelect = styled(Select)`
   font-size: 13px;
   height: 28px;
@@ -75,7 +68,7 @@ const Slider = styled.input`
   width: 20%; /* Full-width */
   height: 25px; /* Specified height */
   border-radius: 5px;
-  margin-left: 20px;
+  margin-left: 420px;
 `;
 
 const FetchButton = styled(Button)`
@@ -194,7 +187,13 @@ function LabelingPage() {
     setSelected(currSelected);
   }
 
+  const onFilterCategory = (event) => {
+    document.getElementById("labelCategory").value = event.target.value;
+    onCategory(event)
+  }
+
   const onCategory = async(event) => {
+    console.log("onCategory")
     // If empty, refresh list to include any new categories actually labeled
     if (event.target.value === "") {
       console.log("Handle this")
@@ -518,7 +517,6 @@ function LabelingPage() {
   }, [keyPaths, keyIdentifiers])
   
   useEffect(() => {
-    console.log("Updating button function")
     let button = document.getElementById("fetch_button");
     if (button) {
       button.onclick = HandleFetchImages;
@@ -833,6 +831,17 @@ function LabelingPage() {
           <option value="forager_annotate">Annotate</option>
           <option value="forager_explore">Explore</option>
         </OptionsSelect>
+        <input type="text" list="users" id="currUser" onChange={onUser} placeholder="User" />
+        <datalist id="users">
+          {users.map((item, key) =>
+            <option key={key} value={item} />
+          )}
+        </datalist>
+        <BuildIndex dataset={datasetName} />
+      </SubContainer>
+      <SubContainer>
+        <TitleHeader>Filter: </TitleHeader>
+        <input type="text" list="categories" id="filterCategory" onChange={onFilterCategory} placeholder="FilterCategory" />
         <OptionsSelect alt="true" id="select_image_subset">
           <option value="all">All</option>
           <option value="unlabeled">Unlabeled</option>
@@ -843,26 +852,18 @@ function LabelingPage() {
           <option value="interesting">Interesting</option>
           <option value="conflict">Conflict</option>
         </OptionsSelect>
-        <input type="text" list="users" id="currUser" onChange={onUser} placeholder="User" />
-        <datalist id="users">
-          {users.map((item, key) =>
-            <option key={key} value={item} />
-          )}
-        </datalist>
-        <input type="text" list="categories" id="filterCategory" placeholder="FilterCategory" />
         <datalist id="categories">
           {categories.map((item, key) =>
             <option key={key} value={item} />
           )}
         </datalist>
-        <FetchButton id="fetch_button">Fetch More Images</FetchButton>
         <OptionsSelect alt="true" id="fetch_image_mode">
           <option value="random">Random</option>
           {cluster.status === 'CLUSTER_STARTED' &&
            index.status == 'INDEX_BUILT' &&
            <option value="knn">KNN</option>}
         </OptionsSelect>
-        <BuildIndex dataset={datasetName} />
+        <FetchButton id="fetch_button">Fetch More Images</FetchButton>
         <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
       </SubContainer>
       <SubContainer>

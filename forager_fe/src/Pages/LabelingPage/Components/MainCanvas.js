@@ -23,9 +23,10 @@ const OptionsSelect = styled(Select)`
   padding: 0 5px;
 `;
 
-const OptionsBar = (onCategory) => {
+const OptionsBar = (props) => {
   return (
     <OptionsContainer>
+      <input type="text" list="categories" id="labelCategory" onChange={props.onCategory} placeholder="LabelCategory" />
       <OptionsSelect alt="true" id="select_annotation_mode">
         <option value="per_frame">Per Frame</option>
         <option value="box_extreme_points">Box (via extreme points)</option>
@@ -34,7 +35,6 @@ const OptionsBar = (onCategory) => {
       </OptionsSelect>
       <OptionsButton alt="true" id="notes_button">Save Notes</OptionsButton>
       <OptionsButton alt="true" id="clear_button">Clear Annotations</OptionsButton>
-      <input type="text" list="categories" onChange={onCategory} id="labelCategory" placeholder="LabelCategory" />
       <OptionsButton alt="true" id="toggle_pt_viz_button">Hide Extreme Points</OptionsButton>
       <OptionsButton alt="true" id="toggle_letterbox_button">Use Scaled View</OptionsButton>
       <OptionsButton alt="true" id="get_annotations">Print Annotations</OptionsButton>
@@ -74,11 +74,11 @@ const Canvas = styled.canvas`
   box-sizing: border-box;
 `;
 
-const MainCanvas = (props, onCategory) => {
+const MainCanvas = (props) => {
   return (
     <Container id="klabel_wrapper">
       <Canvas width="960" height="500" id="main_canvas" tabindex="0"/>
-      <OptionsBar onCategory={onCategory}/>
+      <OptionsBar onCategory={props.onCategory}/>
       <StatsBar numTotalFilteredImages={props.numTotalFilteredImages}/>
       <textarea type="text" id="user_notes" placeholder="My notes: "></textarea>
       <div id="other_user_notes"></div>
