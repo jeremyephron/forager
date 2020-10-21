@@ -56,9 +56,9 @@ const StatsBar = (props) => {
       <div>Total selected images: {props.numTotalFilteredImages}</div>
       <div><p>Unlabeled images:</p>
       {props.annotationsSummary.data && Object.keys(props.annotationsSummary.data).map(cat => (
-        <div><p><b>Category: {cat}</b></p>
+        <div key={cat}><p><b>Category: {cat}</b></p>
         {Object.keys(props.annotationsSummary.data[cat]).map(user => (
-          <div>{user}: {props.annotationsSummary.data[cat][user]['unlabeled']} </div>
+          <div key={user}>{user}: {props.annotationsSummary.data[cat][user]['unlabeled']} </div>
         ))}
         </div>
       ))}

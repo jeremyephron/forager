@@ -492,12 +492,13 @@ function LabelingPage() {
 
       // Get ann summary
       var url = new URL(getAnnotationsSummaryUrl);
-      const annotationsSummary = await fetch(url, {
+      fetch(url, {
         method: "GET",
         credentials: 'include',
-      }).then(results => results.json());
-
-      setAnnotationsSummary(annotationsSummary);
+      }).then(results => results.json()
+      ).then(results => {
+        setAnnotationsSummary(results);
+      });
 
       // Get annotations
       url = new URL(getAnnotationsUrl);
