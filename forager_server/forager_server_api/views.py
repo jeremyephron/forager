@@ -372,35 +372,62 @@ def get_annotations_summary(request, dataset_name):
     label_function_values = defaultdict(lambda: defaultdict(int))
     # label_category -> label_value -> total
     label_category_values = defaultdict(lambda: defaultdict(int))
-    for label_function in label_functions:
-        for label_category in label_categories:
-            func_cat_anns = anns.filter(
-                label_function=label_function,
-                label_category=label_category)
-            filtered_anns = filter_most_recent_anns(func_cat_anns)
-            count = 0
-            label_value_totals = defaultdict(int)
-            # filter to most recent ann per image
-            for ann in filtered_anns.values():
-                ann = ann[label_function]
-                # Add to ann_summary
-                label_value = json.loads(ann.label_data)['value']
-                ann_summary[label_category][label_function][label_value] += 1
-                label_value_totals[label_value] += 1
-                count += 1
-            if count > 0:
-                label_function_categories[label_function].add(label_category)
+    if False:
+        for label_function in label_functions:
+            for label_category in label_categories:
+                func_cat_anns = anns.filter(
+                    label_function=label_function,
+                    label_category=label_category)
+                filtered_anns = filter_most_recent_anns(func_cat_anns)
+                count = 0
+                label_value_totals = defaultdict(int)
+                # filter to most recent ann per image
+                for ann in filtered_anns.values():
+                    ann = ann[label_function]
+                    # Add to ann_summary
+                    label_value = json.loads(ann.label_data)['value']
+                    ann_summary[label_category][label_function][label_value] += 1
+                    label_value_totals[label_value] += 1
+                    count += 1
+                if count > 0:
+                    label_function_categories[label_function].add(label_category)
 
-                # Add unlabeled as total images - count
-                label_value = 'unlabeled'
-                unlabeled_count = total_images - count
-                ann_summary[label_category][label_function][label_value] = \
-                    unlabeled_count
-                label_value_totals[label_value] = unlabeled_count
+                    # Add unlabeled as total images - count
+                    label_value = 'unlabeled'
+                    unlabeled_count = total_images - count
+                    ann_summary[label_category][label_function][label_value] = \
+                        unlabeled_count
+                    label_value_totals[label_value] = unlabeled_count
 
-            for label_value, total in label_value_totals.items():
-                label_function_values[label_function][label_value] += total
-                label_category_values[label_category][label_value] += total
+                for label_value, total in label_value_totals.items():
+                    label_function_values[label_function][label_value] += total
+                    label_category_values[label_category][label_value] += total
+    elif False:
+        # For each user, find num unique annotations
+        filtered_anns = filter_most_recent_anns(func_cat_anns)
+        counts = defaultdict(lambda: defaultdict(int))
+        for im_id, data in filtered_anns.items():
+            for label_function, anns in data.items():
+                for ann in anns:
+                    label_category = ann.label_category
+                    counts[label_category][label_function] += 1
+                    label_value = json.loads(label_value)['value']
+                    label_function_values[label_function][label_value] += 1
+    else:
+        for label_function in label_functions:
+            for label_category in label_categories:
+                num_unique_image_anns = (
+                    anns.filter(
+                        label_function=label_function,
+                        label_category=label_category)
+                    .values("dataset_item").distinct().count())
+                num_unlabeled = total_images - num_unique_image_anns
+                if num_unique_image_anns > 0:
+                    ann_summary[label_category][label_function]['unlabeled'] += num_unlabeled
+                    label_function_categories[label_function].add(label_category)
+                    label_function_values[label_function]['unlabeled'] += num_unlabeled
+                    label_category_values[label_category]['unlabeled'] += num_unlabeled
+
 
     data = {
         'data': ann_summary,
