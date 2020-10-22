@@ -19,22 +19,22 @@ import {
   ExtremeBoxAnnnotation,
 } from "../../assets/js/klabel.js";
 
-const Container = styled.div`
+const RowContainer = styled.div`
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   background-color: white;
 `;
 
-const SubContainer = styled.div`
+const ColContainer = styled.div`
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   background-color: white;
   margin-left: 1vw;
   margin-top: 1vh;
 `;
 
 const ImageGridContainer = styled.div`
-  width: 100%;
+  width: 95%;
   height: 65vh;
   margin-top: 2vh;
   margin-right: 3vw;
@@ -854,65 +854,69 @@ function LabelingPage() {
   }, []);
 
   return (
-    <Container>
-      <SubContainer>
-        <TitleHeader>Labeling: {datasetName}</TitleHeader>
-        <OptionsSelect alt="true" id="select_forager_mode">
-          <option value="forager_annotate">Annotate</option>
-          <option value="forager_explore">Explore</option>
-        </OptionsSelect>
-        <BuildIndex dataset={datasetName} />
-      </SubContainer>
-      <SubContainer>
-        <TitleHeader>Filter: </TitleHeader>
-        <input type="text" list="users" id="filterUser" onChange={onFilterUser} placeholder="FilterUser" />
-        <datalist id="users">
-          {users.map((item, key) =>
-            <option key={key} value={item} />
-          )}
-        </datalist>
-        <input type="text" list="categories" id="filterCategory" onChange={onFilterCategory} placeholder="FilterCategory" />
-        <OptionsSelect alt="true" id="select_image_subset">
-          <option value="all">All</option>
-          <option value="unlabeled">Unlabeled</option>
-          <option value="positive">Positive</option>
-          <option value="negative">Negative</option>
-          <option value="hard_negative">Hard Negative</option>
-          <option value="unsure">Unsure</option>
-          <option value="interesting">Interesting</option>
-          <option value="conflict">Conflict</option>
-        </OptionsSelect>
-        <datalist id="categories">
-          {categories.map((item, key) =>
-            <option key={key} value={item} />
-          )}
-        </datalist>
-        <OptionsSelect alt="true" id="fetch_image_mode">
-          <option value="random">Random</option>
-          {cluster.status === 'CLUSTER_STARTED' &&
-           index.status == 'INDEX_BUILT' &&
-           <option value="knn">KNN</option>}
-          {cluster.status === 'CLUSTER_STARTED' &&
-          index.status == 'INDEX_BUILT' &&
-          <option value="spatialKnn">Spatial KNN</option>}
-          {cluster.status === 'CLUSTER_STARTED' &&
-          index.status == 'INDEX_BUILT' &&
-          <option value="svm">Category SVM</option>}
-        </OptionsSelect>
-        <FetchButton id="fetch_button">Fetch More Images</FetchButton>
-        <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
-      </SubContainer>
-      <SubContainer>
+    <ColContainer>
+    <RowContainer>
+      <ColContainer>
+        <RowContainer>
+          <TitleHeader>Labeling: {datasetName}</TitleHeader>
+          <OptionsSelect alt="true" id="select_forager_mode">
+            <option value="forager_annotate">Annotate</option>
+            <option value="forager_explore">Explore</option>
+          </OptionsSelect>
+          <BuildIndex dataset={datasetName} />
+        </RowContainer>
+        <RowContainer>
+          <TitleHeader>Filter: </TitleHeader>
+          <input type="text" list="users" id="filterUser" onChange={onFilterUser} placeholder="FilterUser" />
+          <datalist id="users">
+            {users.map((item, key) =>
+              <option key={key} value={item} />
+            )}
+          </datalist>
+          <input type="text" list="categories" id="filterCategory" onChange={onFilterCategory} placeholder="FilterCategory" />
+          <OptionsSelect alt="true" id="select_image_subset">
+            <option value="all">All</option>
+            <option value="unlabeled">Unlabeled</option>
+            <option value="positive">Positive</option>
+            <option value="negative">Negative</option>
+            <option value="hard_negative">Hard Negative</option>
+            <option value="unsure">Unsure</option>
+            <option value="interesting">Interesting</option>
+            <option value="conflict">Conflict</option>
+          </OptionsSelect>
+          <datalist id="categories">
+            {categories.map((item, key) =>
+              <option key={key} value={item} />
+            )}
+          </datalist>
+          <OptionsSelect alt="true" id="fetch_image_mode">
+            <option value="random">Random</option>
+            {cluster.status === 'CLUSTER_STARTED' &&
+            index.status == 'INDEX_BUILT' &&
+            <option value="knn">KNN</option>}
+            {cluster.status === 'CLUSTER_STARTED' &&
+            index.status == 'INDEX_BUILT' &&
+            <option value="spatialKnn">Spatial KNN</option>}
+            {cluster.status === 'CLUSTER_STARTED' &&
+            index.status == 'INDEX_BUILT' &&
+            <option value="svm">Category SVM</option>}
+          </OptionsSelect>
+          <FetchButton id="fetch_button">Fetch More Images</FetchButton>
+        </RowContainer>
         <MainCanvas numTotalFilteredImages={numTotalFilteredImages} onCategory={onLabelCategory} onUser={onLabelUser} annotationsSummary={annotationsSummary}/>
+      </ColContainer>
+      <ColContainer>
+        <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
         <ImageGridContainer id="explore_grid">
-          <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} visibility={visibility} currentIndex={labeler.current_frame_index} selectedIndices={labeler.current_indices}/>
+            <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} visibility={visibility} currentIndex={labeler.current_frame_index} selectedIndices={labeler.current_indices}/>
         </ImageGridContainer>
-      </SubContainer>
-      <hr style={{width:"95%"}}/>
-      <ImageRowContainer id="explore_grid">
-          <ImageGrid onImageClick={OnKeyImageClick} imagePaths={keyPaths} imageHeight={imageSize}/>
-      </ImageRowContainer>
-    </Container>
+      </ColContainer>
+    </RowContainer>
+    <hr style={{width:"95%"}}/>
+    <ImageRowContainer id="explore_grid">
+        <ImageGrid onImageClick={OnKeyImageClick} imagePaths={keyPaths} imageHeight={imageSize}/>
+    </ImageRowContainer>
+    </ColContainer>
   );
 };
 
