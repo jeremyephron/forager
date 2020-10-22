@@ -16,10 +16,6 @@ from interactive_index.utils import (merge_on_disk,
                                      cantor_pairing,
                                      invert_cantor_pairing)
 
-# Handle faiss compiled without GPU support
-if not hasattr(faiss, 'GpuMultipleClonerOptions'):
-    faiss.GpuMultipleClonerOptions = List
-
 
 class InteractiveIndex:
     """
@@ -81,6 +77,7 @@ class InteractiveIndex:
             self.encoding, self.encoding_args,
             self.transform, self.transform_args
         )
+        self.metric = self.cfg['metric'].lower()
 
         if self.use_gpu:
             self.co = self._create_co(
@@ -104,7 +101,11 @@ class InteractiveIndex:
 
         """
 
-        index = faiss.index_factory(self.d, index_str)
+        metric = faiss.METRIC_L2
+        if self.metric == 'inner product':
+            metric = faiss.METRIC_INNER_PRODUCT
+
+        index = faiss.index_factory(self.d, index_str, metric)
         faiss.write_index(index, str(self.tempdir/self.TRAINED_INDEX_NAME))
 
         # TODO: get from index_str
@@ -311,7 +312,7 @@ class InteractiveIndex:
         use_float16,
         use_float16_quantizer,
         use_precomputed_codes
-    ) -> faiss.GpuMultipleClonerOptions:
+    ) -> 'faiss.GpuMultipleClonerOptions':
         """
         TODO: docstring
 

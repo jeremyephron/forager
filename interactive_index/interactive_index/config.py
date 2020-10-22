@@ -21,6 +21,7 @@ CONFIG_DEFAULTS = {
     'use_float16': True,
     'use_float16_quantizer': True,
     'use_precomputed_codes': False,
+    'metric': 'L2',
     
     # Transformation
     'transform': None,
