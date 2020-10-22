@@ -8,6 +8,7 @@ use_gpu: true
 use_float16: true
 use_float16_quantizer: true
 use_precomputed_codes: false
+metric: L2  # or 'inner product'
 
 # {None, PCA, ITQ}
 # None: no transformation
