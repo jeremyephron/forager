@@ -123,9 +123,7 @@ function LabelingPage() {
   // Same thing with imagesubset
   var currImageSubset = 7;
   const [categories, setCategories] = useState(["Hello","There"]);
-  const [currentCategory, setCurrentCategory] = useState("");
   const [users, setUsers] = useState(["Kenobi"]);
-  const [currentUser, setCurrentUser] = useState("");
   const [numTotalFilteredImages, setNumTotalFilteredImages] = useState(0);
   const [annotationsSummary, setAnnotationsSummary] = useState({});
   //var user = "";
@@ -219,104 +217,59 @@ function LabelingPage() {
 
   const onFilterCategory = (event) => {
     document.getElementById("labelCategory").value = event.target.value;
-    onLabelCategory(event)
+    OnLabel()
   }
 
   const onFilterUser = (event) => {
     document.getElementById("labelUser").value = event.target.value;
-    onLabelUser(event)
+    OnLabel()
   }
 
-  const onLabelCategory = async(event) => {
-    console.log("onLabelCategory")
-    // If empty, refresh list to include any new categories actually labeled
-    if (event.target.value === "") {
-      console.log("Handle this")
-    }
-    // Set currentCategory to contents of text field
-    setCurrentCategory(event.target.value);
-    //category = event.target.value;
+  const [OnLabel, SetOnLabel] = useState(()=> async(currPage) => {})
 
-    let labelUser = document.getElementById("labelUser").value;
-    var url = new URL(getAnnotationsUrl);
-    url.search = new URLSearchParams({identifiers: currIdentifiers, user: labelUser, category: event.target.value}).toString();
-    const annotations = await fetch(url, {
-      method: "GET",
-      credentials: 'include',
-    })
-    .then(results => results.json());
+  useEffect(() => {
+    console.log("Updating onLabel")
+    SetOnLabel ( () => async(currPage) => {
+      console.log("onLabel")
 
-    const imageData = [];
-    for (let i=0; i<currPaths.length; i++) {
-      const data = new ImageData();
-      data.source_url = currPaths[i];
-      data.identifier = currIdentifiers[i];
+      let labelUser = document.getElementById("labelUser").value;
+      let labelCategory = document.getElementById("labelCategory").value;
+      var url = new URL(getAnnotationsUrl);
+      url.search = new URLSearchParams({identifiers: identifiers, user: labelUser, category: labelCategory}).toString();
+      const annotations = await fetch(url, {
+        method: "GET",
+        credentials: 'include',
+      })
+      .then(results => results.json());
 
-      if (data.identifier in annotations) {
-        annotations[data.identifier].map(ann => {
-          if (ann.type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
-            data.annotations.push(PerFrameAnnotation.parse(ann));
-          } else if (ann.type === Annotation.ANNOTATION_MODE_POINT) {
-            data.annotations.push(PointAnnotation.parse(ann));
-          } else if (ann.type === Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX) {
-            data.annotations.push(TwoPointBoxAnnotation.parse(ann));
-          } else if (ann.type === Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX) {
-            data.annotations.push(ExtremeBoxAnnnotation.parse(ann));
-          }
-        });
+      const imageData = [];
+      for (let i=0; i<paths.length; i++) {
+        const data = new ImageData();
+        data.source_url = paths[i];
+        data.identifier = identifiers[i];
+
+        if (data.identifier in annotations) {
+          annotations[data.identifier].map(ann => {
+            if (ann.type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+              data.annotations.push(PerFrameAnnotation.parse(ann));
+            } else if (ann.type === Annotation.ANNOTATION_MODE_POINT) {
+              data.annotations.push(PointAnnotation.parse(ann));
+            } else if (ann.type === Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX) {
+              data.annotations.push(TwoPointBoxAnnotation.parse(ann));
+            } else if (ann.type === Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX) {
+              data.annotations.push(ExtremeBoxAnnnotation.parse(ann));
+            }
+          });
+        }
+        imageData.push(data);
       }
-      imageData.push(data);
-    }
 
-    //get_notes(false);
-    labeler.load_image_stack(imageData);
-    labeler.set_focus();
-  }
-
-  const onLabelUser = async(event) => {
-    // If empty, refresh list to include any new categories actually labeled
-    if (event.target.value === "") {
-      console.log("Handle this")
-    }
-    // Set currentCategory to contents of text field
-    setCurrentUser(event.target.value);
-
-    let labelCategory = document.getElementById("labelCategory").value;
-    var url = new URL(getAnnotationsUrl);
-    url.search = new URLSearchParams({identifiers: currIdentifiers, user: event.target.value, category: labelCategory}).toString();
-    const annotations = await fetch(url, {
-      method: "GET",
-      credentials: 'include',
-    })
-    .then(results => results.json());
-
-    const imageData = [];
-    for (let i=0; i<currPaths.length; i++) {
-      const data = new ImageData();
-      data.source_url = currPaths[i];
-      data.identifier = currIdentifiers[i];
-
-      if (data.identifier in annotations) {
-        annotations[data.identifier].map(ann => {
-          if (ann.type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
-            data.annotations.push(PerFrameAnnotation.parse(ann));
-          } else if (ann.type === Annotation.ANNOTATION_MODE_POINT) {
-            data.annotations.push(PointAnnotation.parse(ann));
-          } else if (ann.type === Annotation.ANNOTATION_MODE_TWO_POINTS_BBOX) {
-            data.annotations.push(TwoPointBoxAnnotation.parse(ann));
-          } else if (ann.type === Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX) {
-            data.annotations.push(ExtremeBoxAnnnotation.parse(ann));
-          }
-        });
-      }
-      imageData.push(data);
-    }
-
-    //get_notes(false);
-    labeler.load_image_stack(imageData);
-    labeler.set_focus();
-  }
-
+      //get_notes(false);
+      labeler.load_image_stack(imageData);
+      labeler.set_focus();
+    });
+  }, [paths, identifiers])
+  
   const getNextFrame = () => {
     // Move currFrame to next, behavior dependent on mode
     var nextFrame = labeler.current_frame_index + 1;
@@ -573,6 +526,9 @@ function LabelingPage() {
       labeler.set_focus();
 
       handle_image_subset_change();
+
+      var myDiv = document.getElementById('explore_grid').firstChild;
+      myDiv.scrollTop = 0;
     });
   }, [keyPaths, keyIdentifiers])
   
@@ -965,9 +921,9 @@ function LabelingPage() {
           </OptionsSelect>
           <FetchButton id="filter_button">Apply Filter</FetchButton>
         </RowContainer>
-        <MainCanvas numTotalFilteredImages={numTotalFilteredImages} onCategory={onLabelCategory} onUser={onLabelUser} annotationsSummary={annotationsSummary}/>
+        <MainCanvas numTotalFilteredImages={numTotalFilteredImages} onCategory={OnLabel} onUser={OnLabel} annotationsSummary={annotationsSummary}/>
         <hr style={{width:"95%"}}/>
-        <ImageRowContainer id="explore_grid">
+        <ImageRowContainer id="key_grid">
             <ImageGrid onImageClick={OnKeyImageClick} imagePaths={keyPaths} imageHeight={imageSize}/>
         </ImageRowContainer>
       </ColContainer>
