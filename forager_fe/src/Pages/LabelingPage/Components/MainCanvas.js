@@ -41,31 +41,6 @@ const OptionsBar = (props) => {
   );
 }
 
-const StatsContainer = styled.div`
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 1vh;
-`;
-
-const StatsBar = (props) => {
-  return (
-    <StatsContainer>
-      <div>Total selected images: {props.numTotalFilteredImages}</div>
-      <div><p>Unlabeled images:</p>
-      {props.annotationsSummary.data && Object.keys(props.annotationsSummary.data).map(cat => (
-        <div key={cat}><p><b>Category: {cat}</b></p>
-        {Object.keys(props.annotationsSummary.data[cat]).map(user => (
-          <div key={user}>{user}: {props.annotationsSummary.data[cat][user]['unlabeled']} </div>
-        ))}
-        </div>
-      ))}
-      </div>
-    </StatsContainer>
-  );
-}
-
 const Container = styled.div`
   display: flex;
   flex-direction: column;
@@ -90,7 +65,6 @@ const MainCanvas = (props) => {
       <div>Key bindings: "1" = positive, "2" = negative, "3" = hard negative, "4" = unsure, "k" = keep, shift-click to select multiple images</div>
       <textarea type="text" id="user_notes" placeholder="My notes: "></textarea>
       <div id="other_user_notes"></div>
-      <StatsBar numTotalFilteredImages={props.numTotalFilteredImages} annotationsSummary={props.annotationsSummary}/>
     </Container>
   );
 }

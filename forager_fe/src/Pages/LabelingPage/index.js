@@ -34,11 +34,9 @@ const ColContainer = styled.div`
 `;
 
 const ImageGridContainer = styled.div`
-  width: 95%;
+  width: 100%;
   height: 65vh;
   margin-top: 2vh;
-  margin-right: 3vw;
-  margin-left: 3vw;
   border-radius: 5px;
 `;
 
@@ -68,7 +66,7 @@ const Slider = styled.input`
   width: 20%; /* Full-width */
   height: 25px; /* Specified height */
   border-radius: 5px;
-  margin-left: 420px;
+  margin-left: 50px;
 `;
 
 const FetchButton = styled(Button)`
@@ -78,9 +76,37 @@ const FetchButton = styled(Button)`
   padding: 0 5px;
 `;
 
-const Checkbox = styled.input`
-  type: "checkbox";
-`
+const StatsContainer = styled.div`
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1vh;
+`;
+
+const StatsBar = (props) => {
+  return (
+    <StatsContainer>
+      <div><p>Unlabeled images:</p>
+      {props.annotationsSummary.data && Object.keys(props.annotationsSummary.data).map(cat => (
+        <div key={cat}><p><b>Category: {cat}</b></p>
+        {Object.keys(props.annotationsSummary.data[cat]).map(user => (
+          <div key={user}>{user}: {props.annotationsSummary.data[cat][user]['unlabeled']} </div>
+        ))}
+        </div>
+      ))}
+      </div>
+    </StatsContainer>
+  );
+}
+
+const SummaryBar = (props) => {
+  return (
+    <StatsContainer>
+      <div>Showing images {1 + (props.page - 1)*props.pageSize} to {Math.min(props.numTotalFilteredImages, props.page*props.pageSize)} out of {props.numTotalFilteredImages}</div>
+    </StatsContainer>
+  );
+}
 
 function LabelingPage() {
   const location = useLocation();
@@ -141,6 +167,7 @@ function LabelingPage() {
   const querySvmUrl = baseUrl + "/query_svm/" + datasetName;
 
   const PAGINATION_NUM = 500;
+  const [page, setPage] = useState(1);
 
   /* Klabel stuff */
   const labeler = useMemo(() => new ImageLabeler(), []);
@@ -401,11 +428,11 @@ function LabelingPage() {
     labeler.set_current_frame_num(getFirstFrame());
   }
 
-  const [HandleFetchImages, SetHandleFetchImages] = useState(()=> async() => {})
+  const [HandleFetchImages, SetHandleFetchImages] = useState(()=> async(currPage) => {})
 
   useEffect(() => {
     console.log("Setting handleFetchImages")
-    SetHandleFetchImages ( () => async() => {
+    SetHandleFetchImages ( () => async(currPage) => {
       let filter = document.getElementById("select_image_subset").value;
       let method = document.getElementById("fetch_image_mode").value;
 
@@ -470,6 +497,7 @@ function LabelingPage() {
           filter: filter,
           method: method,
           num: PAGINATION_NUM,
+          offset: (currPage - 1)*PAGINATION_NUM
         }).toString();
         res = await fetch(url, {
           method: "GET",
@@ -549,11 +577,47 @@ function LabelingPage() {
   }, [keyPaths, keyIdentifiers])
   
   useEffect(() => {
-    let button = document.getElementById("fetch_button");
+    let button = document.getElementById("filter_button");
+    var maxPage = Math.ceil(numTotalFilteredImages/PAGINATION_NUM)
+    console.log("Page:")
+    console.log(page)
     if (button) {
-      button.onclick = HandleFetchImages;
+      button.onclick = (function() {
+        setPage(1);
+        HandleFetchImages(1);
+      })
     }
-  },[HandleFetchImages])
+    button = document.getElementById("first_button");
+    if (button) {
+      button.onclick = (function() {
+        setPage(1);
+        HandleFetchImages(1);
+      })
+    }
+    button = document.getElementById("prev_button");
+    if (button) {
+      button.onclick = (function() {
+        var nextPage = Math.max(page - 1,1)
+        setPage(nextPage);
+        HandleFetchImages(nextPage);
+      })
+    }
+    button = document.getElementById("next_button");
+    if (button) {
+      button.onclick = (function() {
+        var nextPage = Math.min(page + 1,maxPage)
+        setPage(nextPage);
+        HandleFetchImages(nextPage);
+      })
+    }
+    button = document.getElementById("last_button");
+    if (button) {
+      button.onclick = (function() {
+        setPage(maxPage);
+        HandleFetchImages(maxPage);
+      })
+    }
+  },[HandleFetchImages, page, numTotalFilteredImages])
 
   const handle_save_notes = async() => {
     let labelUser = document.getElementById("labelUser").value;
@@ -771,6 +835,10 @@ function LabelingPage() {
         imageData.push(data);
       }
 
+      labeler.load_image_stack(imageData);
+      labeler.set_focus();
+
+      //get_notes(true); // Get own notes as well
       url = new URL(getUsersAndCategoriesUrl);
       const usersAndCategories = await fetch(
         url, {method: "GET", credentials: 'include',}
@@ -778,11 +846,6 @@ function LabelingPage() {
 
       setUsers(usersAndCategories['users']);
       setCategories(usersAndCategories['categories']);
-
-      //get_notes(true); // Get own notes as well
-
-      labeler.load_image_stack(imageData);
-      labeler.set_focus();
 
       labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY);
       labeler.annotation_added_callback = handle_annotation_added;
@@ -847,14 +910,13 @@ function LabelingPage() {
       currPaths = paths; // Need this for initialization when the page loads...
     }
 
-    let button = document.getElementById("fetch_button");
-    button.onclick = HandleFetchImages;
+    //let button = document.getElementById("filter_button");
+    //button.onclick = HandleFetchImages;
 
     klabelRun();
   }, []);
 
   return (
-    <ColContainer>
     <RowContainer>
       <ColContainer>
         <RowContainer>
@@ -901,22 +963,30 @@ function LabelingPage() {
             index.status == 'INDEX_BUILT' &&
             <option value="svm">Category SVM</option>}
           </OptionsSelect>
-          <FetchButton id="fetch_button">Fetch More Images</FetchButton>
+          <FetchButton id="filter_button">Apply Filter</FetchButton>
         </RowContainer>
         <MainCanvas numTotalFilteredImages={numTotalFilteredImages} onCategory={onLabelCategory} onUser={onLabelUser} annotationsSummary={annotationsSummary}/>
+        <hr style={{width:"95%"}}/>
+        <ImageRowContainer id="explore_grid">
+            <ImageGrid onImageClick={OnKeyImageClick} imagePaths={keyPaths} imageHeight={imageSize}/>
+        </ImageRowContainer>
       </ColContainer>
       <ColContainer>
-        <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
+        <RowContainer>
+          <FetchButton id="first_button">First</FetchButton>
+          <FetchButton id="prev_button">Prev</FetchButton>
+          <FetchButton id="next_button">Next</FetchButton>
+          <FetchButton id="last_button">Last</FetchButton>
+          <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
+        </RowContainer>
+        <SummaryBar numTotalFilteredImages={numTotalFilteredImages} page={page} pageSize={PAGINATION_NUM}/>
         <ImageGridContainer id="explore_grid">
             <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} visibility={visibility} currentIndex={labeler.current_frame_index} selectedIndices={labeler.current_indices}/>
         </ImageGridContainer>
+        <hr style={{width:"95%"}}/>
+        <StatsBar annotationsSummary={annotationsSummary}/>
       </ColContainer>
     </RowContainer>
-    <hr style={{width:"95%"}}/>
-    <ImageRowContainer id="explore_grid">
-        <ImageGrid onImageClick={OnKeyImageClick} imagePaths={keyPaths} imageHeight={imageSize}/>
-    </ImageRowContainer>
-    </ColContainer>
   );
 };
 
