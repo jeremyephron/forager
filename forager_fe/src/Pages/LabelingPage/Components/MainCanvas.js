@@ -26,6 +26,7 @@ const OptionsSelect = styled(Select)`
 const OptionsBar = (props) => {
   return (
     <OptionsContainer>
+      <input type="text" list="users" id="labelUser" onChange={props.onUser} placeholder="LabelUser" />
       <input type="text" list="categories" id="labelCategory" onChange={props.onCategory} placeholder="LabelCategory" />
       <OptionsSelect alt="true" id="select_annotation_mode">
         <option value="per_frame">Per Frame</option>
@@ -34,10 +35,8 @@ const OptionsBar = (props) => {
         <option value="point">Point</option>
       </OptionsSelect>
       <OptionsButton alt="true" id="notes_button">Save Notes</OptionsButton>
-      <OptionsButton alt="true" id="clear_button">Clear Annotations</OptionsButton>
       <OptionsButton alt="true" id="toggle_pt_viz_button">Hide Extreme Points</OptionsButton>
       <OptionsButton alt="true" id="toggle_letterbox_button">Use Scaled View</OptionsButton>
-      <OptionsButton alt="true" id="get_annotations">Print Annotations</OptionsButton>
     </OptionsContainer>
   );
 }
@@ -87,7 +86,7 @@ const MainCanvas = (props) => {
   return (
     <Container id="klabel_wrapper">
       <Canvas width="960" height="500" id="main_canvas" tabindex="0"/>
-      <OptionsBar onCategory={props.onCategory}/>
+      <OptionsBar onUser={props.onUser} onCategory={props.onCategory}/>
       <div>Key bindings: "1" = positive, "2" = negative, "3" = hard negative, "4" = unsure, "k" = keep, shift-click to select multiple images</div>
       <textarea type="text" id="user_notes" placeholder="My notes: "></textarea>
       <div id="other_user_notes"></div>

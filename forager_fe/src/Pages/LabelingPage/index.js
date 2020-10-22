@@ -192,11 +192,16 @@ function LabelingPage() {
 
   const onFilterCategory = (event) => {
     document.getElementById("labelCategory").value = event.target.value;
-    onCategory(event)
+    onLabelCategory(event)
   }
 
-  const onCategory = async(event) => {
-    console.log("onCategory")
+  const onFilterUser = (event) => {
+    document.getElementById("labelUser").value = event.target.value;
+    onLabelUser(event)
+  }
+
+  const onLabelCategory = async(event) => {
+    console.log("onLabelCategory")
     // If empty, refresh list to include any new categories actually labeled
     if (event.target.value === "") {
       console.log("Handle this")
@@ -205,9 +210,9 @@ function LabelingPage() {
     setCurrentCategory(event.target.value);
     //category = event.target.value;
 
-    let user = document.getElementById("currUser").value;
+    let labelUser = document.getElementById("labelUser").value;
     var url = new URL(getAnnotationsUrl);
-    url.search = new URLSearchParams({identifiers: currIdentifiers, user: user, category: event.target.value}).toString();
+    url.search = new URLSearchParams({identifiers: currIdentifiers, user: labelUser, category: event.target.value}).toString();
     const annotations = await fetch(url, {
       method: "GET",
       credentials: 'include',
@@ -241,15 +246,13 @@ function LabelingPage() {
     labeler.set_focus();
   }
 
-  const onUser = async(event) => {
+  const onLabelUser = async(event) => {
     // If empty, refresh list to include any new categories actually labeled
     if (event.target.value === "") {
       console.log("Handle this")
     }
     // Set currentCategory to contents of text field
     setCurrentUser(event.target.value);
-    //user = event.target.value;
-    //console.log(user);
 
     let labelCategory = document.getElementById("labelCategory").value;
     var url = new URL(getAnnotationsUrl);
@@ -353,12 +356,12 @@ function LabelingPage() {
     let show = new Array(labeler.frames.length).fill(false,0,labeler.frames.length)
     let conflicts = {};
     if (select.localeCompare("conflict") === 0) {
-      let user = document.getElementById("currUser").value;
+      let labelUser = document.getElementById("labelUser").value;
       let labelCategory = document.getElementById("labelCategory").value;
 
       // Assume this returns a list of conflicting identifiers
       let url = new URL(getConflictsUrl);
-      url.search = new URLSearchParams({identifiers:currIdentifiers, user: user, category: labelCategory}).toString();
+      url.search = new URLSearchParams({identifiers:currIdentifiers, user: labelUser, category: labelCategory}).toString();
       conflicts = await fetch(url, {
         method: "GET",
         credentials: 'include',
@@ -411,7 +414,8 @@ function LabelingPage() {
         filter = "all";
       }
 
-      let user = document.getElementById("currUser").value;
+      let filterUser = document.getElementById("filterUser").value;
+      let labelUser = document.getElementById("labelUser").value;
       // Fetch images by filterCategory
       let filterCategory = document.getElementById("filterCategory").value;
       let labelCategory = document.getElementById("labelCategory").value;
@@ -449,7 +453,7 @@ function LabelingPage() {
         // For now makes more sense to pass the user/category, the backend should be able to find the corresponding labels and paths
         url = new URL(querySvmUrl);
         url.search = new URLSearchParams({
-          user: user,
+          user: filterUser,
           category: filterCategory,
           cluster_id: clusterRef.current.id,
           index_id: indexRef.current.id,
@@ -461,7 +465,7 @@ function LabelingPage() {
       } else {
         url = new URL(getNextImagesURL);
         url.search = new URLSearchParams({
-          user: user,
+          user: filterUser,
           category: filterCategory,
           filter: filter,
           method: method,
@@ -503,7 +507,7 @@ function LabelingPage() {
       // Get annotations
       url = new URL(getAnnotationsUrl);
       url.search = new URLSearchParams({
-        identifiers: res.identifiers, user: user, category: labelCategory}).toString();
+        identifiers: res.identifiers, user: labelUser, category: labelCategory}).toString();
       const annotations = await fetch(url, {
         method: "GET",
         credentials: 'include',
@@ -552,19 +556,19 @@ function LabelingPage() {
   },[HandleFetchImages])
 
   const handle_save_notes = async() => {
-    let user = document.getElementById("currUser").value;
+    let labelUser = document.getElementById("labelUser").value;
     // For saving information, use label category
     let labelCategory = document.getElementById("labelCategory").value;
     const notes = document.getElementById("user_notes").value;
     
     let endpoint = new URL(setNotesUrl);
     endpoint.search = new URLSearchParams({
-      user: user,
+      user: labelUser,
       category: labelCategory
     }).toString();
 
     let body = {
-      user: user,
+      user: labelUser,
       category: labelCategory,
       notes: notes
     }
@@ -579,12 +583,12 @@ function LabelingPage() {
   }
 
   const get_notes = async(ownNotes) => {
-    let user = document.getElementById("currUser").value;
+    let labelUser = document.getElementById("labelUser").value;
     let labelCategory = document.getElementById("labelCategory").value;
     
     let endpoint = new URL(getNotesUrl);
     endpoint.search = new URLSearchParams({
-      user: user,
+      user: labelUser,
       category: labelCategory
     }).toString();
 
@@ -594,8 +598,8 @@ function LabelingPage() {
 
     if (ownNotes) {
       let notesDiv = document.getElementById("user_notes");
-      if (user in notes) {
-        notesDiv.value = notes[user];
+      if (labelUser in notes) {
+        notesDiv.value = notes[labelUser];
       }
     } 
     var otherNotes = ""
@@ -657,8 +661,7 @@ function LabelingPage() {
     }
 
     const handle_annotation_added = async (currFrame, annotation) => {
-      let user = document.getElementById("currUser").value;
-      let filterCategory = document.getElementById("filterCategory").value;
+      let labelUser = document.getElementById("labelUser").value;
       let labelCategory = document.getElementById("labelCategory").value;
 
       if (annotation.type == Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
@@ -667,12 +670,12 @@ function LabelingPage() {
 
       let endpoint = new URL(addAnnotationUrl + '/' + currFrame.data.identifier);
       endpoint.search = new URLSearchParams({
-        user: user,
+        user: labelUser,
         category: labelCategory
       }).toString();
 
       let body = {
-        user: user,
+        user: labelUser,
         category: labelCategory,
         annotation: annotation,
         label_type: labelTypeStrings[annotation.type]
@@ -731,11 +734,11 @@ function LabelingPage() {
       labeler.init(main_canvas);
       labeler.set_categories( { positive: { value: 1, color: "#67bf5c" }, negative: {value:2, color: "#ed665d"}, hard_negative: {value:3, color: "#ffff00"}, unsure: {value:4, color: "#ffa500"} } );
 
-      let user = document.getElementById("currUser").value;
+      let labelUser = document.getElementById("labelUser").value;
       let labelCategory = document.getElementById("labelCategory").value;
 
       let url = new URL(getAnnotationsUrl);
-      url.search = new URLSearchParams({identifiers: identifiers, user: user, category: labelCategory}).toString();
+      url.search = new URLSearchParams({identifiers: identifiers, user: labelUser, category: labelCategory}).toString();
       const annotations = await fetch(url, {
         method: "GET",
         credentials: 'include',
@@ -795,10 +798,6 @@ function LabelingPage() {
       button.toggle_status = true;
       labeler.set_letterbox(button.toggle_status);
 
-      button = document.getElementById("clear_button");
-      button.onclick = handle_clear_boxes;
-      button = document.getElementById("get_annotations");
-      button.onclick = handle_get_annotations;
       //button = document.getElementById("notes_button");
       //button.onclick = handle_save_notes;
 
@@ -862,16 +861,16 @@ function LabelingPage() {
           <option value="forager_annotate">Annotate</option>
           <option value="forager_explore">Explore</option>
         </OptionsSelect>
-        <input type="text" list="users" id="currUser" onChange={onUser} placeholder="User" />
+        <BuildIndex dataset={datasetName} />
+      </SubContainer>
+      <SubContainer>
+        <TitleHeader>Filter: </TitleHeader>
+        <input type="text" list="users" id="filterUser" onChange={onFilterUser} placeholder="FilterUser" />
         <datalist id="users">
           {users.map((item, key) =>
             <option key={key} value={item} />
           )}
         </datalist>
-        <BuildIndex dataset={datasetName} />
-      </SubContainer>
-      <SubContainer>
-        <TitleHeader>Filter: </TitleHeader>
         <input type="text" list="categories" id="filterCategory" onChange={onFilterCategory} placeholder="FilterCategory" />
         <OptionsSelect alt="true" id="select_image_subset">
           <option value="all">All</option>
@@ -904,7 +903,7 @@ function LabelingPage() {
         <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
       </SubContainer>
       <SubContainer>
-        <MainCanvas numTotalFilteredImages={numTotalFilteredImages} onCategory={onCategory} annotationsSummary={annotationsSummary}/>
+        <MainCanvas numTotalFilteredImages={numTotalFilteredImages} onCategory={onLabelCategory} onUser={onLabelUser} annotationsSummary={annotationsSummary}/>
         <ImageGridContainer id="explore_grid">
           <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} visibility={visibility} currentIndex={labeler.current_frame_index} selectedIndices={labeler.current_indices}/>
         </ImageGridContainer>
