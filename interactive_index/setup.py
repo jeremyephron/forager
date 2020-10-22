@@ -9,5 +9,5 @@ setup(
         "numpy==1.18.5",
         "PyYAML>=5.3.1",
     ],  # TODO: put reqs here
-    python_requires=">=3.8",
+    python_requires=">=3.7",
 )
