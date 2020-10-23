@@ -227,6 +227,7 @@ async def start_job(request):
         LabeledIndexReducer(),
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
+        chunk_size=config.CHUNK_SIZE,
     )
 
     index_id = job.job_id
