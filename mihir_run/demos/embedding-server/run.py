@@ -70,10 +70,13 @@ class LabeledIndexReducer(Reducer):
         self.labels.append(input["image"])
         embeddings = utils.base64_to_numpy(output[config.EMBEDDING_LAYER])
 
+        full = embeddings.mean(axis=(1, 2))
+        spatial = embeddings.reshape(config.EMBEDDING_DIM, -1).T
+
         with self.accumulated_lock:
-            self.accumulated_full[i] = embeddings.mean(axis=(1, 2))
-            self.accumulated_spatial[i] = embeddings.reshape(config.EMBEDDING_DIM, -1).T
-            self.num_accumulated_spatial += len(self.accumulated_spatial[i])
+            self.accumulated_full[i] = full
+            self.accumulated_spatial[i] = spatial
+            self.num_accumulated_spatial += len(spatial)
 
     def flush(self):
         should_finalize = False
