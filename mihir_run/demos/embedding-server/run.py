@@ -84,11 +84,13 @@ class LabeledIndexReducer(Reducer):
         # TODO(mihirg): how does INDEX_FLUSH_EVERY interact with INDEX_SUBINDEX_SIZE?
         should_add_full = (
             should_train_full
-            or len(self.accumulated_full) % self.INDEX_FLUSH_EVERY == 0
+            or force
+            or len(self.accumulated_full) % config.INDEX_FLUSH_EVERY == 0
         )
         should_add_spatial = (
             should_train_spatial
-            or self.num_accumulated_spatial % self.INDEX_FLUSH_EVERY == 0
+            or force
+            or self.num_accumulated_spatial % config.INDEX_FLUSH_EVERY == 0
         )
 
         if should_add_full:
