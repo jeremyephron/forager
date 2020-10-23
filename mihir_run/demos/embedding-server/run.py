@@ -33,41 +33,82 @@ class ClusterData:
     service_url: Optional[str] = None
 
 
-class LabeledIndex:
-    def __init__(self, embedding_dict, **kwargs):
-        self.labels = list(embedding_dict.keys())
+class LabeledIndexReducer(Reducer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        index_kwargs = dict(
+            d=config.EMBEDDING_DIM,
+            n_centroids=config.INDEX_NUM_CENTROIDS,
+            vectors_per_index=config.INDEX_SUBINDEX_SIZE,
+            use_gpu=config.INDEX_USE_GPU,
+        )
+        filepath_id = str(uuid.uuid4())
+
+        self.labels = []
+        self.full_image_index = InteractiveIndex(
+            tempdir=f"/tmp/f-{filepath_id}/", **index_kwargs
+        )
+        self.spatial_index = InteractiveIndex(
+            tempdir=f"/tmp/s-{filepath_id}/", **index_kwargs
+        )
+
+        self.accumulated_results = {}
+
+        self.is_trained = False
+        self.train_threshold = config.INDEX_TRAIN_MULTIPLE * max(
+            self.full_image_index.n_centroids, self.spatial_index.n_centroids
+        )
+
+    def handle_result(self, input, output):
+        label = input["image"]
+        spatial_embeddings = utils.base64_to_numpy(output[config.EMBEDDING_LAYER])
+        self.accumulated_results[label] = spatial_embeddings
+        self.flush()
+
+    def flush(self, force=False):
+        should_train = not self.is_trained and (
+            force or len(self.accumulated_results) > self.train_threshold
+        )
+        if not (should_train or self.is_trained):
+            return
 
         full_image_vectors = np.stack(
             [
                 spatial_embeddings.mean(axis=(1, 2))
-                for spatial_embeddings in embedding_dict.values()
+                for spatial_embeddings in self.accumulated_results.values()
             ]
         )
-
-        self.full_image_index = InteractiveIndex(
-            tempdir=f"/tmp/{uuid.uuid4()}/", **kwargs
-        )
-        self.full_image_index.train(full_image_vectors)
-        self.full_image_index.add(full_image_vectors)
-        self.full_image_index.merge_partial_indexes()
-
         spatial_vectors = np.concatenate(
             [
                 spatial_embeddings.reshape(config.EMBEDDING_DIM, -1).T
-                for spatial_embeddings in embedding_dict.values()
+                for spatial_embeddings in self.accumulated_results.values()
             ]
         )
         spatial_ids = [
-            i
-            for i, (c, h, w) in enumerate(map(np.shape, embedding_dict.values()))
+            i + len(self.labels)
+            for i, (c, h, w) in enumerate(
+                map(np.shape, self.accumulated_results.values())
+            )
             for _ in range(h * w)
         ]
+        self.labels.extend(self.accumulated_results.keys())
 
-        # TODO(mihirg): Add incrementally as results come back
-        self.spatial_index = InteractiveIndex(tempdir=f"/tmp/{uuid.uuid4()}/", **kwargs)
-        self.spatial_index.train(spatial_vectors)
+        if should_train:
+            self.full_image_index.train(full_image_vectors)
+            self.spatial_index.train(spatial_vectors)
+
+        self.full_image_index.add(full_image_vectors)
         self.spatial_index.add(spatial_vectors, spatial_ids)
+
+        self.accumulated_results.clear()
+
+    @property
+    def result(self):  # equivalent of finalize()
+        self.flush(True)
+        self.full_image_index.merge_partial_indexes()
         self.spatial_index.merge_partial_indexes()
+        return self
 
     def delete(self):
         self.full_image_index.cleanup()
@@ -109,7 +150,7 @@ class LabeledIndex:
 # Global data
 current_clusters = {}  # type: Dict[str, ClusterData]
 current_jobs = {}  # type: Dict[str, MapReduceJob]
-current_indexes = {}  # type: Dict[str, LabeledIndex]
+current_indexes = {}  # type: Dict[str, LabeledIndexReducer]
 
 
 # Start web server
@@ -172,21 +213,6 @@ async def _stop_cluster(cluster_data):
 
 
 # EMBEDDING COMPUTATION
-class EmbeddingDictReducer(Reducer):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.embeddings = {}
-
-    def handle_result(self, input, output):
-        self.embeddings[input["image"]] = utils.base64_to_numpy(
-            output[config.EMBEDDING_LAYER]
-        )
-
-    @property
-    def result(self):
-        return self.embeddings
-
-
 @app.route("/start_job", methods=["POST"])
 async def start_job(request):
     cluster_id = request.form["cluster_id"][0]
@@ -198,7 +224,7 @@ async def start_job(request):
 
     job = MapReduceJob(
         MapperSpec(url=cluster_data.service_url, n_mappers=cluster_data.n_nodes),
-        EmbeddingDictReducer(),
+        LabeledIndexReducer(),
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
     )
@@ -214,15 +240,14 @@ async def start_job(request):
     return resp.json({"index_id": index_id})
 
 
-def _handle_job_result(embedding_dict, index_id):
-    # Create index
-    current_indexes[index_id] = LabeledIndex(
-        embedding_dict,
-        d=config.EMBEDDING_DIM,
-        n_centroids=config.INDEX_NUM_CENTROIDS,
-        vectors_per_index=config.INDEX_SUBINDEX_SIZE,
-        use_gpu=config.INDEX_USE_GPU,
-    )
+async def _stop_job(job):
+    await job.stop()
+    job.reducer.delete()
+
+
+def _handle_job_result(index, index_id):
+    # Store index
+    current_indexes[index_id] = index
     asyncio.create_task(_cleanup_job(index_id))
 
 
@@ -239,13 +264,15 @@ async def job_status(request):
         job = current_jobs[index_id]
         if job.finished:
             current_jobs.pop(index_id)
-        result = job.job_result
+        performance = job.performance
+        progress = job.progress
     else:
-        result = {}
+        performance = None
+        progress = None
 
     status = {
-        "performance": result.get("performance"),
-        "progress": result.get("progress"),
+        "performance": performance,
+        "progress": progress,
         "has_index": index_id in current_indexes,
     }
     return resp.json(status)
@@ -354,6 +381,7 @@ async def query_svm(request):
     paths = [x[0] for x in query_results]
     return resp.json({"results": paths})
 
+
 # CLEANUP
 @app.listener("after_server_stop")
 async def cleanup(app, loop):
@@ -365,14 +393,13 @@ async def cleanup(app, loop):
 
 async def _cleanup_jobs():
     n = len(current_jobs)
-    await asyncio.gather(*[job.stop() for job in current_jobs.values()])
+    await asyncio.gather(*map(_stop_job, current_jobs.values()))
     print(f"- stopped {n} jobs")
 
 
 async def _cleanup_clusters():
     n = len(current_clusters)
-    for cluster_data in current_clusters.values():
-        await _stop_cluster(cluster_data)
+    await asyncio.gather(*map(_stop_cluster, current_clusters.values()))
     print(f"- killed {n} clusters")
 
 

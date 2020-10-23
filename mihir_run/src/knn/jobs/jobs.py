@@ -1,5 +1,6 @@
 import asyncio
 import collections
+import functools
 import resource
 import time
 import traceback
@@ -121,7 +122,9 @@ class MapReduceJob:
                 pass
             else:
                 if callback is not None:
-                    callback(result)
+                    await asyncio.get_running_loop().run_in_executor(
+                        None, functools.partial(callback, result)
+                    )
 
         self.task = asyncio.create_task(task())
 
@@ -176,13 +179,8 @@ class MapReduceJob:
         return self.reducer.result
 
     @property
-    def job_result(self) -> Dict[str, Any]:
+    def progress(self) -> Any:
         elapsed_time = (time.time() - self.start_time) if self.start_time else 0.0
-
-        performance = {
-            "profiling": {k: v.mean() for k, v in self._profiling.items()},
-            "mapper_utilization": dict(enumerate(self._n_chunks_per_mapper.values())),
-        }
 
         progress = {
             "cost": self.cost,
@@ -194,9 +192,20 @@ class MapReduceJob:
         if self._n_total is not None:
             progress["n_total"] = self._n_total
 
+        return progress
+
+    @property
+    def performance(self):
         return {
-            "performance": performance,
-            "progress": progress,
+            "profiling": {k: v.mean() for k, v in self._profiling.items()},
+            "mapper_utilization": dict(enumerate(self._n_chunks_per_mapper.values())),
+        }
+
+    @property
+    def job_result(self) -> Dict[str, Any]:
+        return {
+            "performance": self.performance,
+            "progress": self.progress,
             "result": self.result,
         }
 
