@@ -219,12 +219,13 @@ class InteractiveIndex:
             )
 
             index.add_with_ids(xb[start_idx:end_idx], ids[start_idx:end_idx])
-            self.n_vectors += end_idx - start_idx
-
             faiss.write_index(
                 faiss.index_gpu_to_cpu(index) if self.use_gpu else index,
                 str(self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num))
             )
+
+            self.n_vectors += end_idx - start_idx
+            start_idx = end_idx
 
     def merge_partial_indexes(self) -> None:
         """
