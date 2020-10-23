@@ -46,78 +46,88 @@ class LabeledIndexReducer(Reducer):
         filepath_id = str(uuid.uuid4())
 
         self.labels = []
-        self.full_image_index = InteractiveIndex(
+        self.full_index = InteractiveIndex(
             tempdir=f"/tmp/f-{filepath_id}/", **index_kwargs
         )
         self.spatial_index = InteractiveIndex(
             tempdir=f"/tmp/s-{filepath_id}/", **index_kwargs
         )
 
-        self.accumulated_results = {}
-
-        self.is_trained = False
-        self.train_threshold = config.INDEX_TRAIN_MULTIPLE * max(
-            self.full_image_index.n_centroids, self.spatial_index.n_centroids
-        )
+        self.accumulated_full = {}
+        self.accumulated_spatial = {}
+        self.num_accumulated_spatial = 0
 
     def handle_result(self, input, output):
-        label = input["image"]
-        spatial_embeddings = utils.base64_to_numpy(output[config.EMBEDDING_LAYER])
-        self.accumulated_results[label] = spatial_embeddings
-        if len(self.accumulated_results) % config.INDEX_FLUSH_EVERY == 0:
-            self.flush()
+        i = len(self.labels)
+
+        self.labels.append(input["image"])
+        embeddings = utils.base64_to_numpy(output[config.EMBEDDING_LAYER])
+
+        self.accumulated_full[i] = embeddings.mean(axis=(1, 2))
+        self.accumulated_spatial[i] = embeddings.reshape(config.EMBEDDING_DIM, -1).T
+        self.num_accumulated_spatial += len(self.accumulated_spatial[i])
+
+        self.flush()
 
     def flush(self, force=False):
-        should_train = not self.is_trained and (
-            force or len(self.accumulated_results) >= self.train_threshold
+        should_train_full = not self.full_index.is_trained and (
+            force
+            or len(self.accumulated_full)
+            >= config.INDEX_TRAIN_MULTIPLE * self.full_index.n_centroids
         )
-        if not (should_train or self.is_trained):
-            return
+        should_train_spatial = not self.spatial_index.is_trained and (
+            force
+            or self.num_accumulated_spatial
+            >= config.INDEX_TRAIN_MULTIPLE * self.spatial_index.n_centroids
+        )
 
-        full_image_vectors = np.stack(
-            [
-                spatial_embeddings.mean(axis=(1, 2))
-                for spatial_embeddings in self.accumulated_results.values()
+        # TODO(mihirg): how does INDEX_FLUSH_EVERY interact with INDEX_SUBINDEX_SIZE?
+        should_add_full = (
+            should_train_full
+            or len(self.accumulated_full) % self.INDEX_FLUSH_EVERY == 0
+        )
+        should_add_spatial = (
+            should_train_spatial
+            or self.num_accumulated_spatial % self.INDEX_FLUSH_EVERY == 0
+        )
+
+        if should_add_full:
+            full_vectors = np.stack(list(self.accumulated_full.values()))
+            full_ids = list(self.accumulated_full.keys())
+
+            if should_train_full:
+                self.full_index.train(full_vectors)
+
+            self.full_index.add(full_vectors, full_ids)
+            self.accumulated_full.clear()
+
+        if should_add_spatial:
+            spatial_vectors = np.concatenate(list(self.accumulated_spatial.values()))
+            spatial_ids = [
+                i for i, vs in self.accumulated_spatial.items() for _ in range(len(vs))
             ]
-        )
-        spatial_vectors = np.concatenate(
-            [
-                spatial_embeddings.reshape(config.EMBEDDING_DIM, -1).T
-                for spatial_embeddings in self.accumulated_results.values()
-            ]
-        )
-        spatial_ids = [
-            i + len(self.labels)
-            for i, (c, h, w) in enumerate(
-                map(np.shape, self.accumulated_results.values())
-            )
-            for _ in range(h * w)
-        ]
-        self.labels.extend(self.accumulated_results.keys())
 
-        if should_train:
-            self.full_image_index.train(full_image_vectors)
-            self.spatial_index.train(spatial_vectors)
+            if should_train_spatial:
+                self.spatial_index.train(spatial_vectors)
 
-        self.full_image_index.add(full_image_vectors)
-        self.spatial_index.add(spatial_vectors, spatial_ids)
-
-        self.accumulated_results.clear()
+            self.spatial_index.add(spatial_vectors, spatial_ids)
+            self.accumulated_spatial.clear()
+            self.num_accumulated_spatial = 0
 
     @property
     def result(self):  # equivalent of finalize()
         self.flush(True)
-        self.full_image_index.merge_partial_indexes()
+        self.full_index.merge_partial_indexes()
         self.spatial_index.merge_partial_indexes()
         return self
 
     def delete(self):
-        self.full_image_index.cleanup()
+        self.full_index.cleanup()
         self.spatial_index.cleanup()
 
     def query(self, query_vector, num_results, num_probes, use_full_image=False):
         if use_full_image:
-            dists, ids = self.full_image_index.query(
+            dists, ids = self.full_index.query(
                 query_vector, num_results, n_probes=num_probes
             )
             sorted_id_dist_tuples = [(i, d) for i, d in zip(ids[0], dists[0]) if i >= 0]
@@ -248,7 +258,6 @@ async def _stop_job(job):
 
 
 def _handle_job_result(index, index_id):
-    # Store index
     current_indexes[index_id] = index
     asyncio.create_task(_cleanup_job(index_id))
 

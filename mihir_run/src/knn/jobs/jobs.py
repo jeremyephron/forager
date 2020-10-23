@@ -1,6 +1,5 @@
 import asyncio
 import collections
-import functools
 import resource
 import time
 import traceback
@@ -122,9 +121,7 @@ class MapReduceJob:
                 pass
             else:
                 if callback is not None:
-                    await asyncio.get_running_loop().run_in_executor(
-                        None, functools.partial(callback, result)
-                    )
+                    callback(result)
 
         self.task = asyncio.create_task(task())
 
