@@ -115,11 +115,7 @@ function LabelingPage() {
   const [identifiers, setIdentifiers] = useState(location.state.identifiers);
   var currIdentifiers = location.state.identifiers;
   const [imageSize, setImageSize] = useState(150);
-  const [visibility, setVisibility] = useState(new Array(location.state.paths.length).fill(true,0,location.state.paths.length))
-  var currVisibility = new Array(location.state.paths.length).fill(true,0,location.state.paths.length);
   const [imageSubset, setImageSubset] = useState(7);
-  // Can't get it to work with just useState(paths), and can fix later
-  var currPaths = location.state.paths;
   // Same thing with imagesubset
   var currImageSubset = 7;
   const [categories, setCategories] = useState(["Hello","There"]);
@@ -269,116 +265,16 @@ function LabelingPage() {
       labeler.set_focus();
     });
   }, [paths, identifiers])
-  
+
   const getNextFrame = () => {
-    // Move currFrame to next, behavior dependent on mode
     var nextFrame = labeler.current_frame_index + 1;
-    //console.log(nextFrame)
-    while (nextFrame < currPaths.length) {
-      if (currVisibility[nextFrame]) {
-        // labeler.current_frame_index = nextFrame;
-        // break;
-        return nextFrame;
-      } else {
-        nextFrame += 1;
-      }
-    }
-    return getLastFrame();
+    return Math.min(nextFrame, paths.length)
   }
 
   const getPrevFrame = () => {
     // Move currFrame to prev, behavior dependent on mode
     var prevFrame = labeler.current_frame_index - 1;
-    while (prevFrame > 0) {
-      if (currVisibility[prevFrame]) {
-        //labeler.current_frame_index = prevFrame;
-        //break;
-        return prevFrame;
-      } else {
-        prevFrame -= 1;
-      }
-    }
-    return getFirstFrame();
-  }
-
-  const getFirstFrame = () => {
-    var firstFrame = 0;
-    while (firstFrame < currPaths.length) {
-      if (currVisibility[firstFrame]) {
-        //labeler.current_frame_index = nextFrame;
-        //break;
-        return firstFrame;
-      } else {
-        firstFrame += 1;
-      }
-    }
-    return 0;
-  }
-
-  const getLastFrame = () => {
-    var lastFrame = currPaths.length - 1;
-    while (lastFrame > 0) {
-      if (currImageSubset & currVisibility[lastFrame]) {
-        return lastFrame;
-      } else {
-        lastFrame -= 1;
-      }
-    }
-    return currPaths.length - 1;
-  }
-
-  const handle_image_subset_change = async() => {
-    if (labeler.get_num_frames() == 0) {
-      return;
-    }
-    let select = document.getElementById("select_image_subset").value;
-    // Calculate the desired subset of images from annotations, then pass to currVisibility
-    let show = new Array(labeler.frames.length).fill(false,0,labeler.frames.length)
-    let conflicts = {};
-    if (select.localeCompare("conflict") === 0) {
-      let labelUser = document.getElementById("labelUser").value;
-      let labelCategory = document.getElementById("labelCategory").value;
-
-      // Assume this returns a list of conflicting identifiers
-      let url = new URL(getConflictsUrl);
-      url.search = new URLSearchParams({identifiers:currIdentifiers, user: labelUser, category: labelCategory}).toString();
-      conflicts = await fetch(url, {
-        method: "GET",
-        credentials: 'include',
-        headers: {
-        'Content-Type': 'application/json'
-        }
-      })
-      .then(results => results.json());
-      console.log(conflicts)
-      console.log(Object.keys(conflicts))
-    }
-    console.log(conflicts);
-    for (var i = 0; i < labeler.frames.length; i++) {
-      if (select.localeCompare("all") === 0) {
-        show[i] = true
-      } else if (select.localeCompare("unlabeled") === 0) {
-        show[i] = (labeler.frames[i].data.annotations.length === 0);
-      } else if (select.localeCompare("conflict") === 0) {
-        if (labeler.frames[i].data.identifier in conflicts) {
-          show[i] = true;
-        }
-      } else  {
-        for (var j = 0; j < labeler.frames[i].data.annotations.length; j++) {
-          if (labeler.frames[i].data.annotations[j].type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
-            if (labeler.frames[i].data.annotations[j].value === filterMap[select]) {
-              show[i] = true;
-            } else  {
-              show[i] = false;
-            }
-          }
-        }
-      }
-    }
-    setVisibility(show);
-    currVisibility = show;
-    console.log(show)
-    labeler.set_current_frame_num(getFirstFrame());
+    return Math.max(prevFrame, 0)
   }
 
   const [HandleFetchImages, SetHandleFetchImages] = useState(()=> async(currPage) => {})
@@ -518,14 +414,10 @@ function LabelingPage() {
       }
 
       setIdentifiers(res.identifiers);
-      currIdentifiers = res.identifiers;
       setPaths(res.paths)
-      currPaths = res.paths;
 
       labeler.load_image_stack(imageData);
       labeler.set_focus();
-
-      handle_image_subset_change();
 
       var myDiv = document.getElementById('explore_grid').firstChild;
       myDiv.scrollTop = 0;
@@ -710,13 +602,6 @@ function LabelingPage() {
       .then(response => response.text());
 
       annotation.identifier = identifer;
-
-      // Return KNN images only when in KNN mode
-      console.log(document.getElementById("select_image_subset").value)
-      if (document.getElementById("select_image_subset").value.localeCompare("knn") !== 0) {
-        console.log("Not KNN")
-        return;
-      }
     }
 
     const handle_annotation_deleted = async (currFrame, annotation) => {
@@ -826,9 +711,6 @@ function LabelingPage() {
       select = document.getElementById("select_forager_mode")
       select.onchange = handle_forager_change;
 
-      select = document.getElementById("select_image_subset")
-      select.onchange = handle_image_subset_change;
-
       window.addEventListener("keydown", function(e) {
         //e.preventDefault(); // If we prevent default it stops typing, only prevent default maybe for arrow keys
         var prevFrame = getPrevFrame();
@@ -862,8 +744,6 @@ function LabelingPage() {
           labeler.handle_keyup(e);
         }
       });
-
-      currPaths = paths; // Need this for initialization when the page loads...
     }
 
     //let button = document.getElementById("filter_button");
@@ -937,7 +817,7 @@ function LabelingPage() {
         </RowContainer>
         <SummaryBar numTotalFilteredImages={numTotalFilteredImages} page={page} pageSize={PAGINATION_NUM}/>
         <ImageGridContainer id="explore_grid">
-            <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} visibility={visibility} currentIndex={labeler.current_frame_index} selectedIndices={labeler.current_indices}/>
+            <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} currentIndex={labeler.current_frame_index} selectedIndices={labeler.current_indices}/>
         </ImageGridContainer>
         <hr style={{width:"95%"}}/>
         <StatsBar annotationsSummary={annotationsSummary}/>
