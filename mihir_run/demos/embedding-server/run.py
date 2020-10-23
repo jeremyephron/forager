@@ -64,11 +64,12 @@ class LabeledIndexReducer(Reducer):
         label = input["image"]
         spatial_embeddings = utils.base64_to_numpy(output[config.EMBEDDING_LAYER])
         self.accumulated_results[label] = spatial_embeddings
-        self.flush()
+        if len(self.accumulated_results) % config.INDEX_FLUSH_EVERY == 0:
+            self.flush()
 
     def flush(self, force=False):
         should_train = not self.is_trained and (
-            force or len(self.accumulated_results) > self.train_threshold
+            force or len(self.accumulated_results) >= self.train_threshold
         )
         if not (should_train or self.is_trained):
             return
@@ -394,13 +395,15 @@ async def cleanup(app, loop):
 
 async def _cleanup_jobs():
     n = len(current_jobs)
-    await asyncio.gather(*map(_stop_job, current_jobs.values()))
+    for job in current_jobs.values():
+        await _stop_job(job)
     print(f"- stopped {n} jobs")
 
 
 async def _cleanup_clusters():
     n = len(current_clusters)
-    await asyncio.gather(*map(_stop_cluster, current_clusters.values()))
+    for cluster in current_clusters.values():
+        await _stop_cluster(cluster)
     print(f"- killed {n} clusters")
 
 
