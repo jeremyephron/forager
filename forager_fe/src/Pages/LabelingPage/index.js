@@ -712,7 +712,12 @@ function LabelingPage() {
       select.onchange = handle_forager_change;
 
       window.addEventListener("keydown", function(e) {
+        console.log("Handling keydown")
         //e.preventDefault(); // If we prevent default it stops typing, only prevent default maybe for arrow keys
+        var activeElement = document.activeElement;
+        if (activeElement && (activeElement.tagName.toLowerCase() === 'input')) {
+          return;
+        }
         var prevFrame = getPrevFrame();
         var nextFrame = getNextFrame();
         if (e.key && e.key.localeCompare("k") === 0) {
@@ -733,6 +738,7 @@ function LabelingPage() {
           setKeyIdentifiers(currKeyIdentifiers.slice())
         }
         if (forager_mode === "forager_annotate") {
+          console.log("Passing keydown to labeler")
           labeler.handle_keydown(e, prevFrame, nextFrame);
           setSelected(labeler.current_indices)
         }

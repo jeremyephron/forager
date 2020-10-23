@@ -124,6 +124,9 @@ export class ImageLabeler {
 		this.current_indices = [0];
 		this.frames = [];
 
+		// Hold current auto labeler id
+		this.autoStepId = null;
+
 		// annotation state
 		this.annotation_mode = Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY;
 		this.category_to_name = [];
@@ -719,7 +722,7 @@ export class ImageLabeler {
 	}
 
 	handle_keydown(event, prevFrame, nextFrame) {
-		//console.log("KeyDown: " + event.keyCode);
+		console.log("KeyDown: " + event.keyCode);
 		if (this.is_annotation_mode_per_frame_category()) {
 
 			// number key: 0-9
@@ -735,6 +738,38 @@ export class ImageLabeler {
 				//this.render();
 				this.current_indices = [nextFrame]
 				setTimeout(() => {this.set_current_frame_num(nextFrame)},50);
+			} else if (event.keyCode === 65) {   // "a" for autolabel
+				if (!this.autoStepId) {
+					var timeDiv = document.getElementById("frameSpeed")
+					var imageTime = 500;
+					if (timeDiv) {
+						var divValue = parseInt(timeDiv.value)
+						if (!isNaN(divValue)) {
+							imageTime = divValue
+						}
+						if (imageTime < 250) {
+							imageTime = 250
+						}
+					}
+					this.autoStepId = setInterval(() => {
+						console.log("Keypress")
+						var evt = new KeyboardEvent("keydown", {
+						bubbles : true,
+						cancelable : true,
+						char : "2",
+						key : "2",
+						shiftKey : false,
+						keyCode : 50
+						})
+						console.log(evt)
+						window.dispatchEvent(evt);
+					}, imageTime)
+				}
+			} else if (event.keyCode === 27) {   // "esc" for autolabel esca
+				if (this.autoStepId) {
+					clearInterval(this.autoStepId)
+					this.autoStepId = null;
+				}
 			}
 		}
 
@@ -753,6 +788,7 @@ export class ImageLabeler {
 			}
 
 		} else if (event.keyCode === 39) {  // right arrow
+			console.log("Handling right arrow")
 			if (this.current_frame_index < this.frames.length-1) {
 				this.current_indices = [nextFrame]
 				this.set_current_frame_num(nextFrame);
