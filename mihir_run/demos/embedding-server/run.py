@@ -55,14 +55,14 @@ class LabeledIndexReducer(Reducer):
             tempdir=f"/tmp/s-{filepath_id}/", **index_kwargs
         )
 
-        self.flush_thread = threading.Thread(target=self.flush)
-        self.should_finalize = threading.Event()
-        self.is_finalized = threading.Event()
-
         self.accumulated_lock = threading.Lock()
         self.accumulated_full = {}
         self.accumulated_spatial = {}
         self.num_accumulated_spatial = 0
+
+        self.should_finalize = threading.Event()
+        self.flush_thread = threading.Thread(target=self.flush)
+        self.flush_thread.start()
 
     def handle_result(self, input, output):
         i = len(self.labels)
@@ -140,12 +140,10 @@ class LabeledIndexReducer(Reducer):
                     self.spatial_index.train(spatial_vectors)
                 self.spatial_index.add(spatial_vectors, spatial_ids)
 
-        self.is_finalized.set()
-
     @property
     def result(self):  # equivalent of finalize()
         self.should_finalize.set()
-        self.is_finalized.wait()
+        self.flush_thread.join()
         self.full_index.merge_partial_indexes()
         self.spatial_index.merge_partial_indexes()
         return self
@@ -155,7 +153,7 @@ class LabeledIndexReducer(Reducer):
         self.spatial_index.cleanup()
 
     def query(self, query_vector, num_results, num_probes, use_full_image=False):
-        assert self.is_finalized.is_set()
+        assert not self.flush_thread.is_alive()
 
         if use_full_image:
             dists, ids = self.full_index.query(
