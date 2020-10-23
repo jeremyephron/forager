@@ -83,8 +83,6 @@ class LabeledIndexReducer(Reducer):
 
         while not should_finalize:
             should_finalize = self.should_finalize.is_set()
-            if not should_finalize:
-                time.sleep(config.INDEX_FLUSH_SLEEP)
 
             accumulated_full_copy = {}
             accumulated_spatial_copy = {}
@@ -139,6 +137,9 @@ class LabeledIndexReducer(Reducer):
                     self.spatial_index.train(spatial_vectors)
                 self.spatial_index.add(spatial_vectors, spatial_ids)
                 self.spatial_index.merge_partial_indexes()
+
+            if not should_finalize and not should_add_full and not should_add_spatial:
+                time.sleep(config.INDEX_FLUSH_SLEEP)
 
     @property
     def result(self):  # called only once to finalize
