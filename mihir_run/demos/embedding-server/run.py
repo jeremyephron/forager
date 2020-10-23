@@ -4,6 +4,8 @@ import functools
 import heapq
 import json
 import operator
+import threading
+import time
 import uuid
 
 import numpy as np
@@ -53,6 +55,11 @@ class LabeledIndexReducer(Reducer):
             tempdir=f"/tmp/s-{filepath_id}/", **index_kwargs
         )
 
+        self.flush_thread = threading.Thread(target=self.flush)
+        self.should_finalize = threading.Event()
+        self.is_finalized = threading.Event()
+
+        self.accumulated_lock = threading.Lock()
         self.accumulated_full = {}
         self.accumulated_spatial = {}
         self.num_accumulated_spatial = 0
@@ -63,62 +70,82 @@ class LabeledIndexReducer(Reducer):
         self.labels.append(input["image"])
         embeddings = utils.base64_to_numpy(output[config.EMBEDDING_LAYER])
 
-        self.accumulated_full[i] = embeddings.mean(axis=(1, 2))
-        self.accumulated_spatial[i] = embeddings.reshape(config.EMBEDDING_DIM, -1).T
-        self.num_accumulated_spatial += len(self.accumulated_spatial[i])
+        with self.accumulated_lock:
+            self.accumulated_full[i] = embeddings.mean(axis=(1, 2))
+            self.accumulated_spatial[i] = embeddings.reshape(config.EMBEDDING_DIM, -1).T
+            self.num_accumulated_spatial += len(self.accumulated_spatial[i])
 
-        self.flush()
+    def flush(self):
+        should_finalize = False
 
-    def flush(self, force=False):
-        should_train_full = not self.full_index.is_trained and (
-            force
-            or len(self.accumulated_full)
-            >= config.INDEX_TRAIN_MULTIPLE * self.full_index.n_centroids
-        )
-        should_train_spatial = not self.spatial_index.is_trained and (
-            force
-            or self.num_accumulated_spatial
-            >= config.INDEX_TRAIN_MULTIPLE * self.spatial_index.n_centroids
-        )
+        while not should_finalize:
+            should_finalize = self.should_finalize.is_set()
+            if not should_finalize:
+                time.sleep(config.INDEX_FLUSH_SLEEP)
 
-        # TODO(mihirg): how does INDEX_FLUSH_EVERY interact with INDEX_SUBINDEX_SIZE?
-        should_add_full = (
-            should_train_full
-            or force
-            or len(self.accumulated_full) % config.INDEX_FLUSH_EVERY == 0
-        )
-        should_add_spatial = (
-            should_train_spatial
-            or force
-            or self.num_accumulated_spatial % config.INDEX_FLUSH_EVERY == 0
-        )
+            accumulated_full_copy = {}
+            accumulated_spatial_copy = {}
 
-        if should_add_full:
-            full_vectors = np.stack(list(self.accumulated_full.values()))
-            full_ids = list(self.accumulated_full.keys())
+            with self.accumulated_lock:
+                should_train_full = not self.full_index.is_trained and (
+                    should_finalize
+                    or len(self.accumulated_full)
+                    >= config.INDEX_TRAIN_MULTIPLE * self.full_index.n_centroids
+                )
+                should_train_spatial = not self.spatial_index.is_trained and (
+                    should_finalize
+                    or self.num_accumulated_spatial
+                    >= config.INDEX_TRAIN_MULTIPLE * self.spatial_index.n_centroids
+                )
 
-            if should_train_full:
-                self.full_index.train(full_vectors)
+                should_add_full = (
+                    should_train_full or should_finalize
+                ) and self.accumulated_full
+                should_add_spatial = (
+                    should_train_spatial or should_finalize
+                ) and self.accumulated_spatial
 
-            self.full_index.add(full_vectors, full_ids)
-            self.accumulated_full.clear()
+                # Swap local and global copies if necessary
+                if should_add_full:
+                    accumulated_full_copy, self.accumulated_full = (
+                        self.accumulated_full,
+                        accumulated_full_copy,
+                    )
+                if should_add_spatial:
+                    (
+                        accumulated_spatial_copy,
+                        self.accumulated_spatial,
+                        self.num_accumulated_spatial,
+                    ) = (self.accumulated_spatial, accumulated_spatial_copy, 0)
 
-        if should_add_spatial:
-            spatial_vectors = np.concatenate(list(self.accumulated_spatial.values()))
-            spatial_ids = [
-                i for i, vs in self.accumulated_spatial.items() for _ in range(len(vs))
-            ]
+            if should_add_full:
+                full_vectors = np.stack(list(accumulated_full_copy.values()))
+                full_ids = list(accumulated_full_copy.keys())
 
-            if should_train_spatial:
-                self.spatial_index.train(spatial_vectors)
+                if should_train_full:
+                    self.full_index.train(full_vectors)
+                self.full_index.add(full_vectors, full_ids)
 
-            self.spatial_index.add(spatial_vectors, spatial_ids)
-            self.accumulated_spatial.clear()
-            self.num_accumulated_spatial = 0
+            if should_add_spatial:
+                spatial_vectors = np.concatenate(
+                    list(accumulated_spatial_copy.values())
+                )
+                spatial_ids = [
+                    i
+                    for i, vs in accumulated_spatial_copy.items()
+                    for _ in range(len(vs))
+                ]
+
+                if should_train_spatial:
+                    self.spatial_index.train(spatial_vectors)
+                self.spatial_index.add(spatial_vectors, spatial_ids)
+
+        self.is_finalized.set()
 
     @property
     def result(self):  # equivalent of finalize()
-        self.flush(True)
+        self.should_finalize.set()
+        self.is_finalized.wait()
         self.full_index.merge_partial_indexes()
         self.spatial_index.merge_partial_indexes()
         return self
@@ -128,6 +155,8 @@ class LabeledIndexReducer(Reducer):
         self.spatial_index.cleanup()
 
     def query(self, query_vector, num_results, num_probes, use_full_image=False):
+        assert self.is_finalized.is_set()
+
         if use_full_image:
             dists, ids = self.full_index.query(
                 query_vector, num_results, n_probes=num_probes
