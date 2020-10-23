@@ -31,7 +31,7 @@ class EmbeddingDictReducer(Reducer):
         self.embeddings = {}
 
     def handle_result(self, input, output):
-        self.embeddings[input] = {
+        self.embeddings[input["image"]] = {
             k: utils.base64_to_numpy(v) for k, v in output.items()
         }
 
