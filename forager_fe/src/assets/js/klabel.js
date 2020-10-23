@@ -737,7 +737,7 @@ export class ImageLabeler {
 				}
 				//this.render();
 				this.current_indices = [nextFrame]
-				setTimeout(() => {this.set_current_frame_num(nextFrame)},50);
+				setTimeout(() => {this.set_current_frame_num(nextFrame)},100);
 			} else if (event.keyCode === 65) {   // "a" for autolabel
 				if (!this.autoStepId) {
 					var timeDiv = document.getElementById("frameSpeed")
