@@ -395,15 +395,13 @@ async def cleanup(app, loop):
 
 async def _cleanup_jobs():
     n = len(current_jobs)
-    for job in current_jobs.values():
-        await _stop_job(job)
+    await asyncio.gather(*map(_stop_job, current_jobs.values()))
     print(f"- stopped {n} jobs")
 
 
 async def _cleanup_clusters():
     n = len(current_clusters)
-    for cluster in current_clusters.values():
-        await _stop_cluster(cluster)
+    await asyncio.gather(*map(_stop_cluster, current_clusters.values()))
     print(f"- killed {n} clusters")
 
 
