@@ -149,6 +149,8 @@ class LabeledIndexReducer(Reducer):
         return self
 
     def delete(self):
+        self.should_finalize.set()
+        self.flush_thread.join()
         self.full_index.cleanup()
         self.spatial_index.cleanup()
 
