@@ -90,23 +90,18 @@ class LabeledIndexReducer(Reducer):
             accumulated_spatial_copy = {}
 
             with self.accumulated_lock:
-                should_train_full = not self.full_index.is_trained and (
+                should_add_full = self.accumulated_full and (
                     should_finalize
+                    or self.full_index.is_trained
                     or len(self.accumulated_full)
                     >= config.INDEX_TRAIN_MULTIPLE * self.full_index.n_centroids
                 )
-                should_train_spatial = not self.spatial_index.is_trained and (
+                should_add_spatial = self.accumulated_spatial and (
                     should_finalize
+                    or self.spatial_index.is_trained
                     or self.num_accumulated_spatial
                     >= config.INDEX_TRAIN_MULTIPLE * self.spatial_index.n_centroids
                 )
-
-                should_add_full = (
-                    should_train_full or should_finalize
-                ) and self.accumulated_full
-                should_add_spatial = (
-                    should_train_spatial or should_finalize
-                ) and self.accumulated_spatial
 
                 # Swap local and global copies if necessary
                 if should_add_full:
@@ -125,7 +120,7 @@ class LabeledIndexReducer(Reducer):
                 full_vectors = np.stack(list(accumulated_full_copy.values()))
                 full_ids = list(accumulated_full_copy.keys())
 
-                if should_train_full:
+                if not self.full_index.is_trained:
                     self.full_index.train(full_vectors)
                 self.full_index.add(full_vectors, full_ids)
 
@@ -139,7 +134,7 @@ class LabeledIndexReducer(Reducer):
                     for _ in range(len(vs))
                 ]
 
-                if should_train_spatial:
+                if not self.spatial_index.is_trained:
                     self.spatial_index.train(spatial_vectors)
                 self.spatial_index.add(spatial_vectors, spatial_ids)
 
