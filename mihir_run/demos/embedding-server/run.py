@@ -123,6 +123,7 @@ class LabeledIndexReducer(Reducer):
                 if not self.full_index.is_trained:
                     self.full_index.train(full_vectors)
                 self.full_index.add(full_vectors, full_ids)
+                self.full_index.merge_partial_indexes()
 
             if should_add_spatial:
                 spatial_vectors = np.concatenate(
@@ -137,18 +138,16 @@ class LabeledIndexReducer(Reducer):
                 if not self.spatial_index.is_trained:
                     self.spatial_index.train(spatial_vectors)
                 self.spatial_index.add(spatial_vectors, spatial_ids)
+                self.spatial_index.merge_partial_indexes()
 
     @property
-    def result(self):  # equivalent of finalize()
+    def result(self):  # called only once to finalize
         self.should_finalize.set()
         self.flush_thread.join()
-        self.full_index.merge_partial_indexes()
-        self.spatial_index.merge_partial_indexes()
         return self
 
     def delete(self):
-        self.should_finalize.set()
-        self.flush_thread.join()
+        self.result
         self.full_index.cleanup()
         self.spatial_index.cleanup()
 
