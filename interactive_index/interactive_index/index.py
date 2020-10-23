@@ -194,13 +194,8 @@ class InteractiveIndex:
         if self.use_gpu:
             index = to_all_gpus(index, self.co)
 
-        end_idx = min(
-            self.vectors_per_index - (self.n_vectors % self.vectors_per_index),
-            xb.shape[0]
-        )
-
         if ids is None:
-            ids = np.arange(self.n_vectors, self.n_vectors + end_idx)
+            ids = np.arange(self.n_vectors, self.n_vectors + xb.shape[0])
         else:
             ids = np.array(ids)
 
@@ -214,17 +209,22 @@ class InteractiveIndex:
                 cantor_pairing(ids[i], ids_extra[i]) for i in range(len(ids))
             ])
 
-        index.add_with_ids(xb[:end_idx], ids)
-        self.n_vectors += end_idx
+        start_idx = 0
+        while start_idx < xb.shape[0]:
+            end_idx = min(
+                start_idx
+                + self.vectors_per_index
+                - (self.n_vectors % self.vectors_per_index),
+                xb.shape[0],
+            )
 
+            index.add_with_ids(xb[start_idx:end_idx], ids[start_idx:end_idx])
+            self.n_vectors += end_idx - start_idx
 
-        faiss.write_index(
-            faiss.index_gpu_to_cpu(index) if self.use_gpu else index,
-            str(self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num))
-        )
-
-        if end_idx < xb.shape[0]:
-           self.add(xb[end_idx:])
+            faiss.write_index(
+                faiss.index_gpu_to_cpu(index) if self.use_gpu else index,
+                str(self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num))
+            )
 
     def merge_partial_indexes(self) -> None:
         """
