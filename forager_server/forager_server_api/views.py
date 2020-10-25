@@ -21,29 +21,67 @@ POST_HEADERS = {
     "Accept": "application/json",
 }
 
-def nest_anns(anns):
-    data = defaultdict(lambda: defaultdict(list))
-    for ann in anns:
-        # Only use most recent perframe ann
-        k = ann.dataset_item.pk
-        u = ann.label_function
-        data[k][u].append(ann)
+def nest_anns(anns, nest_category=True, nest_lf=True):
+    if nest_category and nest_lf:
+        data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+        for ann in anns:
+            # Only use most recent perframe ann
+            k = ann.dataset_item.pk
+            c = ann.label_category
+            u = ann.label_function
+            data[k][c][u].append(ann)
+    elif nest_category:
+        data = defaultdict(lambda: defaultdict(list))
+        for ann in anns:
+            # Only use most recent perframe ann
+            k = ann.dataset_item.pk
+            c = ann.label_category
+            data[k][c].append(ann)
+    elif nest_lf:
+        data = defaultdict(lambda: defaultdict(list))
+        for ann in anns:
+            # Only use most recent perframe ann
+            k = ann.dataset_item.pk
+            u = ann.label_function
+            data[k][u].append(ann)
+    else:
+        data = defaultdict(list)
+        for ann in anns:
+            # Only use most recent perframe ann
+            k = ann.dataset_item.pk
+            data[k].append(ann)
     return data
 
 
 def filter_most_recent_anns(nested_anns):
-    data = defaultdict(lambda: defaultdict(list))
-    for pk, label_fns_data in nested_anns.items():
-        for label_fn, anns in label_fns_data.items():
-            most_recent = None
-            for ann in anns:
-                if ann.label_type == 'klabel_frame':
-                    if most_recent is None or ann.created > most_recent.created:
-                        most_recent = ann
+    def filter_fn(anns):
+        filt_anns = []
+        most_recent = None
+        for ann in anns:
+            if ann.label_type == 'klabel_frame':
+                if most_recent is None or ann.created > most_recent.created:
+                    most_recent = ann
                 else:
-                    data[pk][label_fn].append(ann)
-            if most_recent:
-                data[pk][label_fn].append(most_recent)
+                    filt_anns.append(ann)
+        if most_recent:
+            filt_anns.append(most_recent)
+        return filt_anns
+
+    if isinstance(next(iter(nested_anns.items()))[1], list):
+       data = defaultdict(list)
+       for pk, anns in nested_anns.items():
+           data[pk] = filter_fn(anns)
+    if isinstance(next(iter(next(iter(nested_anns.items()))[1].items())), list):
+       data = defaultdict(lambda: defaultdict(list))
+       for pk, label_fns_data in nested_anns.items():
+           for label_fn, anns in label_fns_data.items():
+               data[pk][label_fn] = filter_fn(anns)
+    if isinstance(next(iter(next(iter(next(iter(nested_anns.items()))[1].items()))[1].items()))[1], list):
+       data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+       for pk, cat_fns_data in nested_anns.items():
+           for cat, label_fns_data in cat_fns_data.items():
+               for label_fn, anns in label_fns_data.items():
+                   data[pk][cat][label_fn] = filter_fn(anns)
     return data
 
 
@@ -481,7 +519,7 @@ def dump_annotations(request, dataset_name):
         dataset_item__in=dataset.datasetitem_set.filter())
     filtered_frame_anns = filter_most_recent_anns(
         nest_anns([ann for ann in anns
-         if ann.label_type == 'klabel_frame']))
+                   if ann.label_type == 'klabel_frame']))
 
     pk_to_img_id = {}
     for ann in anns:
@@ -495,25 +533,26 @@ def dump_annotations(request, dataset_name):
         3: 'hard_neg',
         4: 'unsure',
     }
-    output_data = defaultdict(dict)
-    for pk, label_functions_data in filtered_frame_anns.items():
+    output_data = defaultdict(lambda: defaultdict(dict))
+    for pk, cats_data in filtered_frame_anns.items():
         img_id = pk_to_img_id[pk]
-        for label_function, anns in label_functions_data.items():
-            label_value = None
-            bboxes = []
-            for ann in anns:
-                if ann.label_type == 'klabel_frame':
-                    label_value = json.loads(ann.label_data)['value']
-                else:
-                    label_data = json.loads(ann.label_data)
-                    bbox_data = label_data['bbox']
-                    bboxes.append(
-                        (bbox_data['bmin']['x'], bbox_data['bmin']['y'],
-                         bbox_data['bmax']['x'], bbox_data['bmax']['y']))
-            output_data[img_id][label_function] = {
-                'label': label_map[label_value],
-                'bboxes': bboxes,
-            }
+        for cat, label_functions_data in cats_data.items():
+            for label_function, anns in label_functions_data.items():
+                label_value = None
+                bboxes = []
+                for ann in anns:
+                    if ann.label_type == 'klabel_frame':
+                        label_value = json.loads(ann.label_data)['value']
+                    else:
+                        label_data = json.loads(ann.label_data)
+                        bbox_data = label_data['bbox']
+                        bboxes.append(
+                            (bbox_data['bmin']['x'], bbox_data['bmin']['y'],
+                             bbox_data['bmax']['x'], bbox_data['bmax']['y']))
+                output_data[img_id][cat][label_function] = {
+                    'label': label_map[label_value],
+                    'bboxes': bboxes,
+                }
     # Output
     # { image_id:
     #   {label_function:
@@ -535,7 +574,7 @@ def get_annotation_conflicts_helper(dataset_items, label_function, category):
 
     anns = Annotation.objects.filter(**filter_args)
 
-    data = filter_most_recent_anns(anns)
+    data = filter_most_recent_anns(nest_anns(anns, nest_category=False))
 
     # Analyze conflicts
     conflict_data = defaultdict(set)
