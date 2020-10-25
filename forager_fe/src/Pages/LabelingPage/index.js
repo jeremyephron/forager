@@ -266,10 +266,14 @@ function LabelingPage() {
     });
   }, [paths, identifiers])
 
+  //const [GetNextFrame, SetGetNextFrame] = useState(()=> async(currPage) => {})
+
   const getNextFrame = () => {
     var nextFrame = labeler.current_frame_index + 1;
-    return Math.min(nextFrame, paths.length)
+    return Math.min(nextFrame, labeler.frames.length)
   }
+
+  //const [HandleFetchImages, SetHandleFetchImages] = useState(()=> async(currPage) => {})
 
   const getPrevFrame = () => {
     // Move currFrame to prev, behavior dependent on mode
