@@ -3,7 +3,7 @@ import { useHistory } from 'react-router-dom';
 import styled from "styled-components";
 
 import { colors, baseUrl } from "../../../Constants";
-import { Button } from "../../../Components";
+import { Spinner, Button } from "../../../Components";
 
 const Container = styled.div`
   margin: 8vh auto 2vh auto;
@@ -13,6 +13,11 @@ const LabelButton = styled(Button)`
     height: 24px;
     font-size: 14px;
     box-shadow: 0 1px 2px 0 rgba(30,54,77,0.50);
+`;
+
+const TextHeader = styled.div`
+    font-size: 24px;
+    font-family: "AirBnbCereal-Book";
 `;
 
 const Table = styled.table`
@@ -58,7 +63,7 @@ const Table = styled.table`
   }
 `;
 
-const DatasetsTable = ({ datasets }) => {
+const DatasetsTable = ({ datasets, loadingLabels, setLoadingLabels }) => {
   const history = useHistory();
   const datasetInfoUrlBase = baseUrl + "/dataset/";
   const downloadLabelsUrlBase = baseUrl + "/dump_annotations/";
@@ -83,16 +88,25 @@ const DatasetsTable = ({ datasets }) => {
       a.click();
       a.remove();
     }
+    setLoadingLabels(true);
     const datasetInfo = await fetch(downloadLabelsUrlBase + datasetName, {
       credentials: 'include',
     }).then(results => results.blob())
     .then(blob => {
       let blobUrl = window.URL.createObjectURL(blob);
       forceDownload(blobUrl, datasetName + '.json');
+      setLoadingLabels(false);
     });
   }
 
-  if (datasets.length > 0) {
+  if (loadingLabels) {
+    return (
+      <div>
+      <TextHeader> Downloading labels... </TextHeader>
+      <Spinner className='loader' />
+      </div>
+    )
+  } else if (datasets.length > 0) {
     return (
       <Table>
         <thead>
@@ -150,6 +164,8 @@ const DatasetsTable = ({ datasets }) => {
 }
 
 const DatasetsTableView = () => {
+  const [loadingLabels, setLoadingLabels] = useState(false);
+
   const datasetsUrl = baseUrl + "/get_datasets";
   const history = useHistory();
   // const [loading, setLoading] = useState(false); // for future use
@@ -174,8 +190,9 @@ const DatasetsTableView = () => {
 
   return (
     <Container>
-      <DatasetsTable datasets={datasets} />
-      <Button onClick={() => history.push("/create")}>Create a new dataset</Button>
+      <DatasetsTable datasets={datasets} loadingLabels={loadingLabels} setLoadingLabels={setLoadingLabels}/>
+      {!loadingLabels &&
+       <Button onClick={() => history.push("/create")}>Create a new dataset</Button>}
     </Container>
   );
 }
