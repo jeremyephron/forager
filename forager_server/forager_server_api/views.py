@@ -490,10 +490,10 @@ def dump_annotations(request, dataset_name):
         pk_to_img_id[pk] = img_id
 
     label_map = {
-        0: 'pos',
-        1: 'neg',
-        2: 'hard_neg',
-        3: 'unsure',
+        1: 'pos',
+        2: 'neg',
+        3: 'hard_neg',
+        4: 'unsure',
     }
     output_data = defaultdict(dict)
     for pk, label_functions_data in filtered_frame_anns.items():
