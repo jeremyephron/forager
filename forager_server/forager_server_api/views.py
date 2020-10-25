@@ -1,6 +1,7 @@
 import json
 import os
 import requests
+import time
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from google.cloud import storage
@@ -20,17 +21,46 @@ POST_HEADERS = {
     "Accept": "application/json",
 }
 
-
-def filter_most_recent_anns(anns):
-    data = defaultdict(dict)
+def nest_anns(anns):
+    data = defaultdict(lambda: defaultdict(list))
     for ann in anns:
         # Only use most recent perframe ann
         k = ann.dataset_item.pk
         u = ann.label_function
-        if k in data and u in data[k] and data[k][u].created > ann.created:
-            continue
-        data[k][u] = ann
+        data[k][u].append(ann)
     return data
+
+
+def filter_most_recent_anns(nested_anns):
+    data = defaultdict(lambda: defaultdict(list))
+    for pk, label_fns_data in nested_anns.items():
+        for label_fn, anns in label_fns_data.items():
+            most_recent = None
+            for ann in anns:
+                if ann.label_type == 'klabel_frame':
+                    if most_recent is None or ann.created > most_recent.created:
+                        most_recent = ann
+                else:
+                    data[pk][label_fn].append(ann)
+            if most_recent:
+                data[pk][label_fn].append(most_recent)
+    return data
+
+
+def aggregate_frame_anns_majority(anns):
+    agg_anns = {}
+    for img_id, data in anns.items():
+        label_values = defaultdict(int)
+        for label_function, ann in data.items():
+            label_values[json.loads(ann.label_data)['value']] += 1
+        max_k = None
+        max_c = -1
+        for k, c in label_values.items():
+            if c > max_c:
+                max_k = k
+                max_c = c
+        agg_anns[img_id] = max_k
+    return agg_anns
 
 
 @api_view(['GET'])
@@ -319,7 +349,6 @@ def get_results(request, dataset_name):
 @api_view(['GET'])
 @csrf_exempt
 def get_annotations(request, dataset_name):
-    print(request.GET['identifiers'])
     if len(request.GET['identifiers']) == 0:
         return JsonResponse({})
 
@@ -378,7 +407,9 @@ def get_annotations_summary(request, dataset_name):
                 func_cat_anns = anns.filter(
                     label_function=label_function,
                     label_category=label_category)
-                filtered_anns = filter_most_recent_anns(func_cat_anns)
+                filtered_frame_anns = filter_most_recent_anns(
+                    nest_anns(func_cat_anns))
+
                 count = 0
                 label_value_totals = defaultdict(int)
                 # filter to most recent ann per image
@@ -404,7 +435,7 @@ def get_annotations_summary(request, dataset_name):
                     label_category_values[label_category][label_value] += total
     elif False:
         # For each user, find num unique annotations
-        filtered_anns = filter_most_recent_anns(func_cat_anns)
+        filtered_anns = filter_most_recent_anns(nest_anns(func_cat_anns))
         counts = defaultdict(lambda: defaultdict(int))
         for im_id, data in filtered_anns.items():
             for label_function, anns in data.items():
@@ -437,8 +468,62 @@ def get_annotations_summary(request, dataset_name):
         'category_totals': label_category_values,
     }
 
+
     return JsonResponse(data)
 
+
+@api_view(['GET'])
+@csrf_exempt
+def dump_annotations(request, dataset_name):
+    dataset = Dataset.objects.get(name=dataset_name)
+    total_images = dataset.datasetitem_set.count()
+    anns = Annotation.objects.filter(
+        dataset_item__in=dataset.datasetitem_set.filter())
+    filtered_frame_anns = filter_most_recent_anns(
+        nest_anns([ann for ann in anns
+         if ann.label_type == 'klabel_frame']))
+
+    pk_to_img_id = {}
+    for ann in anns:
+        pk = ann.dataset_item.pk
+        img_id = ann.dataset_item.identifier
+        pk_to_img_id[pk] = img_id
+
+    label_map = {
+        0: 'pos',
+        1: 'neg',
+        2: 'hard_neg',
+        3: 'unsure',
+    }
+    output_data = defaultdict(dict)
+    for pk, label_functions_data in filtered_frame_anns.items():
+        img_id = pk_to_img_id[pk]
+        for label_function, anns in label_functions_data.items():
+            label_value = None
+            bboxes = []
+            for ann in anns:
+                if ann.label_type == 'klabel_frame':
+                    label_value = json.loads(ann.label_data)['value']
+                else:
+                    label_data = json.loads(ann.label_data)
+                    bbox_data = label_data['bbox']
+                    bboxes.append(
+                        (bbox_data['bmin']['x'], bbox_data['bmin']['y'],
+                         bbox_data['bmax']['x'], bbox_data['bmax']['y']))
+            output_data[img_id][label_function] = {
+                'label': label_map[label_value],
+                'bboxes': bboxes,
+            }
+    # Output
+    # { image_id:
+    #   {label_function:
+    #     {label: 'pos' OR 'neg' OR 'unsure',
+    #      bboxes: [(top_left_x, top_left_y, bottom_right_x, bottom_right_y)]
+    #     }
+    #   }
+    # }
+
+    return JsonResponse(output_data)
 
 def get_annotation_conflicts_helper(dataset_items, label_function, category):
     filter_args = dict(
@@ -464,8 +549,6 @@ def get_annotation_conflicts_helper(dataset_items, label_function, category):
                 continue
             label_value = json.loads(ann.label_data)
             if label_value['value'] != user_label_value['value']:
-                print('conflict label',
-                      label_value['value'], user_label_value['value'])
                 conflict_data[image_id].add(ann.label_function)
     return conflict_data
 

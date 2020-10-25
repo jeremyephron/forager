@@ -61,6 +61,7 @@ const Table = styled.table`
 const DatasetsTable = ({ datasets }) => {
   const history = useHistory();
   const datasetInfoUrlBase = baseUrl + "/dataset/";
+  const downloadLabelsUrlBase = baseUrl + "/dump_annotations/";
 
   const fetchDatasetInfo = async ( datasetName ) => {
     const datasetInfo = await fetch(datasetInfoUrlBase + datasetName, {
@@ -70,6 +71,24 @@ const DatasetsTable = ({ datasets }) => {
       datasetName: datasetInfo.datasetName,
       paths: datasetInfo.paths,
       identifiers: datasetInfo.identifiers
+    });
+  }
+  const downloadLabels = async ( datasetName ) => {
+    function forceDownload(blob, filename) {
+      var a = document.createElement('a');
+      a.download = filename;
+      a.href = blob;
+      // For Firefox https://stackoverflow.com/a/32226068
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+    const datasetInfo = await fetch(downloadLabelsUrlBase + datasetName, {
+      credentials: 'include',
+    }).then(results => results.blob())
+    .then(blob => {
+      let blobUrl = window.URL.createObjectURL(blob);
+      forceDownload(blobUrl, datasetName + '.json');
     });
   }
 
@@ -83,6 +102,7 @@ const DatasetsTable = ({ datasets }) => {
           <th>No. Labels</th>
           <th>Last Labeled</th>
           <th></th>
+          <th></th>
         </tr>
         </thead>
         <tbody>
@@ -95,6 +115,11 @@ const DatasetsTable = ({ datasets }) => {
               <td>
                 <LabelButton alt="true" onClick={() => fetchDatasetInfo(dataset.name)}>
                   Label
+                </LabelButton>
+              </td>
+              <td>
+                <LabelButton alt="true" onClick={() => downloadLabels(dataset.name)}>
+                  Dump Labels
                 </LabelButton>
               </td>
             </tr>
