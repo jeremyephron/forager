@@ -223,6 +223,13 @@ async def query_index(request):
     ]  # [0, 1]^2
     index_id = request.form["index_id"][0]
     num_results = int(request.form["num_results"][0])
+    augmentations = request.form["augmentations"]
+    
+    augmentation_dict = {}
+    for i in range(len(augmentations)//2):
+        augmentation_dict[augmentations[2*i]] = float(augmentations[2*i+1])
+    
+    print(augmentation_dict)
 
     cluster_data = current_clusters[cluster_id]
     await cluster_data.ready.wait()
@@ -237,7 +244,7 @@ async def query_index(request):
     )
     query_vector = await job.run_until_complete(
         [
-            {"image": image_path, "patch": patch}
+            {"image": image_path, "patch": patch, "augmentations": augmentation_dict}
             for image_path, patch in zip(image_paths, patches)
         ]
     )

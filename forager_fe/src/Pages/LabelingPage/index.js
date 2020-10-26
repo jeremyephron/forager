@@ -302,7 +302,7 @@ function LabelingPage() {
 
       var url;
       var res;
-      if (method.localeCompare("knn") === 0 || method.localeCompare("spatialKnn") === 0) {
+      if (true || method.localeCompare("knn") === 0 || method.localeCompare("spatialKnn") === 0) {
         // Get relevant frames
         if (labeler.current_indices.length === 0) {
           labeler.current_indices = [labeler.get_current_frame_num()]
@@ -318,12 +318,15 @@ function LabelingPage() {
           }
         }
 
+        var augmentations=["rotate:15","flip:1"]
+
         url = new URL(lookupKnnUrl);
         url.search = new URLSearchParams({
           ann_identifiers:  filteredAnnotations.map(ann => ann.identifier),
           cluster_id: clusterRef.current.id,
           index_id: indexRef.current.id,
-          use_full_image: (method.localeCompare("knn") === 0)
+          use_full_image: (method.localeCompare("knn") === 0),
+          augmentations: augmentations
         }).toString();
         res = await fetch(url, {method: "GET",
           credentials: 'include',

@@ -1,6 +1,6 @@
 project=`gcloud config get-value project 2> /dev/null`
 folder=mapper
-name=mihir-demo-${PWD##*/}
+name=vishnu-demo-${PWD##*/}
 region=us-central1
 root_path=../..
 

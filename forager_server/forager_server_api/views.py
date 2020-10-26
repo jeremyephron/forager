@@ -662,6 +662,7 @@ def lookup_knn(request, dataset_name):
     ann_identifiers = [int(x) for x in request.GET['ann_identifiers'].split(',')]
     cluster_id = request.GET['cluster_id']
     index_id = request.GET['index_id']
+    augmentations = [x.split(":") for x in request.GET['augmentations'].split(',')]
 
     # 1. Retrieve dataset info from db
     dataset = Dataset.objects.get(name=dataset_name)
@@ -687,6 +688,7 @@ def lookup_knn(request, dataset_name):
         "bucket": bucket_name,
         "paths": paths,
         "patches": json.dumps(patches),
+        "augmentations": augmentations,
         "num_results": 100,
     }
     r = requests.post(

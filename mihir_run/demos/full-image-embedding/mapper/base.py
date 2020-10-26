@@ -4,8 +4,9 @@ import os
 import aiohttp
 from gcloud.aio.storage import Storage
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageEnhance
 import torch
+from torchvision.transforms import transforms
 
 from detectron2.layers import ShapeSpec
 from detectron2.checkpoint.detection_checkpoint import DetectionCheckpointer
@@ -32,12 +33,31 @@ class ResNetBackboneMapper(Mapper):
         self.normalize = lambda image: (image - pixel_mean) / pixel_std
         self.input_format = cfg.INPUT.FORMAT
 
+        # Set up possible augmentations
+        cl_enhancer = ImageEnhance.Color(image)
+        cn_enhancer = ImageEnhance.Contrast(image)
+
+        def brightness(image, factor):
+            br_enhancer = ImageEnhance.Brightness(image)
+            return br_enhancer.enhance(factor)
+        
+        def contrast(image, factor):
+            cn_enhancer = ImageEnhance.Contrast(image)
+            return cn_enhancer.enhance(factor)
+
+        self.flip = lambda image: image.transpose(Image.FLIP_LEFT_RIGHT)
+        self.grayscale = lambda image: image.convert('L')
+        self.brightness = brightness
+        self.contrast = contrast
+        self.resize = lambda image, params: image.resize((params[0], params[1]))
+        self.rotate = lambda image, angle: image.rotate(angle)
+
         # Create connection pools
         self.session = aiohttp.ClientSession()
         self.storage_client = Storage(session=self.session)
 
     async def download_and_process_image(
-        self, image_bucket, image_path, request_id, num_retries=4
+        self, image_bucket, image_path, image_patch, augmentations, request_id, num_retries=4
     ):
         # Download image
         for i in range(num_retries):
@@ -60,6 +80,26 @@ class ResNetBackboneMapper(Mapper):
 
                 # Preprocess
                 image = image.convert("RGB")
+
+                # Crop
+                x1f, y1f, x2f, y2f = image_patch
+                w, h = image.size
+                image = image.crop((int)(x1f*w), (int)(y1f*h), (int)(x2f*w), (int)(y2f*h))
+
+                # Apply transformations (augmentations is a dict)
+                if ("flip" in augmentations):  
+                    image = self.flip(image)
+                if ("gray" in augmentations):
+                    image = self.grayscale(image)
+                if ("brightness" in augmentations):
+                    image = self.brighten(image, augmentations["brightness"])
+                if ("contrast" in augmentations):
+                    image = self.brighten(image, augmentations["contrast"])
+                if ("resize" in augmentations):
+                    image = self.rescale(image, augmentations["resize"])
+                if ("rotate" in augmentations):
+                    image = self.rotate(image, augmentations["rotate"])
+
                 image = torch.as_tensor(
                     np.asarray(image), dtype=torch.float32
                 )  # -> tensor
