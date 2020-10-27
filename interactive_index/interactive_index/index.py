@@ -215,7 +215,7 @@ class InteractiveIndex:
                 cantor_pairing(ids[i], ids_extra[i]) for i in range(len(ids))
             ])
 
-        index.add_with_ids(xb[:end_idx], ids)
+        index.add_with_ids(xb[:end_idx], ids[:end_idx])
         self.n_vectors += end_idx
 
 
@@ -225,7 +225,7 @@ class InteractiveIndex:
         )
 
         if end_idx < xb.shape[0]:
-           self.add(xb[end_idx:])
+           self.add(xb[end_idx:].copy(), ids[end_idx:].copy())
 
     def merge_partial_indexes(self) -> None:
         """
@@ -271,14 +271,17 @@ class InteractiveIndex:
 
     def cleanup(self) -> None:
         """Deletes all persistent files associated with this index."""
+        def unlink(path):
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
 
-        (self.tempdir/self.TRAINED_INDEX_NAME).unlink(missing_ok=True)
-        (self.tempdir/self.MERGED_INDEX_NAME).unlink(missing_ok=True)
-        (self.tempdir/self.MERGED_INDEX_DATA_NAME).unlink(missing_ok=True)
+        unlink(self.tempdir/self.TRAINED_INDEX_NAME)
+        unlink(self.tempdir/self.MERGED_INDEX_NAME)
+        unlink(self.tempdir/self.MERGED_INDEX_DATA_NAME)
         for shard_num in range(self.n_indexes):
-            (self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num)).unlink(
-                missing_ok=True
-            )
+            unlink(self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num))
 
     #####################
     # Private Functions #
@@ -365,4 +368,3 @@ class InteractiveIndex:
         search_str = f'IVF{n_centroids}'
 
         return ','.join([transform_str, search_str, encoding_str])
-

@@ -1,6 +1,6 @@
 project=`gcloud config get-value project 2> /dev/null`
 folder=mapper
-name=mihir-demo-${PWD##*/}
+name=mihir-full-image-embedding-spatial
 region=us-central1
 root_path=../..
 
