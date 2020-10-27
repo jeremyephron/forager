@@ -55,6 +55,10 @@ function BuildIndex({ dataset }) {
     const response = await fetch(API_BASE + endpoint, {
       method: "POST",
       credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({cluster_id: cluster.id}),
     }).then(response => response.json());
     dispatch({
       'type': 'SET_INDEX_ID',
