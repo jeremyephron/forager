@@ -233,8 +233,8 @@ class ExpiringDict(MutableMapping[KT, VT]):
         asyncio.run(self.clear_async())
 
     async def cleanup_key(self, key: KT) -> None:
-        await self.cleanup_func(self.store[key])
-        del self[key]
+        await self.cleanup_func(self.store.pop(key))
+        del self.last_accessed[key]
 
     async def clear_async(self) -> None:
         await asyncio.gather(*map(self.cleanup_key, self.store.keys()))
