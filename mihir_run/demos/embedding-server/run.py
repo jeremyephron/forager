@@ -160,8 +160,9 @@ async def start_job(request):
     index_id = job.job_id
     current_jobs[index_id] = job
 
+    augmentation_dict = {}
     # Construct input iterable
-    iterable = [{"image": path} for path in paths]
+    iterable = [{"image": path, "augmentations": augmentation_dict} for path in paths]
     callback_func = functools.partial(_handle_job_result, index_id=index_id)
     await job.start(iterable, callback_func)
 
