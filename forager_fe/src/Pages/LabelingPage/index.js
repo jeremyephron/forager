@@ -318,7 +318,13 @@ function LabelingPage() {
           }
         }
 
-        var augmentations=["rotate:15","flip:1"]
+        // Get augmentations
+        var augmentations = []
+        var augSelect = document.getElementById("augmentations");
+        var augParams = document.getElementById("augmentationParams");
+        for (var i = 0; i < augSelect.length; i++) {
+            if (augSelect.options[i].selected) augmentations.push(augSelect.options[i].value + ":" + augParams.value);
+        }
 
         url = new URL(lookupKnnUrl);
         url.search = new URLSearchParams({
@@ -802,7 +808,9 @@ function LabelingPage() {
           </datalist>
           <OptionsSelect alt="true" id="fetch_image_mode">
             <option value="random">Random</option>
-            <option value="knn">KNN</option>
+            {cluster.status === 'CLUSTER_STARTED' &&
+            index.status == 'INDEX_BUILT' &&
+            <option value="knn">KNN</option>}
             {cluster.status === 'CLUSTER_STARTED' &&
             index.status == 'INDEX_BUILT' &&
             <option value="spatialKnn">Spatial KNN</option>}
@@ -810,6 +818,15 @@ function LabelingPage() {
             index.status == 'INDEX_BUILT' &&
             <option value="svm">Category SVM</option>}
           </OptionsSelect>
+          <select id="augmentations" size="1" multiple>
+            <option>flip</option>
+            <option>gray</option>
+            <option>brightness</option>
+            <option>resize</option>
+            <option>rotate</option>
+            <option>contrast</option>
+          </select>
+          <input id="augmentationParam" style={{width: "70px"}}></input>
           <FetchButton id="filter_button">Apply Filter</FetchButton>
         </RowContainer>
         <MainCanvas numTotalFilteredImages={numTotalFilteredImages} onCategory={OnLabel} onUser={OnLabel} annotationsSummary={annotationsSummary}/>
