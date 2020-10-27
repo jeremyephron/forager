@@ -14,7 +14,8 @@ const BuildButton = styled(Button)`
 `;
 
 const API_BASE = baseUrl;
-const CREATE_INDEX_ENDPOINT = "/create_index/";
+const CREATE_INDEX_ENDPOINT = "/create_index";
+const DELETE_INDEX_ENDPOINT = "/delete_index";
 const STATUS_POLL_INTERVAL = 3000;  // ms
 
 function BuildIndex({ dataset }) {
@@ -25,31 +26,35 @@ function BuildIndex({ dataset }) {
   });
   const dispatch = useDispatch();
 
-  let text = 'Build KNN index';
-  let enabled = false;
+  let text;
+  let enabled;
 
-  if (cluster.status === 'CLUSTER_STARTED') {
-    if (index.id) {
-      if (index.status === 'INDEX_BUILT') {
-        text = 'KNN index built!'
-      } else {
-        text = 'Building...'
-      }
-    } else {
+  if (index.id) {
+    if (index.status === 'INDEX_BUILT') {
+      text = 'Delete KNN index';
       enabled = true;
+    } else {
+      text = 'Building...';
+      enabled = false;
     }
+  } else {
+    let text = 'Build KNN index';
+    enabled = cluster.status === 'CLUSTER_STARTED';
   }
 
   const handleClick = async () => {
-    if (!enabled) return;
+    let endpoint;
+    if (!enabled) {
+      return;
+    } else if (index.id) {
+      endpoint = DELETE_INDEX_ENDPOINT + '/' + index.id;
+    } else {
+      endpoint = CREATE_INDEX_ENDPOINT + '/' + dataset;
+    }
 
-    const response = await fetch(API_BASE + CREATE_INDEX_ENDPOINT + dataset, {
+    const response = await fetch(API_BASE + endpoint, {
       method: "POST",
       credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({cluster_id: cluster.id})
     }).then(response => response.json());
     dispatch({
       'type': 'SET_INDEX_ID',

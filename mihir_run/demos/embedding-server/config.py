@@ -3,9 +3,8 @@ GCP_ZONE = "us-central1-a"
 GCP_MACHINE_TYPE = "n2-highcpu-4"
 
 OUTPUT_FILENAME = "lvis-embeddings.npy"
-MAPPER_CONTAINER = "gcr.io/visualdb-1046/mihir-demo-full-image-embedding"
+MAPPER_CONTAINER = "gcr.io/visualdb-1046/mihir-full-image-embedding-spatial"
 
-JOB_CLEANUP_TIME = 60 * 60  # 1 hour
 N_RETRIES = 1
 CHUNK_SIZE = 1
 
@@ -22,3 +21,6 @@ INDEX_USE_GPU = False
 INDEX_TRAIN_MULTIPLE = 39
 
 INDEX_FLUSH_SLEEP = 5  # seconds
+
+CLEANUP_TIMEOUT = 30 * 60  # seconds
+CLEANUP_INTERVAL = CLEANUP_TIMEOUT // 4

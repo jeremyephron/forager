@@ -13,7 +13,8 @@ from sanic import Sanic
 import sanic.response as resp
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+
+from typing import Awaitable, Callable, Dict, TypeVar, Optional, MutableMapping
 
 from knn import utils
 from knn.jobs import MapReduceJob, MapperSpec
@@ -187,15 +188,98 @@ class LabeledIndexReducer(Reducer):
         return [(self.labels[i], d) for i, d in sorted_id_dist_tuples]
 
 
-# Global data
-current_clusters = {}  # type: Dict[str, ClusterData]
-current_jobs = {}  # type: Dict[str, MapReduceJob]
-current_indexes = {}  # type: Dict[str, LabeledIndexReducer]
+KT = TypeVar("KT")
+VT = TypeVar("VT")
+
+
+class ExpiringDict(MutableMapping[KT, VT]):
+    def __init__(
+        self,
+        sanic_app: Sanic,
+        cleanup_func: Callable[[VT], Awaitable[None]],
+        timeout: float,
+        interval: float,
+    ) -> None:
+        self.schedule = sanic_app.add_task
+        self.cleanup_func = cleanup_func
+        self.timeout = timeout
+        self.interval = interval
+
+        self.store: Dict[KT, VT] = {}
+        self.last_accessed: Dict[KT, float] = {}
+
+        self.schedule(self.sleep_and_cleanup())
+
+    def __getitem__(self, key: KT) -> VT:
+        value = self.store[key]
+        self.last_accessed[key] = time.time()
+        return value
+
+    def __setitem__(self, key: KT, value: VT) -> None:
+        self.store[key] = value
+        self.last_accessed[key] = time.time()
+
+    def __delitem__(self, key: KT) -> None:
+        del self.store[key]
+        del self.last_accessed[key]
+
+    def __iter__(self):
+        raise NotImplementedError()
+
+    def __len__(self) -> int:
+        return len(self.store)
+
+    def clear(self) -> None:
+        asyncio.run(self.clear_async())
+
+    async def cleanup_key(self, key: KT) -> None:
+        await self.cleanup_func(self.store[key])
+        del self[key]
+
+    async def clear_async(self) -> None:
+        await asyncio.gather(*map(self.cleanup_key, self.store.keys()))
+
+    async def sleep_and_cleanup(self) -> None:
+        await asyncio.sleep(self.interval)
+
+        current = time.time()
+        keys_to_delete = [
+            k for k, v in self.last_accessed.items() if current - v > self.timeout
+        ]
+        await asyncio.gather(*map(self.cleanup_key, keys_to_delete))
+
+        self.schedule(self.sleep_and_cleanup())
 
 
 # Start web server
 app = Sanic(__name__)
 app.update_config({"RESPONSE_TIMEOUT": 10 * 60})  # 10 minutes
+
+
+async def _stop_cluster(cluster_data):
+    await cluster_data.started.wait()
+    await cluster_data.cluster.stop()
+
+
+async def _stop_job(job):
+    await job.stop()
+    job.reducer.delete()
+
+
+async def _delete_index(index):
+    index.delete()
+
+
+# Global data
+current_clusters = ExpiringDict(
+    app, _stop_cluster, config.CLEANUP_TIMEOUT, config.CLEANUP_INTERVAL
+)  # type: ExpiringDict[str, ClusterData]
+current_jobs = ExpiringDict(
+    app, _stop_job, config.CLEANUP_TIMEOUT, config.CLEANUP_INTERVAL
+)  # type: ExpiringDict[str, MapReduceJob]
+current_indexes = ExpiringDict(
+    app, _delete_index, config.CLEANUP_TIMEOUT, config.CLEANUP_INTERVAL
+)  # type: ExpiringDict[str, LabeledIndexReducer]
 
 
 # CLUSTER MANAGEMENT
@@ -247,11 +331,6 @@ async def stop_cluster(request):
     return resp.text("", status=204)
 
 
-async def _stop_cluster(cluster_data):
-    await cluster_data.started.wait()
-    await cluster_data.cluster.stop()
-
-
 # EMBEDDING COMPUTATION
 @app.route("/start_job", methods=["POST"])
 async def start_job(request):
@@ -281,19 +360,8 @@ async def start_job(request):
     return resp.json({"index_id": index_id})
 
 
-async def _stop_job(job):
-    await job.stop()
-    job.reducer.delete()
-
-
 def _handle_job_result(index, index_id):
     current_indexes[index_id] = index
-    asyncio.create_task(_cleanup_job(index_id))
-
-
-async def _cleanup_job(index_id):
-    await asyncio.sleep(config.JOB_CLEANUP_TIME)
-    current_jobs.pop(index_id, None)  # don't throw error if already deleted
 
 
 @app.route("/job_status", methods=["GET"])
@@ -321,7 +389,7 @@ async def job_status(request):
 @app.route("/stop_job", methods=["POST"])
 async def stop_job(request):
     index_id = request.json["index_id"]
-    await current_jobs.pop(index_id).stop()
+    await _stop_job(current_jobs.pop(index_id))
     return resp.text("", status=204)
 
 
@@ -372,7 +440,7 @@ async def query_index(request):
 @app.route("/delete_index", methods=["POST"])
 async def delete_index(request):
     index_id = request.form["index_id"][0]
-    current_indexes.pop(index_id).delete()
+    await _delete_index(current_indexes.pop(index_id))
     return resp.text("", status=204)
 
 
@@ -433,20 +501,19 @@ async def cleanup(app, loop):
 
 async def _cleanup_jobs():
     n = len(current_jobs)
-    await asyncio.gather(*map(_stop_job, current_jobs.values()))
+    await current_jobs.clear_async()
     print(f"- stopped {n} jobs")
 
 
 async def _cleanup_clusters():
     n = len(current_clusters)
-    await asyncio.gather(*map(_stop_cluster, current_clusters.values()))
+    await current_clusters.clear_async()
     print(f"- killed {n} clusters")
 
 
 async def _cleanup_indexes():
     n = len(current_indexes)
-    for index in current_indexes.values():
-        index.delete()
+    await current_indexes.clear_async()
     print(f"- deleted {n} indexes")
 
 
