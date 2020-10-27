@@ -91,6 +91,8 @@ async def _start_cluster(cluster_data):
     )
     cluster_data.deployment_id = deployment_id
     cluster_data.service_url = service_url
+    print("Service url: ")
+    print(service_url)
     cluster_data.ready.set()
 
 

@@ -8,13 +8,13 @@ import config
 
 
 class ImageEmbeddingMapper(ResNetBackboneMapper):
-    @Mapper.SkipIfError
     # input, job args govern data
     async def process_element(self, input, job_id, job_args, request_id, element_index):
         image_bucket = job_args["input_bucket"]
         image_path = input["image"]
         augmentations = input["augmentations"]
         x1f, y1f, x2f, y2f = input.get("patch", (0, 0, 1, 1))
+        print(input)
 
         spatial_embeddings_dict = await self.download_and_process_image(
             image_bucket, image_path, [x1f, y1f, x2f, y2f], augmentations, request_id

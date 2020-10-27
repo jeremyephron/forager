@@ -34,8 +34,6 @@ class ResNetBackboneMapper(Mapper):
         self.input_format = cfg.INPUT.FORMAT
 
         # Set up possible augmentations
-        cl_enhancer = ImageEnhance.Color(image)
-        cn_enhancer = ImageEnhance.Contrast(image)
 
         def brightness(image, factor):
             br_enhancer = ImageEnhance.Brightness(image)
@@ -82,9 +80,12 @@ class ResNetBackboneMapper(Mapper):
                 image = image.convert("RGB")
 
                 # Crop
-                x1f, y1f, x2f, y2f = image_patch
-                w, h = image.size
-                image = image.crop((int)(x1f*w), (int)(y1f*h), (int)(x2f*w), (int)(y2f*h))
+                if image_patch:
+                    print("Image patch:")
+                    print(image_patch)
+                    x1f, y1f, x2f, y2f = image_patch
+                    w, h = image.size
+                    image = image.crop(((int)(x1f*w), (int)(y1f*h), (int)(x2f*w), (int)(y2f*h)))
 
                 # Apply transformations (augmentations is a dict)
                 if ("flip" in augmentations):  

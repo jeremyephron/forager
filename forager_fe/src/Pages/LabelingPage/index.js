@@ -302,7 +302,7 @@ function LabelingPage() {
 
       var url;
       var res;
-      if (true || method.localeCompare("knn") === 0 || method.localeCompare("spatialKnn") === 0) {
+      if (method.localeCompare("knn") === 0 || method.localeCompare("spatialKnn") === 0) {
         // Get relevant frames
         if (labeler.current_indices.length === 0) {
           labeler.current_indices = [labeler.get_current_frame_num()]
@@ -802,9 +802,7 @@ function LabelingPage() {
           </datalist>
           <OptionsSelect alt="true" id="fetch_image_mode">
             <option value="random">Random</option>
-            {cluster.status === 'CLUSTER_STARTED' &&
-            index.status == 'INDEX_BUILT' &&
-            <option value="knn">KNN</option>}
+            <option value="knn">KNN</option>
             {cluster.status === 'CLUSTER_STARTED' &&
             index.status == 'INDEX_BUILT' &&
             <option value="spatialKnn">Spatial KNN</option>}
