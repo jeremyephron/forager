@@ -38,7 +38,7 @@ function BuildIndex({ dataset }) {
       enabled = false;
     }
   } else {
-    let text = 'Build KNN index';
+    text = 'Build KNN index';
     enabled = cluster.status === 'CLUSTER_STARTED';
   }
 
