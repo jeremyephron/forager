@@ -321,7 +321,7 @@ function LabelingPage() {
         // Get augmentations
         var augmentations = []
         var augSelect = document.getElementById("augmentations");
-        var augParams = document.getElementById("augmentationParams");
+        var augParams = document.getElementById("augmentationParam");
         for (var i = 0; i < augSelect.length; i++) {
             if (augSelect.options[i].selected) augmentations.push(augSelect.options[i].value + ":" + augParams.value);
         }

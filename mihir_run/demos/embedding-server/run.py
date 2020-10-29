@@ -226,7 +226,10 @@ async def query_index(request):
     ]  # [0, 1]^2
     index_id = request.form["index_id"][0]
     num_results = int(request.form["num_results"][0])
-    augmentations = request.form["augmentations"]
+    augmentations = []
+    if "augmentations" in request.form:
+        augmentations = request.form["augmentations"]
+    print(augmentations)
     
     augmentation_dict = {}
     for i in range(len(augmentations)//2):

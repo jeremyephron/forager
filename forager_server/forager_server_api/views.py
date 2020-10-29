@@ -663,6 +663,8 @@ def lookup_knn(request, dataset_name):
     cluster_id = request.GET['cluster_id']
     index_id = request.GET['index_id']
     augmentations = [x.split(":") for x in request.GET['augmentations'].split(',')]
+    print("Augmentations: ")
+    print(augmentations)
 
     # 1. Retrieve dataset info from db
     dataset = Dataset.objects.get(name=dataset_name)

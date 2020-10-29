@@ -93,9 +93,9 @@ class ResNetBackboneMapper(Mapper):
                 if ("gray" in augmentations):
                     image = self.grayscale(image)
                 if ("brightness" in augmentations):
-                    image = self.brighten(image, augmentations["brightness"])
+                    image = self.brightness(image, augmentations["brightness"])
                 if ("contrast" in augmentations):
-                    image = self.brighten(image, augmentations["contrast"])
+                    image = self.contrast(image, augmentations["contrast"])
                 if ("resize" in augmentations):
                     image = self.rescale(image, augmentations["resize"])
                 if ("rotate" in augmentations):
