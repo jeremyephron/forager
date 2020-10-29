@@ -47,7 +47,7 @@ class ResNetBackboneMapper(Mapper):
         self.grayscale = lambda image: image.convert('L')
         self.brightness = brightness
         self.contrast = contrast
-        self.resize = lambda image, params: image.resize((params[0], params[1]))
+        self.resize = lambda image, params: image.resize(((int)(params*image.size[0]), (int)(params*image.size[1])))
         self.rotate = lambda image, angle: image.rotate(angle)
 
         # Create connection pools
