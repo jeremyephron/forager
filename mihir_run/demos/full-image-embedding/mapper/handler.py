@@ -27,10 +27,15 @@ class ImageEmbeddingMapper(ResNetBackboneMapper):
                 n, c, h, w = spatial_embeddings.size()
                 assert n == 1
 
-                embedding = (
-                    spatial_embeddings.mean(dim=-1).mean(dim=-1)
+                # Come back and revisit whether to do this
+                # x1 = int(math.floor(x1f * w))
+                # y1 = int(math.floor(y1f * h))
+                # x2 = int(math.ceil(x2f * w))
+                # y2 = int(math.ceil(y2f * h))
+
+                result[layer] = utils.numpy_to_base64(
+                    spatial_embeddings.numpy()
                 )
-                result[layer] = utils.numpy_to_base64(embedding.numpy())
 
             return result
 

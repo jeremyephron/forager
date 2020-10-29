@@ -58,7 +58,7 @@ function ClusterStatus() {
     if (cluster.status === 'CLUSTER_NOT_STARTED') {
       endpoint = START_CLUSTER_ENDPOINT;
     } else if (cluster.status === 'CLUSTER_STARTED') {
-      endpoint = STOP_CLUSTER_ENDPOINT;
+      endpoint = STOP_CLUSTER_ENDPOINT + '/' + cluster.id;
     } else {
       return;
     }
@@ -66,10 +66,6 @@ function ClusterStatus() {
     const response = await fetch(API_BASE + endpoint, {
       method: "POST",
       credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({cluster_id: cluster.id})
     }).then(response => response.json());
     dispatch({
       'type': 'SET_CLUSTER_ID',

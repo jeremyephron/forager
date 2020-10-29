@@ -151,9 +151,8 @@ def get_cluster_status(request, cluster_id):
 
 @api_view(['POST'])
 @csrf_exempt
-def stop_cluster(request):
-    data = json.loads(request.body)
-    params = {"cluster_id": data["cluster_id"]}
+def stop_cluster(request, cluster_id):
+    params = {"cluster_id": cluster_id}
     requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/stop_cluster",
         data=params,
@@ -201,6 +200,20 @@ def get_index_status(request, index_id):
     )
     response_data = r.json()
     return JsonResponse(response_data)
+
+
+@api_view(['POST'])
+@csrf_exempt
+def delete_index(request, index_id):
+    params = {"index_id": index_id}
+    requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/delete_index",
+        data=params,
+        headers=POST_HEADERS,
+    )
+    return JsonResponse({
+        "status": "success",
+    })
 
 
 @api_view(['POST'])
@@ -665,6 +678,7 @@ def lookup_knn(request, dataset_name):
     augmentations = [x.split(":") for x in request.GET['augmentations'].split(',')]
     print("Augmentations: ")
     print(augmentations)
+    use_full_image = 'use_full_image' in request.GET
 
     # 1. Retrieve dataset info from db
     dataset = Dataset.objects.get(name=dataset_name)
@@ -692,6 +706,7 @@ def lookup_knn(request, dataset_name):
         "patches": json.dumps(patches),
         "augmentations": augmentations,
         "num_results": 100,
+        "use_full_image": use_full_image,
     }
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/query_index",
