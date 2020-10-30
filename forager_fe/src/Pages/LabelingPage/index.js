@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 
-import { colors, baseUrl } from "../../Constants";
+import { colors, baseUrl, apiKey } from "../../Constants";
 import { MainCanvas, ImageGrid, BuildIndex } from "./Components";
 import { Button, Select } from "../../Components";
 import {
@@ -159,6 +159,8 @@ function LabelingPage() {
   const setKeyUrl = baseUrl + "/set_marked/" + datasetName;
   const getKeyUrl = baseUrl + "/get_marked/" + datasetName;
   const querySvmUrl = baseUrl + "/query_svm/" + datasetName;
+  const queryGoogleUrl = `https://www.googleapis.com/customsearch/v1`
+  const genIdentifiersUrl = baseUrl + "/gen_identifiers/" + datasetName;
 
   const PAGINATION_NUM = 500;
   const [page, setPage] = useState(1);
@@ -344,6 +346,41 @@ function LabelingPage() {
         res = await fetch(url, {method: "GET",
           credentials: 'include',
         }).then(results => results.json());
+      } else if (method.localeCompare("google") === 0) {
+        // Get positive image paths, positive patches, negative image paths?
+        // For now makes more sense to pass the user/category, the backend should be able to find the corresponding labels and paths
+        console.log(currIdentifiers)
+        let cx = 'a7790b0816f5cc41c'
+        let start = 1;
+        url = new URL(queryGoogleUrl);
+        url.search = new URLSearchParams({
+          key: apiKey,
+          cx: cx,
+          q: encodeURIComponent(filterCategory),
+          start: start,
+          searchType: "image",
+        }).toString();
+        console.log(apiKey)
+        console.log(process.env)
+        let data = await fetch(url).then(results => results.json());
+        console.log(data);
+        res = {};
+        res.paths = data.items.map(item => item.link);
+        res.num_total = data.items.length;
+        console.log(res.paths)
+
+        url = new URL(genIdentifiersUrl);
+        let body = {
+          paths: res.paths
+        }
+        let identifierResponse = await fetch(url.toString(), {
+          method: "POST",
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(body)
+        }).then(response => response.json());
+        res.identifiers = identifierResponse.identifiers;
+        console.log(res.identifiers);
       } else {
         url = new URL(getNextImagesURL);
         url.search = new URLSearchParams({
@@ -365,8 +402,6 @@ function LabelingPage() {
       }
 
       // Add in any key images not present in identifiers (add to res.identifiers and res.paths)
-      console.log(res.identifiers)
-      console.log(keyIdentifiers)
       for (var i = 0; i < keyIdentifiers.length; i++) {
         if (!res.identifiers.includes(keyIdentifiers[i])) {
           res.identifiers.push(keyIdentifiers[i])
@@ -793,6 +828,7 @@ function LabelingPage() {
             <option value="unsure">Unsure</option>
             <option value="interesting">Interesting</option>
             <option value="conflict">Conflict</option>
+            <option value="google">Googled Earlier</option>
           </OptionsSelect>
           <datalist id="categories">
             {categories.map((item, key) =>
@@ -801,6 +837,7 @@ function LabelingPage() {
           </datalist>
           <OptionsSelect alt="true" id="fetch_image_mode">
             <option value="random">Random</option>
+            <option value="google">Google</option>
             {cluster.status === 'CLUSTER_STARTED' &&
             index.status == 'INDEX_BUILT' &&
             <option value="knn">KNN</option>}
