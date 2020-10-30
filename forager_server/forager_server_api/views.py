@@ -246,6 +246,10 @@ def create_dataset(request):
                  if (path.endswith('.jpg') or
                      path.endswith('.jpeg') or
                      path.endswith('.png'))]
+
+        # these paths do not have a prefix--probably can just load images differently if with prefix
+        print(paths[:10])
+        print(os.path.basename(paths[0]).split('.')[0])
         items = [
             DatasetItem(dataset=dataset,
                         identifier=os.path.basename(path).split('.')[0],
@@ -263,6 +267,56 @@ def create_dataset(request):
             'message': 'Something went wrong. Make sure the directory path is valid.',
         })
 
+@api_view(['POST'])
+@csrf_exempt
+def gen_identifiers(request, dataset_name, dataset = None):
+    if not dataset:
+        dataset = get_object_or_404(Dataset, name=dataset_name)
+    try:
+        data = json.loads(request.body)
+
+        # Create all the DatasetItems for this dataset
+        paths = data["paths"]
+        
+        # Assume this filtering is done beforehand
+        #paths = [path for path in paths
+        #         if (path.endswith('.jpg') or
+        #             path.endswith('.jpeg') or
+        #             path.endswith('.png'))]
+
+        # these paths do have a prefix, unlike paths from gcloud bucket in create_dataset
+        print(paths[:5])
+
+        # Check which paths are already in the dataset
+        existing_items = DatasetItem.objects.filter(dataset=dataset,path__in=paths).order_by('pk')
+        existing_paths = [di.path for di in existing_items]
+
+        # How to generate identifiers
+        # Add items, then get auto-generated identifiers
+        identifiers = []
+        for path in paths:
+            if (path not in existing_paths):
+                newItem = DatasetItem.objects.create(dataset=dataset,identifier="",path=path)
+                identifiers.append(newItem.pk)
+                print("New identifier")
+                print(newItem.pk)
+            else:
+                pathIndex = existing_paths.index(path)
+                identifiers.append(existing_items[pathIndex].pk)
+                print("Getting existing identifier")
+                print(existing_items[pathIndex].pk)
+
+        req = HttpRequest()
+        req.method = 'GET'
+        return JsonResponse({
+            'status': 'success',
+            'identifiers': identifiers
+        })
+    except ValidationError:
+        return JsonResponse({
+            'status': 'failure',
+            'message': 'Something went wrong. Make sure the directory path is valid.',
+        })
 
 @api_view(['GET'])
 @csrf_exempt
@@ -272,9 +326,11 @@ def get_dataset_info(request, dataset_name, dataset=None):
 
     bucket_name = dataset.directory[len('gs://'):].split('/')[0]
     path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
-    dataset_items = DatasetItem.objects.filter(dataset=dataset).order_by('pk')[:100]
+    dataset_items = DatasetItem.objects.filter(dataset=dataset).order_by('pk')[:500]
     dataset_item_paths = [path_template.format(di.path) for di in dataset_items]
     dataset_item_identifiers = [di.pk for di in dataset_items]
+    print(dataset_item_paths[:10])
+    print(dataset_item_identifiers[:10])
 
     return JsonResponse({
         'status': 'success',
