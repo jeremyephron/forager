@@ -170,7 +170,7 @@ def create_index(request, dataset_name, dataset=None):
         dataset = get_object_or_404(Dataset, name=dataset_name)
 
     bucket_name = dataset.directory[len('gs://'):].split('/')[0]
-    dataset_items = DatasetItem.objects.filter(dataset=dataset)
+    dataset_items = DatasetItem.objects.filter(dataset=dataset,google=False)
     dataset_item_raw_paths = [di.path for di in dataset_items]
 
     data = json.loads(request.body)
@@ -296,7 +296,7 @@ def gen_identifiers(request, dataset_name, dataset = None):
         identifiers = []
         for path in paths:
             if (path not in existing_paths):
-                newItem = DatasetItem.objects.create(dataset=dataset,identifier="",path=path)
+                newItem = DatasetItem.objects.create(dataset=dataset,identifier="",path=path,google=True)
                 identifiers.append(newItem.pk)
                 print("New identifier")
                 print(newItem.pk)
@@ -384,7 +384,7 @@ def get_next_images(request, dataset_name, dataset=None):
 
     bucket_name = dataset.directory[len('gs://'):].split('/')[0]
     path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
-    dataset_items = DatasetItem.objects.filter(dataset=dataset).order_by('pk')
+    dataset_items = DatasetItem.objects.filter(dataset=dataset,google=False).order_by('pk')
 
     # Find all annotations for the user and category in this dataset
     annotations = Annotation.objects.filter(
@@ -396,6 +396,8 @@ def get_next_images(request, dataset_name, dataset=None):
     next_images = []
     if label_value == 'all':
         next_images = dataset_items
+    elif label_value == 'google':
+        next_images = DatasetItem.objects.filter(dataset=dataset,google=True).order_by('pk')
     elif label_value == 'unlabeled':
         images_with_label = set()
         for ann in annotations:
@@ -426,7 +428,7 @@ def get_next_images(request, dataset_name, dataset=None):
     ret_images = next_images[offset_to_return:offset_to_return+num_to_return]
 
     # Find all dataset items which do not have an annotation of the type
-    dataset_item_paths = [path_template.format(di.path) for di in ret_images]
+    dataset_item_paths = [(di.path if di.path.find("http") != -1 else path_template.format(di.path)) for di in ret_images]
     dataset_item_identifiers = [di.pk for di in ret_images]
 
     return JsonResponse({
@@ -488,10 +490,10 @@ def get_annotations(request, dataset_name):
 @csrf_exempt
 def get_annotations_summary(request, dataset_name):
     dataset = Dataset.objects.get(name=dataset_name)
-    total_images = dataset.datasetitem_set.count()
+    total_images = dataset.datasetitem_set.filter(google=False).count()
     anns = Annotation.objects.filter(
         label_type="klabel_frame",
-        dataset_item__in=dataset.datasetitem_set.filter())
+        dataset_item__in=dataset.datasetitem_set.filter(google=False))
     label_functions = [d['label_function'] for d in (anns.values("label_function").distinct())]
     label_categories = [d['label_category'] for d in (anns.values("label_category").distinct())]
 
@@ -583,9 +585,9 @@ def get_annotations_summary(request, dataset_name):
 @csrf_exempt
 def dump_annotations(request, dataset_name):
     dataset = Dataset.objects.get(name=dataset_name)
-    total_images = dataset.datasetitem_set.count()
+    total_images = dataset.datasetitem_set.filter(google=False).count()
     anns = Annotation.objects.filter(
-        dataset_item__in=dataset.datasetitem_set.filter())
+        dataset_item__in=dataset.datasetitem_set.filter(google=False))
     filtered_frame_anns = filter_most_recent_anns(
         nest_anns([ann for ann in anns
                    if ann.label_type == 'klabel_frame']))

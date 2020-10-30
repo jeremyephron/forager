@@ -828,6 +828,7 @@ function LabelingPage() {
             <option value="unsure">Unsure</option>
             <option value="interesting">Interesting</option>
             <option value="conflict">Conflict</option>
+            <option value="google">Googled Earlier</option>
           </OptionsSelect>
           <datalist id="categories">
             {categories.map((item, key) =>
