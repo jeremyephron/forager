@@ -1,6 +1,7 @@
 import asyncio
 from collections import defaultdict
 import functools
+import gc
 import heapq
 import json
 import operator
@@ -141,6 +142,8 @@ class LabeledIndexReducer(Reducer):
 
             if not should_finalize and not should_add_full and not should_add_spatial:
                 time.sleep(config.INDEX_FLUSH_SLEEP)
+            else:
+                gc.collect()
 
     @property
     def result(self):  # called only once to finalize
