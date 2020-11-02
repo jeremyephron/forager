@@ -46,6 +46,10 @@ class LabeledIndexReducer(Reducer):
             n_centroids=config.INDEX_NUM_CENTROIDS,
             vectors_per_index=config.INDEX_SUBINDEX_SIZE,
             use_gpu=config.INDEX_USE_GPU,
+            # transform=config.INDEX_TRANSFORM,
+            # transform_args=config.INDEX_TRANSFORM_ARGS,
+            # encoding=config.INDEX_ENCODING,
+            # encoding_args=config.INDEX_ENCODING_ARGS,
         )
         filepath_id = str(uuid.uuid4())
 
