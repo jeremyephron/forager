@@ -339,7 +339,7 @@ function LabelingPage() {
 
   const getNextFrame = () => {
     var nextFrame = labeler.current_frame_index + 1;
-    return Math.min(nextFrame, labeler.frames.length)
+    return Math.min(nextFrame, labeler.frames.length - 1)
   }
 
   //const [HandleFetchImages, SetHandleFetchImages] = useState(()=> async(currPage) => {})
