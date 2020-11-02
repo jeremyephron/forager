@@ -765,7 +765,7 @@ export class ImageLabeler {
 						window.dispatchEvent(evt);
 					}, imageTime)
 				}
-			} else if (event.keyCode === 27) {   // "esc" for autolabel esca
+			} else if (event.keyCode === 83) {   // "s" for autolabel stop
 				if (this.autoStepId) {
 					clearInterval(this.autoStepId)
 					this.autoStepId = null;
