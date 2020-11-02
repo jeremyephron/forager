@@ -3,6 +3,7 @@ TODO: docstring
 
 """
 
+import json
 from pathlib import Path
 from typing import List, Optional, Tuple, Union, Sequence
 import warnings
@@ -36,6 +37,7 @@ class InteractiveIndex:
     SHARD_INDEX_NAME_TMPL = 'shard_{}.index'
     MERGED_INDEX_DATA_NAME = 'merged.ivfdata'
     MERGED_INDEX_NAME = 'merged.index'
+    META_FILE_NAME = 'meta.json'
 
     SUPPORTED_DIM_PER_SUBQ = [1, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24, 28, 32]
 
@@ -47,6 +49,18 @@ class InteractiveIndex:
 
         """
 
+        exists = False
+        if '_exists' in kwargs:
+            exists = kwargs['_exists']
+            del kwargs['_exists']
+
+        extra = None
+        if '_extra' in kwargs:
+            extra = kwargs['_extra']
+            del kwargs['_extra']
+
+        assert not exists or extra
+            
         if config_fpath:
             self.cfg = read_config(config_fpath)
         else:
@@ -90,7 +104,15 @@ class InteractiveIndex:
 
         self.multi_id = self.cfg['multi_id']
 
-        self.create(self.index_str)
+        if not exists:
+            self.create(self.index_str)
+        else:
+            self.requires_training = extra['requires_training']
+            self.is_trained = extra['is_trained']
+            self.n_indexes = extra['n_indexes']
+            self.n_vectors = extra['n_vectors']
+
+        self._save_metadata()
 
     def create(self, index_str: str) -> None:
         """
@@ -148,6 +170,7 @@ class InteractiveIndex:
         )
 
         self.is_trained = True
+        self._save_metadata()
 
     def add(
         self,
@@ -178,30 +201,8 @@ class InteractiveIndex:
             raise RuntimeError('Cannot add to untrained index.')
 
         xb = self._convert_src_to_numpy(xb_src)
-
-        if self.n_vectors % self.vectors_per_index == 0:
-            # Need to create a new index
-            index = faiss.read_index(str(self.tempdir/self.TRAINED_INDEX_NAME))
-            shard_num = self.n_indexes
-            self.n_indexes += 1
-        else:
-            # Read existing partial index
-            shard_num = self.n_indexes - 1
-            index = faiss.read_index(str(
-                self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num)
-            ))
-
-        # Move to GPU
-        if self.use_gpu:
-            index = to_all_gpus(index, self.co)
-
-        end_idx = min(
-            self.vectors_per_index - (self.n_vectors % self.vectors_per_index),
-            xb.shape[0]
-        )
-
         if ids is None:
-            ids = np.arange(self.n_vectors, self.n_vectors + end_idx)
+            ids = np.arange(self.n_vectors, self.n_vectors + len(xb))
         else:
             ids = np.array(ids)
 
@@ -215,17 +216,42 @@ class InteractiveIndex:
                 cantor_pairing(ids[i], ids_extra[i]) for i in range(len(ids))
             ])
 
-        index.add_with_ids(xb[:end_idx], ids[:end_idx])
-        self.n_vectors += end_idx
+        idx = 0
+        while idx < len(xb):
+            if self.n_vectors % self.vectors_per_index == 0:
+                # Need to create a new index
+                index = faiss.read_index(
+                    str(self.tempdir/self.TRAINED_INDEX_NAME)
+                )
+                shard_num = self.n_indexes
+                self.n_indexes += 1
+            else:
+                # Read existing partial index
+                shard_num = self.n_indexes - 1
+                index = faiss.read_index(str(
+                    self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num)
+                ))
 
+            # Move to GPU
+            if self.use_gpu:
+                index = to_all_gpus(index, self.co)
 
-        faiss.write_index(
-            faiss.index_gpu_to_cpu(index) if self.use_gpu else index,
-            str(self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num))
-        )
+            end_idx = idx + min(
+                self.vectors_per_index - (self.n_vectors % self.vectors_per_index),
+                xb.shape[0]
+            )
+            
+            index.add_with_ids(xb[idx:end_idx], ids[idx:end_idx])
+            self.n_vectors += (end_idx - idx)
 
-        if end_idx < xb.shape[0]:
-           self.add(xb[end_idx:].copy(), ids[end_idx:].copy())
+            faiss.write_index(
+                faiss.index_gpu_to_cpu(index) if self.use_gpu else index,
+                str(self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num))
+            )
+
+            self._save_metadata()
+            
+            idx = end_idx
 
     def merge_partial_indexes(self) -> None:
         """
@@ -368,3 +394,35 @@ class InteractiveIndex:
         search_str = f'IVF{n_centroids}'
 
         return ','.join([transform_str, search_str, encoding_str])
+
+    def _save_metadata(self) -> None:
+        """
+        TODO: docstring
+
+        """
+
+        payload = {
+            'cfg': self.cfg,
+            'extra': {
+                'requires_training': self.requires_training,
+                'is_trained': self.is_trained,
+                'n_indexes': self.n_indexes,
+                'n_vectors': self.n_vectors
+            }
+        }
+        
+        json.dump(payload, (self.tempdir/self.META_FILE_NAME).open('w'))
+
+    @classmethod
+    def load(cls, tempdir: str) -> 'InteractiveIndex':
+        """
+        TODO: docstring
+
+        """
+
+        payload = json.load((Path(tempdir)/cls.META_FILE_NAME).open())
+        index = InteractiveIndex(
+            **payload['cfg'], _extra=payload['extra'], _exists=True
+        )
+        return index
+
