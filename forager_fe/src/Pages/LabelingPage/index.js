@@ -4,7 +4,7 @@ import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 
 import { colors, baseUrl, apiKey } from "../../Constants";
-import { MainCanvas, ImageGrid, BuildIndex } from "./Components";
+import { MainCanvas, ImageGrid, BuildIndex, TrainProgress } from "./Components";
 import { Button, Select } from "../../Components";
 import {
   BBox2D,
@@ -23,9 +23,24 @@ const RowContainer = styled.div`
   display: flex;
   flex-direction: row;
   background-color: white;
+  margin-top: 0.25vh;
+`;
+
+const RowWrapContainer = styled.div`
+  display: flex;
+  flex-direction: row;
+  background-color: white;
+  flex-wrap: wrap;
 `;
 
 const ColContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  background-color: white;
+  margin-right: 1vw;
+`;
+
+const BaseColContainer = styled.div`
   display: flex;
   flex-direction: column;
   background-color: white;
@@ -34,10 +49,12 @@ const ColContainer = styled.div`
 `;
 
 const ImageGridContainer = styled.div`
+  display: flex;
   width: 100%;
   height: 65vh;
   margin-top: 2vh;
   border-radius: 5px;
+  overflow: hidden;
 `;
 
 const ImageRowContainer = styled.div`
@@ -53,7 +70,7 @@ const TitleHeader = styled.h1`
   font-family: "AirBnbCereal-Medium";
   font-size: 24px;
   color: ${colors.primary};
-  padding-right: 20px;
+  padding-right: 5px;
 `;
 
 const OptionsSelect = styled(Select)`
@@ -63,16 +80,21 @@ const OptionsSelect = styled(Select)`
 `;
 
 const Slider = styled.input`
-  width: 20%; /* Full-width */
+  width: 150px; /* Full-width */
   height: 25px; /* Specified height */
   border-radius: 5px;
-  margin-left: 50px;
+  margin-left: 20px;
 `;
 
 const FetchButton = styled(Button)`
   font-size: 13px;
   height: 28px;
-  width: 150px;
+  padding: 0 5px;
+`;
+
+const HideButton = styled(Button)`
+  font-size: 13px;
+  height: 28px;
   padding: 0 5px;
 `;
 
@@ -86,7 +108,7 @@ const StatsContainer = styled.div`
 
 const StatsBar = (props) => {
   return (
-    <StatsContainer>
+    <StatsContainer  id="annotation_stats">
       <div><p>Unlabeled images:</p>
       {props.annotationsSummary.data && Object.keys(props.annotationsSummary.data).map(cat => (
         <div key={cat}><p><b>Category: {cat}</b></p>
@@ -103,7 +125,7 @@ const StatsBar = (props) => {
 const SummaryBar = (props) => {
   return (
     <StatsContainer>
-      <div>Showing images {1 + (props.page - 1)*props.pageSize} to {Math.min(props.numTotalFilteredImages, props.page*props.pageSize)} out of {props.numTotalFilteredImages}</div>
+      <div>Fetched images {1 + (props.page - 1)*props.pageSize} to {Math.min(props.numTotalFilteredImages, props.page*props.pageSize)} out of {props.numTotalFilteredImages}</div>
     </StatsContainer>
   );
 }
@@ -211,6 +233,55 @@ function LabelingPage() {
       labeler.current_indices = [idx];
     }
     setSelected(currSelected);
+  }
+
+  const onKLabelClick = (event) => {
+    const klabeldiv = document.getElementById("klabel_wrapper");
+    const button = document.getElementById("klabel_toggle")
+    console.log(button.value)
+    if (klabeldiv.style.display === "none") {
+      klabeldiv.style.display = "flex";
+      button.innerHTML = "Hide KLabel"
+    } else {
+      klabeldiv.style.display = "none";
+      button.innerHTML = "Show KLabel"
+    }
+  }
+
+  const onExploreClick = (event) => {
+    const explorediv = document.getElementById("explore_grid");
+    const button = document.getElementById("explore_toggle")
+    if (explorediv.style.display === "none") {
+      explorediv.style.display = "flex";
+      button.innerHTML = "Hide Explore Grid"
+    } else {
+      explorediv.style.display = "none";
+      button.innerHTML = "Show Explore Grid"
+    }
+  }
+
+  const onSummaryClick = (event) => {
+    const annotationdiv = document.getElementById("annotation_stats");
+    const button = document.getElementById("summary_toggle")
+    if (annotationdiv.style.display === "none") {
+      annotationdiv.style.display = "flex";
+      button.innerHTML = "Hide Label Summary"
+    } else {
+      annotationdiv.style.display = "none";
+      button.innerHTML = "Show Label Summary"
+    }
+  }
+
+  const onKeyImageClick = (event) => {
+    const keyimagediv = document.getElementById("key_grid");
+    const button = document.getElementById("keyimage_toggle")
+    if (keyimagediv.style.display === "none") {
+      keyimagediv.style.display = "flex";
+      button.innerHTML = "Hide Key Images"
+    } else {
+      keyimagediv.style.display = "none";
+      button.innerHTML = "Show Key Images"
+    }
   }
 
   const onFilterCategory = (event) => {
@@ -662,21 +733,6 @@ function LabelingPage() {
       });
     }
 
-    const handle_forager_change = () => {
-      const select = document.getElementById("select_forager_mode");
-      const klabeldiv = document.getElementById("klabel_wrapper");
-      const explorediv = document.getElementById("explore_grid");
-      if (select.value.localeCompare("forager_annotate") === 0) {
-        forager_mode = "forager_annotate"
-        klabeldiv.style.display = "flex"
-        explorediv.style.display = "flex"
-      } else if (select.value.localeCompare("forager_explore") === 0) {
-        forager_mode = "forager_explore"
-        klabeldiv.style.display = "none"
-        explorediv.style.display = "flex"
-      }
-    }
-
     const klabelRun = async () => {
       const main_canvas = document.getElementById(main_canvas_id);
       labeler.init(main_canvas);
@@ -751,9 +807,6 @@ function LabelingPage() {
       let select = document.getElementById("select_annotation_mode")
       select.onchange = handle_mode_change;
 
-      select = document.getElementById("select_forager_mode")
-      select.onchange = handle_forager_change;
-
       window.addEventListener("keydown", function(e) {
         console.log("Handling keydown")
         //e.preventDefault(); // If we prevent default it stops typing, only prevent default maybe for arrow keys
@@ -802,78 +855,81 @@ function LabelingPage() {
   }, []);
 
   return (
-    <RowContainer>
-      <ColContainer>
-        <RowContainer>
-          <TitleHeader>Labeling: {datasetName}</TitleHeader>
-          <OptionsSelect alt="true" id="select_forager_mode">
-            <option value="forager_annotate">Annotate</option>
-            <option value="forager_explore">Explore</option>
-          </OptionsSelect>
-          <BuildIndex dataset={datasetName} />
-        </RowContainer>
-        <RowContainer>
-          <TitleHeader>Filter: </TitleHeader>
-          <input type="text" list="users" id="filterUser" onChange={onFilterUser} placeholder="FilterUser" />
-          <datalist id="users">
-            {users.map((item, key) =>
-              <option key={key} value={item} />
-            )}
-          </datalist>
-          <input type="text" list="categories" id="filterCategory" onChange={onFilterCategory} placeholder="FilterCategory" />
-          <OptionsSelect alt="true" id="select_image_subset">
-            <option value="all">All</option>
-            <option value="unlabeled">Unlabeled</option>
-            <option value="positive">Positive</option>
-            <option value="negative">Negative</option>
-            <option value="hard_negative">Hard Negative</option>
-            <option value="unsure">Unsure</option>
-            <option value="interesting">Interesting</option>
-            <option value="conflict">Conflict</option>
-            <option value="google">Googled Earlier</option>
-          </OptionsSelect>
-          <datalist id="categories">
-            {categories.map((item, key) =>
-              <option key={key} value={item} />
-            )}
-          </datalist>
-          <OptionsSelect alt="true" id="fetch_image_mode">
-            <option value="random">Random</option>
-            <option value="google">Google</option>
-            {cluster.status === 'CLUSTER_STARTED' &&
-            index.status == 'INDEX_BUILT' &&
-            <option value="knn">KNN</option>}
-            {cluster.status === 'CLUSTER_STARTED' &&
-            index.status == 'INDEX_BUILT' &&
-            <option value="spatialKnn">Spatial KNN</option>}
-            {cluster.status === 'CLUSTER_STARTED' &&
-            index.status == 'INDEX_BUILT' &&
-            <option value="svm">Category SVM</option>}
-          </OptionsSelect>
-          <FetchButton id="filter_button">Apply Filter</FetchButton>
-        </RowContainer>
-        <MainCanvas numTotalFilteredImages={numTotalFilteredImages} onCategory={OnLabel} onUser={OnLabel} annotationsSummary={annotationsSummary}/>
-        <hr style={{width:"95%"}}/>
-        <ImageRowContainer id="key_grid">
-            <ImageGrid onImageClick={OnKeyImageClick} imagePaths={keyPaths} imageHeight={imageSize}/>
-        </ImageRowContainer>
-      </ColContainer>
-      <ColContainer>
-        <RowContainer>
-          <FetchButton id="first_button">First</FetchButton>
-          <FetchButton id="prev_button">Prev</FetchButton>
-          <FetchButton id="next_button">Next</FetchButton>
-          <FetchButton id="last_button">Last</FetchButton>
-          <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
-        </RowContainer>
-        <SummaryBar numTotalFilteredImages={numTotalFilteredImages} page={page} pageSize={PAGINATION_NUM}/>
-        <ImageGridContainer id="explore_grid">
-            <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} currentIndex={labeler.current_frame_index} selectedIndices={labeler.current_indices}/>
-        </ImageGridContainer>
-        <hr style={{width:"95%"}}/>
-        <StatsBar annotationsSummary={annotationsSummary}/>
-      </ColContainer>
-    </RowContainer>
+    <BaseColContainer>
+      <RowContainer id="title">
+        <TitleHeader>Labeling: {datasetName}</TitleHeader>
+        <BuildIndex dataset={datasetName} />
+        <HideButton id="klabel_toggle" onClick={onKLabelClick}>Hide KLabel</HideButton>
+        <HideButton id="explore_toggle" onClick={onExploreClick}>Hide Explore Grid</HideButton>
+        <HideButton id="summary_toggle" onClick={onSummaryClick}>Hide Label Summary</HideButton>
+        <HideButton id="keyimage_toggle" onClick={onKeyImageClick}>Hide Key Images</HideButton>
+      </RowContainer>
+      <RowContainer>
+        <ColContainer>
+          <RowContainer>
+            <TitleHeader>Filter: </TitleHeader>
+            <input type="text" list="users" id="filterUser" onChange={onFilterUser} placeholder="FilterUser" />
+            <datalist id="users">
+              {users.map((item, key) =>
+                <option key={key} value={item} />
+              )}
+            </datalist>
+            <input type="text" list="categories" id="filterCategory" onChange={onFilterCategory} placeholder="FilterCategory" />
+            <OptionsSelect alt="true" id="select_image_subset">
+              <option value="all">All</option>
+              <option value="unlabeled">Unlabeled</option>
+              <option value="positive">Positive</option>
+              <option value="negative">Negative</option>
+              <option value="hard_negative">Hard Negative</option>
+              <option value="unsure">Unsure</option>
+              <option value="interesting">Interesting</option>
+              <option value="conflict">Conflict</option>
+              <option value="google">Googled Earlier</option>
+            </OptionsSelect>
+            <datalist id="categories">
+              {categories.map((item, key) =>
+                <option key={key} value={item} />
+              )}
+            </datalist>
+            <OptionsSelect alt="true" id="fetch_image_mode">
+              <option value="random">Random</option>
+              <option value="google">Google</option>
+              {cluster.status === 'CLUSTER_STARTED' &&
+              index.status == 'INDEX_BUILT' &&
+              <option value="knn">KNN</option>}
+              {cluster.status === 'CLUSTER_STARTED' &&
+              index.status == 'INDEX_BUILT' &&
+              <option value="spatialKnn">Spatial KNN</option>}
+              {cluster.status === 'CLUSTER_STARTED' &&
+              index.status == 'INDEX_BUILT' &&
+              <option value="svm">Category SVM</option>}
+            </OptionsSelect>
+            <FetchButton id="filter_button">Apply Filter</FetchButton>
+          </RowContainer>
+          <MainCanvas numTotalFilteredImages={numTotalFilteredImages} onCategory={OnLabel} onUser={OnLabel} annotationsSummary={annotationsSummary}/>
+          <hr style={{width:"95%"}}/>
+          <TrainProgress/>
+          <ImageRowContainer id="key_grid">
+              <ImageGrid onImageClick={OnKeyImageClick} imagePaths={keyPaths} imageHeight={imageSize}/>
+          </ImageRowContainer>
+        </ColContainer>
+        <ColContainer>
+          <RowWrapContainer>
+            <FetchButton id="first_button">First</FetchButton>
+            <FetchButton id="prev_button">Prev</FetchButton>
+            <FetchButton id="next_button">Next</FetchButton>
+            <FetchButton id="last_button">Last</FetchButton>
+            <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
+          </RowWrapContainer>
+          <SummaryBar id="image_summary" numTotalFilteredImages={numTotalFilteredImages} page={page} pageSize={PAGINATION_NUM}/>
+          <ImageGridContainer id="explore_grid">
+              <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} currentIndex={labeler.current_frame_index} selectedIndices={labeler.current_indices}/>
+          </ImageGridContainer>
+          <hr style={{width:"95%"}}/>
+          <StatsBar annotationsSummary={annotationsSummary}/>
+        </ColContainer>
+      </RowContainer>
+    </BaseColContainer>
   );
 };
 

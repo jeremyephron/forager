@@ -28,9 +28,6 @@ const CopyrightText = styled.span`
 function Footer() {
   return (
     <Container>
-      <CopyrightText>
-      	Copyright © 2020 Stanford University. All Rights Reserved.
-      </CopyrightText>
     </Container>
   );
 }
