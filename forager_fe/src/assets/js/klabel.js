@@ -721,11 +721,18 @@ export class ImageLabeler {
 		this.render();
 	}
 
+	stop_autolabel(){
+		if (this.autoStepId) {
+			clearInterval(this.autoStepId)
+			this.autoStepId = null;
+		}
+	}
+
 	handle_keydown(event, prevFrame, nextFrame) {
 		console.log("KeyDown: " + event.keyCode);
 		if (this.is_annotation_mode_per_frame_category()) {
-
 			// number key: 0-9
+			var stopAuto = (this.current_frame_index === nextFrame);
 			if (event.keyCode >= 48 && event.keyCode <= 57) {
 				var key_pressed = event.keyCode - 48;
 				var category_name = this.category_to_name[key_pressed];
@@ -765,12 +772,15 @@ export class ImageLabeler {
 						window.dispatchEvent(evt);
 					}, imageTime)
 				}
-			} else if (event.keyCode === 27) {   // "esc" for autolabel esca
-				if (this.autoStepId) {
-					clearInterval(this.autoStepId)
-					this.autoStepId = null;
-				}
+			} else if (event.keyCode === 83) {   // "s" for autolabel stop
+				this.stop_autolabel();
 			}
+
+			if (stopAuto) {
+				this.stop_autolabel();
+			}
+		} else {
+			this.stop_autolabel();
 		}
 
 		if (event.keyCode === 37) {   // left arrow
@@ -786,7 +796,7 @@ export class ImageLabeler {
 				this.visible_image_region = new BBox2D(0.0, 0.0, 1.0, 1.0);
 				this.render();
 			}
-
+			this.stop_autolabel();
 		} else if (event.keyCode === 39) {  // right arrow
 			console.log("Handling right arrow")
 			if (this.current_frame_index < this.frames.length-1) {
@@ -801,13 +811,13 @@ export class ImageLabeler {
 				this.visible_image_region = new BBox2D(0.0, 0.0, 1.0, 1.0);
 				this.render();
 			}
-
+			this.stop_autolabel();
 		} else if (event.keyCode === 27) {  // ESC key
 
 			this.clear_in_progress_points();
 			this.clear_zoom_corner_points();
 			this.render();
-
+			this.stop_autolabel();
 		} else if (event.keyCode === 82) {  // 'r' key: reset zoom
 			this.visible_image_region = new BBox2D(0.0, 0.0, 1.0, 1.0);
 			this.render();
@@ -1023,6 +1033,7 @@ export class ImageLabeler {
 
 	load_image_stack(image_dataset) {
 		console.log('KLabeler: loading set of ' + image_dataset.length + ' images.');
+		this.stop_autolabel();
         if (this.frames.length > 0) {
 		  this.set_current_frame_num(0);
         }

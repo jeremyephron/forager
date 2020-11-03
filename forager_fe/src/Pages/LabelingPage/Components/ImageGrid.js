@@ -21,6 +21,7 @@ const Grid = styled.div`
   flex-wrap: wrap;
   height: 100%;
   overflow-y: scroll;
+  overflow-x: hidden;
   justify-content: space-evenly;
 `;
 

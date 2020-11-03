@@ -63,7 +63,7 @@ const MainCanvas = (props) => {
     <Container id="klabel_wrapper">
       <Canvas width="960" height="500" id="main_canvas" tabindex="0"/>
       <OptionsBar onUser={props.onUser} onCategory={props.onCategory}/>
-      <div>Key bindings: "1" = positive, "2" = negative, "3" = hard negative, "4" = unsure, "k" = keep, "a" = autolabel negative, "esc" to stop autolabel</div>
+      <div>Key bindings: "1" = positive, "2" = negative, "3" = hard negative, "4" = unsure, "k" = keep, "a" = autolabel negative, "s" to stop autolabel</div>
       <textarea type="text" id="user_notes" placeholder="My notes: "></textarea>
       <div id="other_user_notes"></div>
     </Container>

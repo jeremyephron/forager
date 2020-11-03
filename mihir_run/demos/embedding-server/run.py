@@ -1,6 +1,7 @@
 import asyncio
 from collections import defaultdict
 import functools
+import gc
 import heapq
 import json
 import operator
@@ -45,6 +46,10 @@ class LabeledIndexReducer(Reducer):
             n_centroids=config.INDEX_NUM_CENTROIDS,
             vectors_per_index=config.INDEX_SUBINDEX_SIZE,
             use_gpu=config.INDEX_USE_GPU,
+            # transform=config.INDEX_TRANSFORM,
+            # transform_args=config.INDEX_TRANSFORM_ARGS,
+            # encoding=config.INDEX_ENCODING,
+            # encoding_args=config.INDEX_ENCODING_ARGS,
         )
         filepath_id = str(uuid.uuid4())
 
@@ -141,6 +146,8 @@ class LabeledIndexReducer(Reducer):
 
             if not should_finalize and not should_add_full and not should_add_spatial:
                 time.sleep(config.INDEX_FLUSH_SLEEP)
+            else:
+                gc.collect()
 
     @property
     def result(self):  # called only once to finalize

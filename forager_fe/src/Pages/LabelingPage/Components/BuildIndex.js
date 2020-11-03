@@ -10,7 +10,7 @@ const BuildButton = styled(Button)`
   height: 28px;
   width: 150px;
   padding: 0 5px;
-  margin-left: 20px;
+  margin-left: 5px;
 `;
 
 const API_BASE = baseUrl;

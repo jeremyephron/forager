@@ -1,3 +1,4 @@
+import asyncio
 import io
 import os
 
@@ -67,7 +68,7 @@ class ResNetBackboneMapper(Mapper):
                     image_bytes = await response.read()
             except Exception:
                 if i < num_retries - 1:
-                    await aiohttp.sleep(2 ** i)
+                    await asyncio.sleep(2 ** i)
                 else:
                     raise
 
@@ -112,4 +113,6 @@ class ResNetBackboneMapper(Mapper):
 
         # Perform inference
         with self.profiler(request_id, "compute_time"):
+            # Input: NCHW
+            # Output: {'res4': NCHW, 'res5': NCHW} where N = 1
             return self.model(image.unsqueeze(dim=0))

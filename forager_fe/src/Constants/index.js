@@ -3,3 +3,4 @@ const apiKey = ""
 
 export { baseUrl };
 export { default as colors } from "./colors";
+export { apiKey };

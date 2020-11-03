@@ -77,4 +77,7 @@ urlpatterns = [
     path('api/lookup_knn/<slug:dataset_name>',
          views.lookup_knn,
          name='lookup_knn'),
+    path('api/gen_identifiers/<slug:dataset_name>',
+         views.gen_identifiers,
+         name='gen_identifiers'),
 ]

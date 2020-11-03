@@ -3,8 +3,8 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 
-import { colors, baseUrl } from "../../Constants";
-import { MainCanvas, ImageGrid, BuildIndex } from "./Components";
+import { colors, baseUrl, apiKey } from "../../Constants";
+import { MainCanvas, ImageGrid, BuildIndex, TrainProgress } from "./Components";
 import { Button, Select } from "../../Components";
 import {
   BBox2D,
@@ -19,13 +19,33 @@ import {
   ExtremeBoxAnnnotation,
 } from "../../assets/js/klabel.js";
 
+const Divider = styled.hr`
+  width: 95%;
+  padding: 0px;
+`;
+
 const RowContainer = styled.div`
   display: flex;
   flex-direction: row;
   background-color: white;
+  margin-top: 0.25vh;
+`;
+
+const RowWrapContainer = styled.div`
+  display: flex;
+  flex-direction: row;
+  background-color: white;
+  flex-wrap: wrap;
 `;
 
 const ColContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  background-color: white;
+  margin-right: 1vw;
+`;
+
+const BaseColContainer = styled.div`
   display: flex;
   flex-direction: column;
   background-color: white;
@@ -34,10 +54,12 @@ const ColContainer = styled.div`
 `;
 
 const ImageGridContainer = styled.div`
+  display: flex;
   width: 100%;
-  height: 65vh;
+  height: 60vh;
   margin-top: 2vh;
   border-radius: 5px;
+  overflow: hidden;
 `;
 
 const ImageRowContainer = styled.div`
@@ -53,7 +75,7 @@ const TitleHeader = styled.h1`
   font-family: "AirBnbCereal-Medium";
   font-size: 24px;
   color: ${colors.primary};
-  padding-right: 20px;
+  padding-right: 5px;
 `;
 
 const OptionsSelect = styled(Select)`
@@ -63,16 +85,21 @@ const OptionsSelect = styled(Select)`
 `;
 
 const Slider = styled.input`
-  width: 20%; /* Full-width */
+  width: 100px; /* Full-width */
   height: 25px; /* Specified height */
   border-radius: 5px;
-  margin-left: 50px;
+  margin-left: 20px;
 `;
 
 const FetchButton = styled(Button)`
   font-size: 13px;
   height: 28px;
-  width: 150px;
+  padding: 0 5px;
+`;
+
+const HideButton = styled(Button)`
+  font-size: 13px;
+  height: 28px;
   padding: 0 5px;
 `;
 
@@ -86,7 +113,7 @@ const StatsContainer = styled.div`
 
 const StatsBar = (props) => {
   return (
-    <StatsContainer>
+    <StatsContainer id="annotation_stats">
       <div><p>Unlabeled images:</p>
       {props.annotationsSummary.data && Object.keys(props.annotationsSummary.data).map(cat => (
         <div key={cat}><p><b>Category: {cat}</b></p>
@@ -103,7 +130,7 @@ const StatsBar = (props) => {
 const SummaryBar = (props) => {
   return (
     <StatsContainer>
-      <div>Showing images {1 + (props.page - 1)*props.pageSize} to {Math.min(props.numTotalFilteredImages, props.page*props.pageSize)} out of {props.numTotalFilteredImages}</div>
+      <div>Images {1 + (props.page - 1)*props.pageSize} to {Math.min(props.numTotalFilteredImages, props.page*props.pageSize)} out of {props.numTotalFilteredImages}</div>
     </StatsContainer>
   );
 }
@@ -159,8 +186,10 @@ function LabelingPage() {
   const setKeyUrl = baseUrl + "/set_marked/" + datasetName;
   const getKeyUrl = baseUrl + "/get_marked/" + datasetName;
   const querySvmUrl = baseUrl + "/query_svm/" + datasetName;
+  const queryGoogleUrl = `https://www.googleapis.com/customsearch/v1`
+  const genIdentifiersUrl = baseUrl + "/gen_identifiers/" + datasetName;
 
-  const PAGINATION_NUM = 500;
+  const [PAGINATION_NUM, setPaginationNum] = useState(500);
   const [page, setPage] = useState(1);
 
   /* Klabel stuff */
@@ -209,6 +238,46 @@ function LabelingPage() {
       labeler.current_indices = [idx];
     }
     setSelected(currSelected);
+  }
+
+  const onKLabelClick = (event) => {
+    const klabeldiv = document.getElementById("klabel_container");
+    const button = document.getElementById("klabel_toggle")
+    console.log(button.value)
+    if (klabeldiv.style.display === "none") {
+      klabeldiv.style.display = "flex";
+      button.innerHTML = "Hide KLabel"
+    } else {
+      klabeldiv.style.display = "none";
+      button.innerHTML = "Show KLabel"
+    }
+  }
+
+  const onSummaryClick = (event) => {
+    const annotationdiv = document.getElementById("annotation_stats");
+    const button = document.getElementById("summary_toggle")
+    if (annotationdiv.style.display === "none") {
+      annotationdiv.style.display = "flex";
+      button.innerHTML = "Hide Label Summary"
+    } else {
+      annotationdiv.style.display = "none";
+      button.innerHTML = "Show Label Summary"
+    }
+  }
+
+  const onKeyImageClick = (event) => {
+    const keyimagediv = document.getElementById("key_grid");
+    const explorediv = document.getElementById("explore_grid");
+    const button = document.getElementById("keyimage_toggle")
+    if (keyimagediv.style.display === "none") {
+      keyimagediv.style.display = "flex";
+      explorediv.style.height = "60vh";
+      button.innerHTML = "Hide Key Images"
+    } else {
+      keyimagediv.style.display = "none";
+      explorediv.style.height = "80vh";
+      button.innerHTML = "Show Key Images"
+    }
   }
 
   const onFilterCategory = (event) => {
@@ -270,7 +339,7 @@ function LabelingPage() {
 
   const getNextFrame = () => {
     var nextFrame = labeler.current_frame_index + 1;
-    return Math.min(nextFrame, labeler.frames.length)
+    return Math.min(nextFrame, labeler.frames.length - 1)
   }
 
   //const [HandleFetchImages, SetHandleFetchImages] = useState(()=> async(currPage) => {})
@@ -354,6 +423,38 @@ function LabelingPage() {
         res = await fetch(url, {method: "GET",
           credentials: 'include',
         }).then(results => results.json());
+      } else if (method.localeCompare("google") === 0) {
+        // Get positive image paths, positive patches, negative image paths?
+        // For now makes more sense to pass the user/category, the backend should be able to find the corresponding labels and paths
+        console.log(currIdentifiers)
+        let cx = 'a7790b0816f5cc41c'
+        console.log(currPage)
+        let start = 1 + (currPage - 1)*10;
+        url = new URL(queryGoogleUrl);
+        url.search = new URLSearchParams({
+          key: apiKey,
+          cx: cx,
+          q: encodeURIComponent(filterCategory),
+          start: start,
+          searchType: "image",
+        }).toString();
+        let data = await fetch(url).then(results => results.json());
+        res = {};
+        res.paths = data.items.map(item => item.link);
+        res.num_total = parseInt(data.searchInformation.totalResults);
+
+        url = new URL(genIdentifiersUrl);
+        let body = {
+          paths: res.paths
+        }
+        let identifierResponse = await fetch(url.toString(), {
+          method: "POST",
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(body)
+        }).then(response => response.json());
+        res.identifiers = identifierResponse.identifiers;
+        console.log(res.identifiers);
       } else {
         url = new URL(getNextImagesURL);
         url.search = new URLSearchParams({
@@ -375,8 +476,6 @@ function LabelingPage() {
       }
 
       // Add in any key images not present in identifiers (add to res.identifiers and res.paths)
-      console.log(res.identifiers)
-      console.log(keyIdentifiers)
       for (var i = 0; i < keyIdentifiers.length; i++) {
         if (!res.identifiers.includes(keyIdentifiers[i])) {
           res.identifiers.push(keyIdentifiers[i])
@@ -438,11 +537,16 @@ function LabelingPage() {
       var myDiv = document.getElementById('explore_grid').firstChild;
       myDiv.scrollTop = 0;
     });
-  }, [keyPaths, keyIdentifiers])
+  }, [keyPaths, keyIdentifiers, PAGINATION_NUM])
 
   useEffect(() => {
     let button = document.getElementById("filter_button");
-    var maxPage = Math.ceil(numTotalFilteredImages/PAGINATION_NUM)
+    var currPaginationNum = 500;
+    if (document.getElementById("fetch_image_mode").value.localeCompare("google") === 0) {
+      currPaginationNum = 10;
+    }
+    var maxPage = Math.ceil(numTotalFilteredImages/currPaginationNum)
+    setPaginationNum(currPaginationNum)
     console.log("Page:")
     console.log(page)
     if (button) {
@@ -635,21 +739,6 @@ function LabelingPage() {
       });
     }
 
-    const handle_forager_change = () => {
-      const select = document.getElementById("select_forager_mode");
-      const klabeldiv = document.getElementById("klabel_wrapper");
-      const explorediv = document.getElementById("explore_grid");
-      if (select.value.localeCompare("forager_annotate") === 0) {
-        forager_mode = "forager_annotate"
-        klabeldiv.style.display = "flex"
-        explorediv.style.display = "flex"
-      } else if (select.value.localeCompare("forager_explore") === 0) {
-        forager_mode = "forager_explore"
-        klabeldiv.style.display = "none"
-        explorediv.style.display = "flex"
-      }
-    }
-
     const klabelRun = async () => {
       const main_canvas = document.getElementById(main_canvas_id);
       labeler.init(main_canvas);
@@ -724,9 +813,6 @@ function LabelingPage() {
       let select = document.getElementById("select_annotation_mode")
       select.onchange = handle_mode_change;
 
-      select = document.getElementById("select_forager_mode")
-      select.onchange = handle_forager_change;
-
       window.addEventListener("keydown", function(e) {
         console.log("Handling keydown")
         //e.preventDefault(); // If we prevent default it stops typing, only prevent default maybe for arrow keys
@@ -775,85 +861,91 @@ function LabelingPage() {
   }, []);
 
   return (
-    <RowContainer>
-      <ColContainer>
-        <RowContainer>
-          <TitleHeader>Labeling: {datasetName}</TitleHeader>
-          <OptionsSelect alt="true" id="select_forager_mode">
-            <option value="forager_annotate">Annotate</option>
-            <option value="forager_explore">Explore</option>
-          </OptionsSelect>
-          <BuildIndex dataset={datasetName} />
-        </RowContainer>
-        <RowContainer>
-          <TitleHeader>Filter: </TitleHeader>
-          <input type="text" list="users" id="filterUser" onChange={onFilterUser} placeholder="FilterUser" />
-          <datalist id="users">
-            {users.map((item, key) =>
-              <option key={key} value={item} />
-            )}
-          </datalist>
-          <input type="text" list="categories" id="filterCategory" onChange={onFilterCategory} placeholder="FilterCategory" />
-          <OptionsSelect alt="true" id="select_image_subset">
-            <option value="all">All</option>
-            <option value="unlabeled">Unlabeled</option>
-            <option value="positive">Positive</option>
-            <option value="negative">Negative</option>
-            <option value="hard_negative">Hard Negative</option>
-            <option value="unsure">Unsure</option>
-            <option value="interesting">Interesting</option>
-            <option value="conflict">Conflict</option>
-          </OptionsSelect>
-          <datalist id="categories">
-            {categories.map((item, key) =>
-              <option key={key} value={item} />
-            )}
-          </datalist>
-          <OptionsSelect alt="true" id="fetch_image_mode">
-            <option value="random">Random</option>
-            {cluster.status === 'CLUSTER_STARTED' &&
-            index.status == 'INDEX_BUILT' &&
-            <option value="knn">KNN</option>}
-            {cluster.status === 'CLUSTER_STARTED' &&
-            index.status == 'INDEX_BUILT' &&
-            <option value="spatialKnn">Spatial KNN</option>}
-            {cluster.status === 'CLUSTER_STARTED' &&
-            index.status == 'INDEX_BUILT' &&
-            <option value="svm">Category SVM</option>}
-          </OptionsSelect>
-          <select id="augmentations" size="1" multiple>
-            <option>flip</option>
-            <option>gray</option>
-            <option>brightness</option>
-            <option>resize</option>
-            <option>rotate</option>
-            <option>contrast</option>
-          </select>
-          <input id="augmentationParam" style={{width: "70px"}}></input>
-          <FetchButton id="filter_button">Apply Filter</FetchButton>
-        </RowContainer>
-        <MainCanvas numTotalFilteredImages={numTotalFilteredImages} onCategory={OnLabel} onUser={OnLabel} annotationsSummary={annotationsSummary}/>
-        <hr style={{width:"95%"}}/>
-        <ImageRowContainer id="key_grid">
-            <ImageGrid onImageClick={OnKeyImageClick} imagePaths={keyPaths} imageHeight={imageSize}/>
-        </ImageRowContainer>
-      </ColContainer>
-      <ColContainer>
-        <RowContainer>
-          <FetchButton id="first_button">First</FetchButton>
-          <FetchButton id="prev_button">Prev</FetchButton>
-          <FetchButton id="next_button">Next</FetchButton>
-          <FetchButton id="last_button">Last</FetchButton>
-          <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
-        </RowContainer>
-        <SummaryBar numTotalFilteredImages={numTotalFilteredImages} page={page} pageSize={PAGINATION_NUM}/>
-        <ImageGridContainer id="explore_grid">
-            <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} currentIndex={labeler.current_frame_index} selectedIndices={labeler.current_indices}/>
-        </ImageGridContainer>
-        <hr style={{width:"95%"}}/>
-        <StatsBar annotationsSummary={annotationsSummary}/>
-      </ColContainer>
-    </RowContainer>
+    <BaseColContainer>
+      <RowContainer id="title">
+        <TitleHeader>Labeling: {datasetName}</TitleHeader>
+        <BuildIndex dataset={datasetName} />
+        <HideButton id="klabel_toggle" onClick={onKLabelClick}>Hide KLabel</HideButton>
+        <HideButton id="summary_toggle" onClick={onSummaryClick}>Hide Label Summary</HideButton>
+        <HideButton id="keyimage_toggle" onClick={onKeyImageClick}>Hide Key Images</HideButton>
+        <p style={{width:"320px"}}></p>
+        <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
+      </RowContainer>
+      <RowContainer>
+        <TitleHeader>Filter: </TitleHeader>
+        <input type="text" list="users" id="filterUser" onChange={onFilterUser} placeholder="FilterUser" />
+        <datalist id="users">
+          {users.map((item, key) =>
+            <option key={key} value={item} />
+          )}
+        </datalist>
+        <input type="text" list="categories" id="filterCategory" onChange={onFilterCategory} placeholder="FilterCategory" />
+        <OptionsSelect alt="true" id="select_image_subset">
+          <option value="all">All</option>
+          <option value="unlabeled">Unlabeled</option>
+          <option value="positive">Positive</option>
+          <option value="negative">Negative</option>
+          <option value="hard_negative">Hard Negative</option>
+          <option value="unsure">Unsure</option>
+          <option value="interesting">Interesting</option>
+          <option value="conflict">Conflict</option>
+          <option value="google">Googled Earlier</option>
+        </OptionsSelect>
+        <datalist id="categories">
+          {categories.map((item, key) =>
+            <option key={key} value={item} />
+          )}
+        </datalist>
+        <OptionsSelect alt="true" id="fetch_image_mode">
+          <option value="random">Random</option>
+          <option value="google">Google</option>
+          {cluster.status === 'CLUSTER_STARTED' &&
+          index.status == 'INDEX_BUILT' &&
+          <option value="knn">KNN</option>}
+          {cluster.status === 'CLUSTER_STARTED' &&
+          index.status == 'INDEX_BUILT' &&
+          <option value="spatialKnn">Spatial KNN</option>}
+          {cluster.status === 'CLUSTER_STARTED' &&
+          index.status == 'INDEX_BUILT' &&
+          <option value="svm">Category SVM</option>}
+        </OptionsSelect>
+        <select id="augmentations" size="1" multiple>
+          <option>flip</option>
+          <option>gray</option>
+          <option>brightness</option>
+          <option>resize</option>
+          <option>rotate</option>
+          <option>contrast</option>
+        </select>
+        <input id="augmentationParam" style={{width: "70px"}}></input>
+        <FetchButton id="filter_button">Apply Filter</FetchButton>
+        <p style={{width:"170px"}}></p>
+        <SummaryBar id="image_summary" numTotalFilteredImages={numTotalFilteredImages} page={page} pageSize={PAGINATION_NUM}/>
+        <p style={{width:"10px"}}></p>
+        <FetchButton id="first_button">First</FetchButton>
+        <FetchButton id="prev_button">Prev</FetchButton>
+        <FetchButton id="next_button">Next</FetchButton>
+        <FetchButton id="last_button">Last</FetchButton>
+      </RowContainer>
+      <RowContainer>
+        <ColContainer id="klabel_container">
+          <MainCanvas numTotalFilteredImages={numTotalFilteredImages} onCategory={OnLabel} onUser={OnLabel} annotationsSummary={annotationsSummary}/>
+          <Divider/>
+          <TrainProgress/>
+          <Divider/>
+          <StatsBar annotationsSummary={annotationsSummary}/>
+        </ColContainer>
+        <ColContainer id="explore_container">
+          <ImageGridContainer id="explore_grid">
+              <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} currentIndex={labeler.current_frame_index} selectedIndices={labeler.current_indices}/>
+          </ImageGridContainer>
+          <hr style={{width:"95%"}}/>
+          <ImageRowContainer id="key_grid">
+              <ImageGrid onImageClick={OnKeyImageClick} imagePaths={keyPaths} imageHeight={imageSize}/>
+          </ImageRowContainer>
+        </ColContainer>
+      </RowContainer>
+    </BaseColContainer>
   );
 };
 
