@@ -157,8 +157,8 @@ class LabeledIndexReducer(Reducer):
         self.should_finalize.set()
         self.flush_thread.join()
 
-        self.full_index.merge_partial_indexes()
-        self.spatial_index.merge_partial_indexes()
+        # self.full_index.merge_partial_indexes()
+        # self.spatial_index.merge_partial_indexes()
 
         return self
 
