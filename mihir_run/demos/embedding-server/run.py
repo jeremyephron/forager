@@ -313,8 +313,6 @@ async def _start_cluster(cluster_data):
     )
     cluster_data.deployment_id = deployment_id
     cluster_data.service_url = service_url
-    print("Service url: ")
-    print(service_url)
     cluster_data.ready.set()
 
 
@@ -422,13 +420,11 @@ async def query_index(request):
     augmentations = []
     if "augmentations" in request.form:
         augmentations = request.form["augmentations"]
-    print(augmentations)
     
     augmentation_dict = {}
     for i in range(len(augmentations)//2):
         augmentation_dict[augmentations[2*i]] = float(augmentations[2*i+1])
     
-    print(augmentation_dict)
     use_full_image = bool(request.form.get("use_full_image", [False])[0])
 
     cluster_data = current_clusters[cluster_id]
