@@ -156,9 +156,7 @@ class InteractiveIndex:
 
         xt = self._convert_src_to_numpy(xt_src)
 
-        print("Before")
         index = faiss.read_index(str(self.tempdir/self.TRAINED_INDEX_NAME))
-        print("After")
 
         if self.use_gpu:
             # TODO: perhaps add memory check for training on GPU?
@@ -308,6 +306,7 @@ class InteractiveIndex:
         unlink(self.tempdir/self.TRAINED_INDEX_NAME)
         unlink(self.tempdir/self.MERGED_INDEX_NAME)
         unlink(self.tempdir/self.MERGED_INDEX_DATA_NAME)
+        unlink(self.tempdir/self.META_FILE_NAME)
         for shard_num in range(self.n_indexes):
             unlink(self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num))
 
