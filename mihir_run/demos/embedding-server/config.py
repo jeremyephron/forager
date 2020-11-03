@@ -3,7 +3,7 @@ GCP_ZONE = "us-central1-a"
 GCP_MACHINE_TYPE = "n2-highcpu-4"
 
 OUTPUT_FILENAME = "lvis-embeddings.npy"
-MAPPER_CONTAINER = "gcr.io/visualdb-1046/vishnu-demo-full-image-embedding-spatial"
+MAPPER_CONTAINER = "gcr.io/visualdb-1046/mihir-full-image-embedding-spatial"
 
 N_RETRIES = 1
 CHUNK_SIZE = 1
@@ -20,10 +20,10 @@ INDEX_NUM_QUERY_PROBES = 16
 INDEX_USE_GPU = False
 INDEX_TRAIN_MULTIPLE = 39
 
-INDEX_TRANSFORM = None
-INDEX_TRANSFORM_ARGS = None
-INDEX_ENCODING = "PQ"
-INDEX_ENCODING_ARGS = [64, 8]
+INDEX_TRANSFORM = "PCA"
+INDEX_TRANSFORM_ARGS = [128]
+INDEX_ENCODING = "SQ"
+INDEX_ENCODING_ARGS = [8]
 
 INDEX_FLUSH_SLEEP = 5  # seconds
 

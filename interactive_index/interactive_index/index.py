@@ -60,7 +60,7 @@ class InteractiveIndex:
             del kwargs['_extra']
 
         assert not exists or extra
-            
+
         if config_fpath:
             self.cfg = read_config(config_fpath)
         else:
@@ -240,7 +240,7 @@ class InteractiveIndex:
                 self.vectors_per_index - (self.n_vectors % self.vectors_per_index),
                 xb.shape[0]
             )
-            
+
             index.add_with_ids(xb[idx:end_idx], ids[idx:end_idx])
             self.n_vectors += (end_idx - idx)
 
@@ -250,7 +250,7 @@ class InteractiveIndex:
             )
 
             self._save_metadata()
-            
+
             idx = end_idx
 
     def merge_partial_indexes(self) -> None:
@@ -306,6 +306,7 @@ class InteractiveIndex:
         unlink(self.tempdir/self.TRAINED_INDEX_NAME)
         unlink(self.tempdir/self.MERGED_INDEX_NAME)
         unlink(self.tempdir/self.MERGED_INDEX_DATA_NAME)
+        unlink(self.tempdir/self.META_FILE_NAME)
         for shard_num in range(self.n_indexes):
             unlink(self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num))
 
@@ -410,7 +411,7 @@ class InteractiveIndex:
                 'n_vectors': self.n_vectors
             }
         }
-        
+
         json.dump(payload, (self.tempdir/self.META_FILE_NAME).open('w'))
 
     @classmethod

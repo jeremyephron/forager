@@ -80,8 +80,8 @@ class LabeledIndexReducer(Reducer):
         spatial = embeddings.reshape(config.EMBEDDING_DIM, -1).T
 
         with self.accumulated_lock:
-            # self.accumulated_full[i] = full
-            # self.accumulated_spatial[i] = spatial
+            self.accumulated_full[i] = full
+            self.accumulated_spatial[i] = spatial
             self.num_accumulated_spatial += len(spatial)
 
     def flush(self):
@@ -127,7 +127,7 @@ class LabeledIndexReducer(Reducer):
                 if not self.full_index.is_trained:
                     self.full_index.train(full_vectors)
                 self.full_index.add(full_vectors, full_ids)
-                self.full_index.merge_partial_indexes()
+                print(f"Added {len(full_ids)} full embeddings to index")
 
             if should_add_spatial:
                 spatial_vectors = np.concatenate(
@@ -142,7 +142,7 @@ class LabeledIndexReducer(Reducer):
                 if not self.spatial_index.is_trained:
                     self.spatial_index.train(spatial_vectors)
                 self.spatial_index.add(spatial_vectors, spatial_ids)
-                self.spatial_index.merge_partial_indexes()
+                print(f"Added {len(spatial_ids)} spatial embeddings to index")
 
             if not should_finalize and not should_add_full and not should_add_spatial:
                 time.sleep(config.INDEX_FLUSH_SLEEP)
@@ -153,6 +153,10 @@ class LabeledIndexReducer(Reducer):
     def result(self):  # called only once to finalize
         self.should_finalize.set()
         self.flush_thread.join()
+
+        self.full_index.merge_partial_indexes()
+        self.spatial_index.merge_partial_indexes()
+
         return self
 
     def delete(self):
@@ -420,11 +424,11 @@ async def query_index(request):
     augmentations = []
     if "augmentations" in request.form:
         augmentations = request.form["augmentations"]
-    
+
     augmentation_dict = {}
-    for i in range(len(augmentations)//2):
-        augmentation_dict[augmentations[2*i]] = float(augmentations[2*i+1])
-    
+    for i in range(len(augmentations) // 2):
+        augmentation_dict[augmentations[2 * i]] = float(augmentations[2 * i + 1])
+
     use_full_image = bool(request.form.get("use_full_image", [False])[0])
 
     cluster_data = current_clusters[cluster_id]
