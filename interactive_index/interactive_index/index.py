@@ -60,7 +60,7 @@ class InteractiveIndex:
             del kwargs['_extra']
 
         assert not exists or extra
-            
+
         if config_fpath:
             self.cfg = read_config(config_fpath)
         else:
@@ -156,7 +156,9 @@ class InteractiveIndex:
 
         xt = self._convert_src_to_numpy(xt_src)
 
+        print("Before")
         index = faiss.read_index(str(self.tempdir/self.TRAINED_INDEX_NAME))
+        print("After")
 
         if self.use_gpu:
             # TODO: perhaps add memory check for training on GPU?
@@ -240,7 +242,7 @@ class InteractiveIndex:
                 self.vectors_per_index - (self.n_vectors % self.vectors_per_index),
                 xb.shape[0]
             )
-            
+
             index.add_with_ids(xb[idx:end_idx], ids[idx:end_idx])
             self.n_vectors += (end_idx - idx)
 
@@ -250,7 +252,7 @@ class InteractiveIndex:
             )
 
             self._save_metadata()
-            
+
             idx = end_idx
 
     def merge_partial_indexes(self) -> None:
@@ -410,7 +412,7 @@ class InteractiveIndex:
                 'n_vectors': self.n_vectors
             }
         }
-        
+
         json.dump(payload, (self.tempdir/self.META_FILE_NAME).open('w'))
 
     @classmethod
