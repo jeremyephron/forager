@@ -1,6 +1,5 @@
 import asyncio
 from collections import defaultdict
-import faulthandler
 import functools
 import gc
 import heapq
@@ -26,8 +25,6 @@ from knn.clusters import GKECluster
 from interactive_index import InteractiveIndex
 
 import config
-
-faulthandler.enable()
 
 
 @dataclass
