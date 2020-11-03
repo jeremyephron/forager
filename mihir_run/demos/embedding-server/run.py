@@ -359,8 +359,9 @@ async def start_job(request):
     index_id = job.job_id
     current_jobs[index_id] = job
 
+    augmentation_dict = {}
     # Construct input iterable
-    iterable = [{"image": path} for path in paths]
+    iterable = [{"image": path, "augmentations": augmentation_dict} for path in paths]
     callback_func = functools.partial(_handle_job_result, index_id=index_id)
     await job.start(iterable, callback_func)
 
@@ -416,6 +417,14 @@ async def query_index(request):
     ]  # [0, 1]^2
     index_id = request.form["index_id"][0]
     num_results = int(request.form["num_results"][0])
+    augmentations = []
+    if "augmentations" in request.form:
+        augmentations = request.form["augmentations"]
+    
+    augmentation_dict = {}
+    for i in range(len(augmentations)//2):
+        augmentation_dict[augmentations[2*i]] = float(augmentations[2*i+1])
+    
     use_full_image = bool(request.form.get("use_full_image", [False])[0])
 
     cluster_data = current_clusters[cluster_id]
@@ -431,7 +440,7 @@ async def query_index(request):
     )
     query_vector = await job.run_until_complete(
         [
-            {"image": image_path, "patch": patch}
+            {"image": image_path, "patch": patch, "augmentations": augmentation_dict}
             for image_path, patch in zip(image_paths, patches)
         ]
     )

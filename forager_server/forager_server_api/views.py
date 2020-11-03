@@ -248,8 +248,6 @@ def create_dataset(request):
                      path.endswith('.png'))]
 
         # these paths do not have a prefix--probably can just load images differently if with prefix
-        print(paths[:10])
-        print(os.path.basename(paths[0]).split('.')[0])
         items = [
             DatasetItem(dataset=dataset,
                         identifier=os.path.basename(path).split('.')[0],
@@ -284,9 +282,6 @@ def gen_identifiers(request, dataset_name, dataset = None):
         #             path.endswith('.jpeg') or
         #             path.endswith('.png'))]
 
-        # these paths do have a prefix, unlike paths from gcloud bucket in create_dataset
-        print(paths[:5])
-
         # Check which paths are already in the dataset
         existing_items = DatasetItem.objects.filter(dataset=dataset,path__in=paths).order_by('pk')
         existing_paths = [di.path for di in existing_items]
@@ -298,13 +293,9 @@ def gen_identifiers(request, dataset_name, dataset = None):
             if (path not in existing_paths):
                 newItem = DatasetItem.objects.create(dataset=dataset,identifier="",path=path,google=True)
                 identifiers.append(newItem.pk)
-                print("New identifier")
-                print(newItem.pk)
             else:
                 pathIndex = existing_paths.index(path)
                 identifiers.append(existing_items[pathIndex].pk)
-                print("Getting existing identifier")
-                print(existing_items[pathIndex].pk)
 
         req = HttpRequest()
         req.method = 'GET'
@@ -329,8 +320,6 @@ def get_dataset_info(request, dataset_name, dataset=None):
     dataset_items = DatasetItem.objects.filter(dataset=dataset).order_by('pk')[:500]
     dataset_item_paths = [path_template.format(di.path) for di in dataset_items]
     dataset_item_identifiers = [di.pk for di in dataset_items]
-    print(dataset_item_paths[:10])
-    print(dataset_item_identifiers[:10])
 
     return JsonResponse({
         'status': 'success',
@@ -497,8 +486,6 @@ def get_annotations_summary(request, dataset_name):
     label_functions = [d['label_function'] for d in (anns.values("label_function").distinct())]
     label_categories = [d['label_category'] for d in (anns.values("label_category").distinct())]
 
-    print(label_functions)
-    print(label_categories)
     # For each (label_function, label_category) pair, get the number of
     # annotations
 
@@ -733,6 +720,7 @@ def lookup_knn(request, dataset_name):
     ann_identifiers = [int(x) for x in request.GET['ann_identifiers'].split(',')]
     cluster_id = request.GET['cluster_id']
     index_id = request.GET['index_id']
+    augmentations = [x.split(":") for x in request.GET['augmentations'].split(',')]
     use_full_image = 'use_full_image' in request.GET
 
     # 1. Retrieve dataset info from db
@@ -759,6 +747,7 @@ def lookup_knn(request, dataset_name):
         "bucket": bucket_name,
         "paths": paths,
         "patches": json.dumps(patches),
+        "augmentations": augmentations,
         "num_results": 100,
         "use_full_image": use_full_image,
     }

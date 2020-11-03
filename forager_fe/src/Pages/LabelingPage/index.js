@@ -387,11 +387,21 @@ function LabelingPage() {
           }
         }
 
+        // Get augmentations
+        var augmentations = []
+        var augSelect = document.getElementById("augmentations");
+        var augParams = document.getElementById("augmentationParam");
+        for (var i = 0; i < augSelect.length; i++) {
+            if (augSelect.options[i].selected) augmentations.push(augSelect.options[i].value + ":" + augParams.value);
+        }
+
         url = new URL(lookupKnnUrl);
         let knnPayload = {
           ann_identifiers: filteredAnnotations.map(ann => ann.identifier),
           cluster_id: clusterRef.current.id,
           index_id: indexRef.current.id,
+          use_full_image: (method.localeCompare("knn") === 0),
+          augmentations: augmentations
         };
         if (method.localeCompare("knn") === 0) {
           knnPayload.use_full_image = true;
@@ -899,8 +909,17 @@ function LabelingPage() {
           index.status == 'INDEX_BUILT' &&
           <option value="svm">Category SVM</option>}
         </OptionsSelect>
+        <select id="augmentations" size="1" multiple>
+          <option>flip</option>
+          <option>gray</option>
+          <option>brightness</option>
+          <option>resize</option>
+          <option>rotate</option>
+          <option>contrast</option>
+        </select>
+        <input id="augmentationParam" style={{width: "70px"}}></input>
         <FetchButton id="filter_button">Apply Filter</FetchButton>
-        <p style={{width:"320px"}}></p>
+        <p style={{width:"170px"}}></p>
         <SummaryBar id="image_summary" numTotalFilteredImages={numTotalFilteredImages} page={page} pageSize={PAGINATION_NUM}/>
         <p style={{width:"10px"}}></p>
         <FetchButton id="first_button">First</FetchButton>
