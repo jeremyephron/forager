@@ -127,6 +127,7 @@ class LabeledIndexReducer(Reducer):
                 if not self.full_index.is_trained:
                     self.full_index.train(full_vectors)
                 self.full_index.add(full_vectors, full_ids)
+                print(f"Added {len(full_ids)} full embeddings to index")
 
             if should_add_spatial:
                 spatial_vectors = np.concatenate(
@@ -141,6 +142,7 @@ class LabeledIndexReducer(Reducer):
                 if not self.spatial_index.is_trained:
                     self.spatial_index.train(spatial_vectors)
                 self.spatial_index.add(spatial_vectors, spatial_ids)
+                print(f"Added {len(spatial_ids)} spatial embeddings to index")
 
             if not should_finalize and not should_add_full and not should_add_spatial:
                 time.sleep(config.INDEX_FLUSH_SLEEP)
