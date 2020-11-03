@@ -123,9 +123,11 @@ class LabeledIndexReducer(Reducer):
             if should_add_full:
                 full_vectors = np.stack(list(accumulated_full_copy.values()))
                 full_ids = list(accumulated_full_copy.keys())
-                if not self.full_index.is_trained:
-                    self.full_index.train(full_vectors)
-                self.full_index.add(full_vectors, full_ids)
+
+                # if not self.full_index.is_trained:
+                #     self.full_index.train(full_vectors)
+                # self.full_index.add(full_vectors, full_ids)
+                # self.full_index.merge_partial_indexes()
 
             if should_add_spatial:
                 spatial_vectors = np.concatenate(
@@ -136,9 +138,11 @@ class LabeledIndexReducer(Reducer):
                     for i, vs in accumulated_spatial_copy.items()
                     for _ in range(len(vs))
                 ]
-                if not self.spatial_index.is_trained:
-                    self.spatial_index.train(spatial_vectors)
-                self.spatial_index.add(spatial_vectors, spatial_ids)
+
+                # if not self.spatial_index.is_trained:
+                #     self.spatial_index.train(spatial_vectors)
+                # self.spatial_index.add(spatial_vectors, spatial_ids)
+                # self.spatial_index.merge_partial_indexes()
 
             if not should_finalize and not should_add_full and not should_add_spatial:
                 time.sleep(config.INDEX_FLUSH_SLEEP)
@@ -149,10 +153,6 @@ class LabeledIndexReducer(Reducer):
     def result(self):  # called only once to finalize
         self.should_finalize.set()
         self.flush_thread.join()
-
-        self.full_index.merge_partial_indexes()
-        self.spatial_index.merge_partial_indexes()
-
         return self
 
     def delete(self):
