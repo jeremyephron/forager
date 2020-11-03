@@ -46,10 +46,10 @@ class LabeledIndexReducer(Reducer):
             n_centroids=config.INDEX_NUM_CENTROIDS,
             vectors_per_index=config.INDEX_SUBINDEX_SIZE,
             use_gpu=config.INDEX_USE_GPU,
-            # transform=config.INDEX_TRANSFORM,
-            # transform_args=config.INDEX_TRANSFORM_ARGS,
-            # encoding=config.INDEX_ENCODING,
-            # encoding_args=config.INDEX_ENCODING_ARGS,
+            transform=config.INDEX_TRANSFORM,
+            transform_args=config.INDEX_TRANSFORM_ARGS,
+            encoding=config.INDEX_ENCODING,
+            encoding_args=config.INDEX_ENCODING_ARGS,
         )
         filepath_id = str(uuid.uuid4())
 
@@ -80,8 +80,8 @@ class LabeledIndexReducer(Reducer):
         spatial = embeddings.reshape(config.EMBEDDING_DIM, -1).T
 
         with self.accumulated_lock:
-            self.accumulated_full[i] = full
-            self.accumulated_spatial[i] = spatial
+            # self.accumulated_full[i] = full
+            # self.accumulated_spatial[i] = spatial
             self.num_accumulated_spatial += len(spatial)
 
     def flush(self):
