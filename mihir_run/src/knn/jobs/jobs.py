@@ -232,9 +232,6 @@ class MapReduceJob:
 
         request = self._construct_request(chunk)
 
-        print(mapper_url)
-        print(request)
-
         for i in range(self.n_retries):
             start_time = time.time()
             end_time = start_time
