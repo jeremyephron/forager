@@ -792,6 +792,7 @@ def lookup_svm(request, dataset_name):
     # Get positive paths, negative paths, positive bounding boxes 
     # Positive patches: 
     pos_anns = Annotation.objects.filter(
+        dataset_item__in=dataset.datasetitem_set.filter(),
         label_type="klabel_extreme",
         label_function=label_function,
         label_category=label_category)
@@ -803,13 +804,13 @@ def lookup_svm(request, dataset_name):
                for bbox in [json.loads(ann.label_data)['bbox']
                             for ann in pos_anns]]
     frame_anns = Annotation.objects.filter(
+        dataset_item__in=dataset.datasetitem_set.filter(),
         label_type="klabel_frame",
         label_function=label_function,
         label_category=label_category)
     neg_paths = []
     for ann in frame_anns:
         label_value = json.loads(ann.label_data)['value']
-        print(label_value)
         if label_value == 2:
             neg_paths.append(ann.dataset_item.path)
 
