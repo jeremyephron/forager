@@ -3,7 +3,7 @@ GCP_ZONE = "us-central1-a"
 GCP_MACHINE_TYPE = "n2-highcpu-4"
 
 OUTPUT_FILENAME = "lvis-embeddings.npy"
-MAPPER_CONTAINER = "gcr.io/visualdb-1046/vishnu-demo-full-image-embedding-spatial-svm"
+MAPPER_CONTAINER = "gcr.io/visualdb-1046/vishnu-demo-full-image-embedding-spatial"
 
 N_RETRIES = 1
 CHUNK_SIZE = 1
