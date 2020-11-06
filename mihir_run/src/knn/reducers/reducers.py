@@ -81,7 +81,6 @@ class TrivialReducer(Reducer):
         extract_func: Optional[Callable[[JSONType], np.ndarray]] = None,
     ) -> None:
         super().__init__()
-        self.pool_func = pool_func
         self.extract_func = extract_func or self.extract_value
         self._results = []  # type: List[np.ndarray]
 

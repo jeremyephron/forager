@@ -432,9 +432,6 @@ async def stop_job(request):
 
 
 # INDEX MANAGEMENT
-def _extract_pooled_combined_embedding_from_mapper_output(output):
-    print(utils.base64_to_numpy(output[config.EMBEDDING_LAYER]).shape)
-    return utils.base64_to_numpy(output[config.EMBEDDING_LAYER]).mean(axis=(1, 2))
 
 def _extract_pooled_embedding_from_mapper_output(output):
     print(utils.base64_to_numpy(output[config.EMBEDDING_LAYER]).shape)
@@ -469,7 +466,7 @@ async def query_index(request):
     # Generate query vector as average of patch embeddings
     job = MapReduceJob(
         MapperSpec(url=cluster_data.service_url, n_mappers=1), 
-        PoolingReducer(extract_func=_extract_pooled_combined_embedding_from_mapper_output),
+        PoolingReducer(extract_func=_extract_pooled_embedding_from_mapper_output),
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
         chunk_size=1,
@@ -507,7 +504,6 @@ async def query_svm(request):
         [float(patch[k]) for k in ("x1", "y1", "x2", "y2")]
         for patch in json.loads(request.form["positive_patches"][0]) # Pass all patches, not just the first
     ]  # [0, 1]^2
-    print(pos_patches)
     neg_image_paths = request.form["negative_paths"]
     num_results = int(request.form["num_results"][0])
 
@@ -537,15 +533,10 @@ async def query_svm(request):
         {"image": image_path, "augmentations": augmentation_dict}
         for image_path in neg_image_paths
     ]
-    print(pos_inputs)
-    print(neg_inputs)
-    print(pos_inputs + neg_inputs)
     training_features = await job.run_until_complete(
-        neg_inputs
+        pos_inputs + neg_inputs
     )
     training_labels = np.concatenate([np.ones((len(pos_inputs,)), dtype=int),np.zeros((len(neg_inputs,)), dtype=int)])
-    print(training_features.shape)
-    print(training_labels)
 
     # Train the SVM using pos/neg + their corresponding embeddings
     # svm = svm.SVC(kernel='linear')
@@ -553,7 +544,7 @@ async def query_svm(request):
     model.fit(training_features, training_labels)
     w = model.coef_ # This will be the query vector
     # Also consider returning the support vectors--good to look at examples along hyperplane
-    print(w)
+    w = np.float32(w[0])
 
     # Evaluate the SVM by querying index
     augmentations = []

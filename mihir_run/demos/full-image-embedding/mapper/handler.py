@@ -37,7 +37,7 @@ class ImageEmbeddingMapper(ResNetBackboneMapper):
                 cropped = spatial_embeddings[0, :, :, :]
 
                 # temporary fix for OOM with spatial embeddings
-                cropped = torch.mean(cropped, dim=(1, 2), keepdim=True)
+                # cropped = torch.mean(cropped, dim=(1, 2), keepdim=True)
 
                 result[layer] = utils.numpy_to_base64(cropped.numpy())
 
