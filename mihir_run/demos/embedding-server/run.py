@@ -19,10 +19,12 @@ from typing import Awaitable, Callable, Dict, TypeVar, Optional, MutableMapping
 
 from knn import utils
 from knn.jobs import MapReduceJob, MapperSpec
-from knn.reducers import Reducer, PoolingReducer
+from knn.reducers import Reducer, PoolingReducer, TrivialReducer
 from knn.clusters import GKECluster
 
 from interactive_index import InteractiveIndex
+
+from sklearn import svm
 
 import config
 
@@ -51,6 +53,17 @@ class LabeledIndexReducer(Reducer):
             encoding=config.INDEX_ENCODING,
             encoding_args=config.INDEX_ENCODING_ARGS,
         )
+        dot_index_kwargs = dict(
+            d=config.EMBEDDING_DIM,
+            n_centroids=config.INDEX_NUM_CENTROIDS,
+            vectors_per_index=config.INDEX_SUBINDEX_SIZE,
+            use_gpu=config.INDEX_USE_GPU,
+            transform=config.INDEX_TRANSFORM,
+            transform_args=config.INDEX_TRANSFORM_ARGS,
+            encoding=config.INDEX_ENCODING,
+            encoding_args=config.INDEX_ENCODING_ARGS,
+            metric='inner_product'
+        )
         filepath_id = str(uuid.uuid4())
 
         self.labels = []
@@ -59,6 +72,9 @@ class LabeledIndexReducer(Reducer):
         )
         self.spatial_index = InteractiveIndex(
             tempdir=f"/tmp/s-{filepath_id}/", **index_kwargs
+        )
+        self.full_dot_index = InteractiveIndex(
+            tempdir=f"/tmp/fd-{filepath_id}/", **dot_index_kwargs
         )
 
         self.accumulated_lock = threading.Lock()
@@ -126,7 +142,10 @@ class LabeledIndexReducer(Reducer):
 
                 if not self.full_index.is_trained:
                     self.full_index.train(full_vectors)
+                if not self.full_dot_index.is_trained:
+                    self.full_dot_index.train(full_vectors)
                 self.full_index.add(full_vectors, full_ids)
+                self.full_dot_index.add(full_vectors, full_ids)
                 print(f"Added {len(full_ids)} full embeddings to index")
 
             if should_add_spatial:
@@ -155,6 +174,7 @@ class LabeledIndexReducer(Reducer):
         self.flush_thread.join()
 
         self.full_index.merge_partial_indexes()
+        self.full_dot_index.merge_partial_indexes()
         self.spatial_index.merge_partial_indexes()
 
         return self
@@ -162,12 +182,18 @@ class LabeledIndexReducer(Reducer):
     def delete(self):
         self.result
         self.full_index.cleanup()
+        self.full_dot_index.cleanup()
         self.spatial_index.cleanup()
 
-    def query(self, query_vector, num_results, num_probes, use_full_image=False):
+    def query(self, query_vector, num_results, num_probes, use_full_image=False, svm=False):
         assert not self.flush_thread.is_alive()
 
-        if use_full_image:
+        if svm:
+            dists, ids = self.full_dot_index.query(
+                query_vector, num_results, n_probes=num_probes
+            )
+            sorted_id_dist_tuples = [(i, d) for i, d in zip(ids[0], dists[0]) if i >= 0]
+        elif use_full_image:
             dists, ids = self.full_index.query(
                 query_vector, num_results, n_probes=num_probes
             )
@@ -406,7 +432,9 @@ async def stop_job(request):
 
 
 # INDEX MANAGEMENT
+
 def _extract_pooled_embedding_from_mapper_output(output):
+    print(utils.base64_to_numpy(output[config.EMBEDDING_LAYER]).shape)
     return utils.base64_to_numpy(output[config.EMBEDDING_LAYER]).mean(axis=(1, 2))
 
 
@@ -417,8 +445,9 @@ async def query_index(request):
     bucket = request.form["bucket"][0]
     patches = [
         [float(patch[k]) for k in ("x1", "y1", "x2", "y2")]
-        for patch in json.loads(request.form["patches"][0])
+        for patch in json.loads(request.form["patches"][0]) # Modified to pass all patches, not just the first
     ]  # [0, 1]^2
+    print(patches)
     index_id = request.form["index_id"][0]
     num_results = int(request.form["num_results"][0])
     augmentations = []
@@ -436,7 +465,7 @@ async def query_index(request):
 
     # Generate query vector as average of patch embeddings
     job = MapReduceJob(
-        MapperSpec(url=cluster_data.service_url, n_mappers=1),
+        MapperSpec(url=cluster_data.service_url, n_mappers=1), 
         PoolingReducer(extract_func=_extract_pooled_embedding_from_mapper_output),
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
@@ -451,7 +480,7 @@ async def query_index(request):
 
     # Run query and return results
     query_results = current_indexes[index_id].query(
-        query_vector, num_results, config.INDEX_NUM_QUERY_PROBES, use_full_image
+        query_vector, num_results, config.INDEX_NUM_QUERY_PROBES, use_full_image, False
     )
     paths = [x[0] for x in query_results]
     return resp.json({"results": paths})
@@ -473,39 +502,65 @@ async def query_svm(request):
     pos_image_paths = request.form["positive_paths"]
     pos_patches = [
         [float(patch[k]) for k in ("x1", "y1", "x2", "y2")]
-        for patch in json.loads(request.form["positive_patches"][0])
+        for patch in json.loads(request.form["positive_patches"][0]) # Pass all patches, not just the first
     ]  # [0, 1]^2
-    neg_imamge_paths = request.form["negative_paths"]
+    neg_image_paths = request.form["negative_paths"]
     num_results = int(request.form["num_results"][0])
 
     cluster_data = current_clusters[cluster_id]
     await cluster_data.ready.wait()
 
     # Get embeddings from index
-    embedding_keys = current_indexes[index_id].labels
-    embedding = current_indexes[index_id].values
+    # We may want to get patch embeddings for labeled images in future--might as well use the bounding box
+    # Only do this if we are using spatial KNN?
+    # embedding_keys = current_indexes[index_id].labels
+    # embedding = current_indexes[index_id].values
 
-    # Generate query vector as average of patch embeddings
+    # Generate training vectors
     job = MapReduceJob(
-        MapperSpec(url=cluster_data.service_url, n_mappers=1),
-        PoolingReducer(extract_func=_extract_embedding_from_mapper_output),
+        MapperSpec(url=cluster_data.service_url, n_mappers=4), # Figure out n_mappers later
+        TrivialReducer(extract_func=_extract_pooled_embedding_from_mapper_output), # Returns all individual inputs back
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
         chunk_size=1,
     )
-    query_vector = await job.run_until_complete(
-        [
-            {"image": image_path, "patch": patch}
-            for image_path, patch in zip(image_paths, patches)
-        ]
+    augmentation_dict = {}
+    pos_inputs = [
+        {"image": image_path, "patch": patch, "augmentations": augmentation_dict}
+        for image_path, patch in zip(pos_image_paths, pos_patches)
+    ]
+    neg_inputs = [
+        {"image": image_path, "augmentations": augmentation_dict}
+        for image_path in neg_image_paths
+    ]
+    training_features = await job.run_until_complete(
+        pos_inputs + neg_inputs
     )
+    training_labels = np.concatenate([np.ones((len(pos_inputs,)), dtype=int),np.zeros((len(neg_inputs,)), dtype=int)])
 
     # Train the SVM using pos/neg + their corresponding embeddings
+    # svm = svm.SVC(kernel='linear')
+    model = svm.LinearSVC()
+    model.fit(training_features, training_labels)
+    w = model.coef_ # This will be the query vector
+    # Also consider returning the support vectors--good to look at examples along hyperplane
+    w = np.float32(w[0])
 
-    # Evaluate the SVM
+    # Evaluate the SVM by querying index
+    augmentations = []
+    if "augmentations" in request.form:
+        augmentations = request.form["augmentations"]
 
-    # Return top N results
+    augmentation_dict = {}
+    for i in range(len(augmentations) // 2):
+        augmentation_dict[augmentations[2 * i]] = float(augmentations[2 * i + 1])
 
+    use_full_image = bool(request.form.get("use_full_image", [True])[0])
+
+    # Run query and return results
+    query_results = current_indexes[index_id].query(
+        w, num_results, config.INDEX_NUM_QUERY_PROBES, use_full_image, True
+    )
     paths = [x[0] for x in query_results]
     return resp.json({"results": paths})
 

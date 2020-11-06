@@ -413,12 +413,22 @@ function LabelingPage() {
       } else if (method.localeCompare("svm") === 0) {
         // Get positive image paths, positive patches, negative image paths?
         // For now makes more sense to pass the user/category, the backend should be able to find the corresponding labels and paths
+        // Get augmentations
+        var augmentations = []
+        var augSelect = document.getElementById("augmentations");
+        var augParams = document.getElementById("augmentationParam");
+        for (var i = 0; i < augSelect.length; i++) {
+            if (augSelect.options[i].selected) augmentations.push(augSelect.options[i].value + ":" + augParams.value);
+        }
+
         url = new URL(querySvmUrl);
         url.search = new URLSearchParams({
           user: filterUser,
           category: filterCategory,
           cluster_id: clusterRef.current.id,
           index_id: indexRef.current.id,
+          use_full_image: true,
+          augmentations: augmentations
         }).toString();
         res = await fetch(url, {method: "GET",
           credentials: 'include',

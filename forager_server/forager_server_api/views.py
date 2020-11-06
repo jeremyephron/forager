@@ -771,3 +771,79 @@ def lookup_knn(request, dataset_name):
 
     # 4. Return knn results
     return JsonResponse(response)
+
+@api_view(['GET'])
+@csrf_exempt
+def lookup_svm(request, dataset_name):
+    label_function = request.GET['user']
+    label_category = request.GET['category']
+    cluster_id = request.GET['cluster_id']
+    index_id = request.GET['index_id']
+    augmentations = [x.split(":") for x in request.GET['augmentations'].split(',')]
+    use_full_image = 'use_full_image' in request.GET
+
+    # 1. Retrieve dataset info from db
+    dataset = Dataset.objects.get(name=dataset_name)
+    data_directory = dataset.directory
+    split_dir = data_directory[len('gs://'):].split('/')
+    bucket_name = split_dir[0]
+    bucket_path = '/'.join(split_dir[1:])
+
+    # Get positive paths, negative paths, positive bounding boxes 
+    # Positive patches: 
+    pos_anns = Annotation.objects.filter(
+        dataset_item__in=dataset.datasetitem_set.filter(),
+        label_type="klabel_extreme",
+        label_function=label_function,
+        label_category=label_category)
+    pos_paths = [ann.dataset_item.path for ann in pos_anns]
+    pos_patches = [{'x1': bbox['bmin']['x'],
+                'y1': bbox['bmin']['y'],
+                'x2': bbox['bmax']['x'],
+                'y2': bbox['bmax']['y']}
+               for bbox in [json.loads(ann.label_data)['bbox']
+                            for ann in pos_anns]]
+    frame_anns = Annotation.objects.filter(
+        dataset_item__in=dataset.datasetitem_set.filter(),
+        label_type="klabel_frame",
+        label_function=label_function,
+        label_category=label_category)
+    neg_paths = []
+    for ann in frame_anns:
+        label_value = json.loads(ann.label_data)['value']
+        if label_value == 2:
+            neg_paths.append(ann.dataset_item.path)
+
+    # 3. Send paths and patches to /query_svm
+    params = {
+        "cluster_id": cluster_id,
+        "index_id": index_id,
+        "bucket": bucket_name,
+        "positive_paths": pos_paths,
+        "positive_patches": json.dumps(pos_patches),
+        "negative_paths": neg_paths,
+        "augmentations": augmentations,
+        "num_results": 100,
+        "use_full_image": use_full_image,
+    }
+    r = requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/query_svm",
+        data=params, headers=POST_HEADERS
+    )
+    response_data = r.json()
+    response = {
+        'identifiers': [],
+        'paths': []
+    }
+    ditems = DatasetItem.objects.filter(path__in=response_data['results'])
+    path_to_id = {}
+    for ditem in ditems:
+        path_to_id[ditem.path] = ditem.pk
+    for path in response_data['results']:
+        path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
+        response['paths'].append(path_template.format(path))
+        response['identifiers'].append(path_to_id[path])
+
+    # 4. Return knn results
+    return JsonResponse(response)
+
