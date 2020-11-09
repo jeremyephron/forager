@@ -650,14 +650,16 @@ def get_annotation_conflicts_helper(dataset_items, label_function, category):
 
     anns = Annotation.objects.filter(**filter_args)
 
-    data = filter_most_recent_anns(nest_anns(anns, nest_category=False, nest_lf=False))
+    data = filter_most_recent_anns(nest_anns(anns, nest_category=False))
 
     # Analyze conflicts
     conflict_data = defaultdict(set)
     for image_id, user_labels in data.items():
         if label_function not in user_labels:
             continue
-        user_annotation = user_labels[label_function]
+        user_annotations = user_labels[label_function]
+        assert len(user_annotations) == 1
+        user_annotation = user_annotations[0]
         user_label_value = json.loads(user_annotation.label_data)
         for label_function, ann in user_labels.items():
             if label_function == user_annotation.label_function:
