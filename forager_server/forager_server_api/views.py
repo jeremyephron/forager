@@ -421,7 +421,6 @@ def get_next_images(request, dataset_name, dataset=None):
         cat_value = CATEGORIES[label_value]
         images_with_label = set()
         for di_pk, ann_list in anns.items():
-            print(ann_list)
             for ann in ann_list:
                 label_value = json.loads(ann.label_data)
                 if label_value['value'] != cat_value:
@@ -661,12 +660,13 @@ def get_annotation_conflicts_helper(dataset_items, label_function, category):
         assert len(user_annotations) == 1
         user_annotation = user_annotations[0]
         user_label_value = json.loads(user_annotation.label_data)
-        for label_function, ann in user_labels.items():
+        for label_function, anns in user_labels.items():
             if label_function == user_annotation.label_function:
                 continue
-            label_value = json.loads(ann.label_data)
-            if label_value['value'] != user_label_value['value']:
-                conflict_data[image_id].add(ann.label_function)
+            for ann in anns:
+                label_value = json.loads(ann.label_data)
+                if label_value['value'] != user_label_value['value']:
+                    conflict_data[image_id].add(ann.label_function)
     return conflict_data
 
 
