@@ -650,7 +650,7 @@ def get_annotation_conflicts_helper(dataset_items, label_function, category):
 
     anns = Annotation.objects.filter(**filter_args)
 
-    data = filter_most_recent_anns(nest_anns(anns, nest_category=False))
+    data = filter_most_recent_anns(nest_anns(anns, nest_category=False, nest_lf=False))
 
     # Analyze conflicts
     conflict_data = defaultdict(set)
