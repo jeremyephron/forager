@@ -67,16 +67,28 @@ def filter_most_recent_anns(nested_anns):
             filt_anns.append(most_recent)
         return filt_anns
 
+    if len(nested_anns) == 0:
+        return {}
     if isinstance(next(iter(nested_anns.items()))[1], list):
        data = defaultdict(list)
        for pk, anns in nested_anns.items():
            data[pk] = filter_fn(anns)
-    if isinstance(next(iter(next(iter(nested_anns.items()))[1].items())), list):
+    elif isinstance(
+            next(iter(
+                next(iter(nested_anns.items()))[1].items()
+            ))[1],
+            list):
        data = defaultdict(lambda: defaultdict(list))
        for pk, label_fns_data in nested_anns.items():
            for label_fn, anns in label_fns_data.items():
                data[pk][label_fn] = filter_fn(anns)
-    if isinstance(next(iter(next(iter(next(iter(nested_anns.items()))[1].items()))[1].items()))[1], list):
+    elif isinstance(
+            next(iter(
+                next(iter(
+                    next(iter(nested_anns.items()))[1].items()
+                ))[1].items()
+            ))[1],
+            list):
        data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
        for pk, cat_fns_data in nested_anns.items():
            for cat, label_fns_data in cat_fns_data.items():
@@ -403,13 +415,18 @@ def get_next_images(request, dataset_name, dataset=None):
             if ditem.pk in conflict_data:
                 next_images.append(ditem)
     else:
+        anns = filter_most_recent_anns(
+            nest_anns(annotations, nest_category=False, nest_lf=False))
+
         cat_value = CATEGORIES[label_value]
         images_with_label = set()
-        for ann in annotations:
-            label_value = json.loads(ann.label_data)
-            if label_value['value'] != cat_value:
-                continue
-            images_with_label.add(ann.dataset_item)
+        for di_pk, ann_list in anns.items():
+            print(ann_list)
+            for ann in ann_list:
+                label_value = json.loads(ann.label_data)
+                if label_value['value'] != cat_value:
+                    continue
+                images_with_label.add(ann.dataset_item)
         for ditem in dataset_items:
             if ditem in images_with_label:
                 next_images.append(ditem)
@@ -417,7 +434,8 @@ def get_next_images(request, dataset_name, dataset=None):
     ret_images = next_images[offset_to_return:offset_to_return+num_to_return]
 
     # Find all dataset items which do not have an annotation of the type
-    dataset_item_paths = [(di.path if di.path.find("http") != -1 else path_template.format(di.path)) for di in ret_images]
+    dataset_item_paths = [(di.path if di.path.find("http") != -1 else path_template.format(di.path))
+                          for di in ret_images]
     dataset_item_identifiers = [di.pk for di in ret_images]
 
     return JsonResponse({
