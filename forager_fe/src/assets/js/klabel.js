@@ -774,6 +774,37 @@ export class ImageLabeler {
 				}
 			} else if (event.keyCode === 83) {   // "s" for autolabel stop
 				this.stop_autolabel();
+			} else if (event.keyCode === 68) {   // "d" for autolabel defer (marking last few frames unsure)
+				// if a per-frame annotation exists, remove it
+				if (this.autoStepId) {
+					var timeDiv = document.getElementById("frameSpeed")
+					var imageTime = 500;
+					if (timeDiv) {
+						var divValue = parseInt(timeDiv.value)
+						if (!isNaN(divValue)) {
+							imageTime = divValue
+						}
+						if (imageTime < 250) {
+							imageTime = 250
+						}
+					}
+					// label last 2 seconds of images as unsure
+					var j = 0;
+					var currFrameNum = this.get_current_frame_num();
+					while (imageTime*j < 2000 && j <= currFrameNum) {
+						cur_frame = this.frames[currFrameNum - j];
+						for (var i=0; i<cur_frame.data.annotations.length; i++) {
+							if (cur_frame.data.annotations[i].type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+								cur_frame.data.annotations.splice(i, 1);
+							}
+						}
+						var newAnnotation = new PerFrameAnnotation(3); // Unsure
+						cur_frame.data.annotations.push(newAnnotation);
+						//console.log("KLabeler: set per-frame annotation: " + this.category_to_name[cat_idx]);
+						this.add_annotation(newAnnotation);
+						j += 1
+					}
+				}
 			}
 
 			if (stopAuto) {
