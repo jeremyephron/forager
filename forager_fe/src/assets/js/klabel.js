@@ -1089,7 +1089,8 @@ export class ImageLabeler {
 		this.clear_zoom_corner_points();
         if (this.frames.length > 0) {
 		  this.set_current_frame_num(0);
-        }
+		}
+		this.current_indices = [0];
 	}
 
 	get_annotations() {
