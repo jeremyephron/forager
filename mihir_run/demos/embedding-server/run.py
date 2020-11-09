@@ -518,7 +518,7 @@ async def query_svm(request):
 
     # Generate training vectors
     job = MapReduceJob(
-        MapperSpec(url=cluster_data.service_url, n_mappers=4), # Figure out n_mappers later
+        MapperSpec(url=cluster_data.service_url, n_mappers=cluster_data.n_nodes), # Figure out n_mappers later
         TrivialReducer(extract_func=_extract_pooled_embedding_from_mapper_output), # Returns all individual inputs back
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,

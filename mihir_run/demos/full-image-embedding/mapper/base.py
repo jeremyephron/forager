@@ -61,8 +61,9 @@ class ResNetBackboneMapper(Mapper):
         # Download image
         for i in range(num_retries):
             try:
+                filename = image_path if image_path.find("http") != -1 else f"https://storage.googleapis.com/{os.path.join(image_bucket, image_path)}"
                 async with self.session.get(
-                    f"https://storage.googleapis.com/{os.path.join(image_bucket, image_path)}"
+                    filename
                 ) as response:
                     assert response.status == 200
                     image_bytes = await response.read()
