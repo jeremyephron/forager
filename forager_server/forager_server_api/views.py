@@ -393,6 +393,7 @@ def get_next_images(request, dataset_name, dataset=None):
         label_function=label_function,
         label_category=category,
         label_type='klabel_frame')
+    print(len(annotations))
 
     next_images = []
     if label_value == 'all':
@@ -780,7 +781,7 @@ def lookup_knn(request, dataset_name):
         'identifiers': [],
         'paths': []
     }
-    ditems = DatasetItem.objects.filter(path__in=response_data['results'])
+    ditems = DatasetItem.objects.filter(dataset=dataset, path__in=response_data['results'])
     path_to_id = {}
     for ditem in ditems:
         path_to_id[ditem.path] = ditem.pk
@@ -801,6 +802,7 @@ def lookup_svm(request, dataset_name):
     index_id = request.GET['index_id']
     augmentations = [x.split(":") for x in request.GET['augmentations'].split(',')]
     use_full_image = 'use_full_image' in request.GET
+    mode = request.GET['mode']
 
     # 1. Retrieve dataset info from db
     dataset = Dataset.objects.get(name=dataset_name)
@@ -810,6 +812,7 @@ def lookup_svm(request, dataset_name):
     bucket_path = '/'.join(split_dir[1:])
 
     # Get positive paths, negative paths, positive bounding boxes 
+    # getNextImages shows good way to do this
     # Positive patches: 
     pos_anns = Annotation.objects.filter(
         dataset_item__in=dataset.datasetitem_set.filter(),
@@ -845,6 +848,7 @@ def lookup_svm(request, dataset_name):
         "augmentations": augmentations,
         "num_results": 100,
         "use_full_image": use_full_image,
+        "mode": mode
     }
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/query_svm",

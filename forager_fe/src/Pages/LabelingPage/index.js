@@ -410,7 +410,7 @@ function LabelingPage() {
         res = await fetch(url, {method: "GET",
           credentials: 'include',
         }).then(results => results.json());
-      } else if (method.localeCompare("svm") === 0) {
+      } else if (method.localeCompare("svmPos") === 0 || method.localeCompare("svmBoundary") === 0) {
         // Get positive image paths, positive patches, negative image paths?
         // For now makes more sense to pass the user/category, the backend should be able to find the corresponding labels and paths
         // Get augmentations
@@ -428,7 +428,8 @@ function LabelingPage() {
           cluster_id: clusterRef.current.id,
           index_id: indexRef.current.id,
           use_full_image: true,
-          augmentations: augmentations
+          augmentations: augmentations,
+          mode: method
         }).toString();
         res = await fetch(url, {method: "GET",
           credentials: 'include',
@@ -917,7 +918,10 @@ function LabelingPage() {
           <option value="spatialKnn">Spatial KNN</option>}
           {cluster.status === 'CLUSTER_STARTED' &&
           index.status == 'INDEX_BUILT' &&
-          <option value="svm">Category SVM</option>}
+          <option value="svmPos">SVM Positive</option>}
+          {cluster.status === 'CLUSTER_STARTED' &&
+          index.status == 'INDEX_BUILT' &&
+          <option value="svmBoundary">SVM Boundary</option>}
         </OptionsSelect>
         <select id="augmentations" size="1" multiple>
           <option>flip</option>
