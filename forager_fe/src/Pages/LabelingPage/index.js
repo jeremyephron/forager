@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 
-import { colors, baseUrl, apiKey } from "../../Constants";
+import { colors, baseUrl } from "../../Constants";
 import { MainCanvas, ImageGrid, BuildIndex, TrainProgress } from "./Components";
 import { Button, Select } from "../../Components";
 import {
@@ -186,8 +186,9 @@ function LabelingPage() {
   const setKeyUrl = baseUrl + "/set_marked/" + datasetName;
   const getKeyUrl = baseUrl + "/get_marked/" + datasetName;
   const querySvmUrl = baseUrl + "/query_svm/" + datasetName;
+  const activeBatchUrl = baseUrl + "/active_batch/" + datasetName;
   const queryGoogleUrl = `https://www.googleapis.com/customsearch/v1`
-  const genIdentifiersUrl = baseUrl + "/gen_identifiers/" + datasetName;
+  const getGoogleUrl = baseUrl + "/get_google/" + datasetName;
 
   const [PAGINATION_NUM, setPaginationNum] = useState(500);
   const [page, setPage] = useState(1);
@@ -435,37 +436,38 @@ function LabelingPage() {
           credentials: 'include',
         }).then(results => results.json());
       } else if (method.localeCompare("google") === 0) {
-        // Get positive image paths, positive patches, negative image paths?
-        // For now makes more sense to pass the user/category, the backend should be able to find the corresponding labels and paths
-        console.log(currIdentifiers)
-        let cx = 'a7790b0816f5cc41c'
-        console.log(currPage)
-        let start = 1 + (currPage - 1)*10;
-        url = new URL(queryGoogleUrl);
+        url = new URL(getGoogleUrl);
         url.search = new URLSearchParams({
-          key: apiKey,
-          cx: cx,
-          q: encodeURIComponent(filterCategory),
-          start: start,
-          searchType: "image",
+          category: filterCategory,
+          start: 1 + (currPage - 1)*10,
         }).toString();
-        let data = await fetch(url).then(results => results.json());
-        res = {};
-        res.paths = data.items.map(item => item.link);
-        res.num_total = parseInt(data.searchInformation.totalResults);
-
-        url = new URL(genIdentifiersUrl);
-        let body = {
-          paths: res.paths
-        }
-        let identifierResponse = await fetch(url.toString(), {
-          method: "POST",
-          headers: { 'Content-Type': 'application/json' },
+        res = await fetch(url, {
+          method: "GET",
           credentials: 'include',
-          body: JSON.stringify(body)
-        }).then(response => response.json());
-        res.identifiers = identifierResponse.identifiers;
-        console.log(res.identifiers);
+          headers: {
+          'Content-Type': 'application/json'
+          }
+        })
+        .then(results => results.json());
+      } else if (method.localeCompare("activeBatch") === 0) {
+        url = new URL(activeBatchUrl);
+        url.search = new URLSearchParams({
+          user: filterUser,
+          category: filterCategory,
+          cluster_id: clusterRef.current.id,
+          index_id: indexRef.current.id,
+          use_full_image: true,
+          augmentations: augmentations,
+          start: 1 + (currPage - 1)*10,
+        }).toString();
+        res = await fetch(url, {
+          method: "GET",
+          credentials: 'include',
+          headers: {
+          'Content-Type': 'application/json'
+          }
+        })
+        .then(results => results.json());
       } else {
         url = new URL(getNextImagesURL);
         url.search = new URLSearchParams({
@@ -922,6 +924,7 @@ function LabelingPage() {
           {cluster.status === 'CLUSTER_STARTED' &&
           index.status == 'INDEX_BUILT' &&
           <option value="svmBoundary">SVM Boundary</option>}
+          <option value="activeBatch">Active Batch</option>
         </OptionsSelect>
         <select id="augmentations" size="1" multiple>
           <option>flip</option>

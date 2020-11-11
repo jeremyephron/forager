@@ -489,13 +489,12 @@ async def query_index(request):
 @app.route("/active_batch", methods=["POST"])
 async def active_batch(request):
     cluster_id = request.form["cluster_id"][0]
-    image_paths = request.form["paths"]
+    image_paths = request.form["paths"] # Paths of seed images (at first from google)
+    #patches = [
+    #    [float(patch[k]) for k in ("x1", "y1", "x2", "y2")]
+    #    for patch in json.loads(request.form["patches"][0]) # Modified to pass all patches, not just the first
+    #]  # [0, 1]^2
     bucket = request.form["bucket"][0]
-    patches = [
-        [float(patch[k]) for k in ("x1", "y1", "x2", "y2")]
-        for patch in json.loads(request.form["patches"][0]) # Modified to pass all patches, not just the first
-    ]  # [0, 1]^2
-    print(patches)
     index_id = request.form["index_id"][0]
     num_results = int(request.form["num_results"][0])
     augmentations = []
@@ -506,31 +505,37 @@ async def active_batch(request):
     for i in range(len(augmentations) // 2):
         augmentation_dict[augmentations[2 * i]] = float(augmentations[2 * i + 1])
 
-    use_full_image = bool(request.form.get("use_full_image", [False])[0])
+    use_full_image = True
 
     cluster_data = current_clusters[cluster_id]
     await cluster_data.ready.wait()
 
     # Generate query vector as average of patch embeddings
     job = MapReduceJob(
-        MapperSpec(url=cluster_data.service_url, n_mappers=1), 
-        PoolingReducer(extract_func=_extract_pooled_embedding_from_mapper_output),
+        MapperSpec(url=cluster_data.service_url, n_mappers=cluster_data.n_nodes), 
+        TrivialReducer(extract_func=_extract_pooled_embedding_from_mapper_output),
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
         chunk_size=1,
     )
-    query_vector = await job.run_until_complete(
+    query_vectors = await job.run_until_complete(
         [
-            {"image": image_path, "patch": patch, "augmentations": augmentation_dict}
-            for image_path, patch in zip(image_paths, patches)
+            {"image": image_path, "augmentations": augmentation_dict}
+            for image_path in image_paths
         ]
     )
 
-    # Run query and return results
-    query_results = current_indexes[index_id].query(
-        query_vector, num_results, config.INDEX_NUM_QUERY_PROBES, use_full_image, False
-    )
-    paths = [x[0] for x in query_results]
+    paths = []
+    # Results per vector
+    perVector = (int)(num_results/len(query_vectors)) + 2
+    for vec in query_vectors:
+        # Return nearby images
+        query_results = current_indexes[index_id].query(
+            np.float32(vec), perVector, config.INDEX_NUM_QUERY_PROBES, use_full_image, False # False bc just standard nearest neighbor
+        )
+        paths.extend([x[0] for x in query_results])
+    paths = list(set(paths)) # Unordered, could choose to order this by distance
+
     return resp.json({"results": paths})
 
 @app.route("/delete_index", methods=["POST"])

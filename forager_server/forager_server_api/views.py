@@ -277,43 +277,52 @@ def create_dataset(request):
             'message': 'Something went wrong. Make sure the directory path is valid.',
         })
 
-@api_view(['POST'])
+def query_google(request, dataset):
+    category = request.GET['category']
+    start = int(request.GET.get('start', 1))
+
+    # Try getting data from google here
+    key = os.environ["SEARCH_KEY"]
+    engine_id = os.environ["SEARCH_ENGINE"]
+
+    params = {"key": key, "cx": engine_id, "q": category, "start": start, "searchType": "image"}
+    r = requests.get(
+        "https://www.googleapis.com/customsearch/v1", params=params
+    )
+    response_data = r.json()
+    paths = [item["link"] for item in response_data["items"]]
+    num_total = int(response_data["searchInformation"]["totalResults"])
+
+    # Check which paths are already in the dataset
+    existing_items = DatasetItem.objects.filter(dataset=dataset,path__in=paths).order_by('pk')
+    existing_paths = [di.path for di in existing_items]
+
+    # How to generate identifiers
+    # Add items, then get auto-generated identifiers
+    identifiers = []
+    for path in paths:
+        if (path not in existing_paths):
+            newItem = DatasetItem.objects.create(dataset=dataset,identifier="",path=path,google=True)
+            identifiers.append(newItem.pk)
+        else:
+            pathIndex = existing_paths.index(path)
+            identifiers.append(existing_items[pathIndex].pk)
+    
+    return [identifiers, paths, num_total]
+
+@api_view(['GET'])
 @csrf_exempt
-def gen_identifiers(request, dataset_name, dataset = None):
+def get_google(request, dataset_name, dataset = None):
     if not dataset:
         dataset = get_object_or_404(Dataset, name=dataset_name)
     try:
-        data = json.loads(request.body)
+        identifiers, paths, num_total = query_google(request, dataset)
 
-        # Create all the DatasetItems for this dataset
-        paths = data["paths"]
-        
-        # Assume this filtering is done beforehand
-        #paths = [path for path in paths
-        #         if (path.endswith('.jpg') or
-        #             path.endswith('.jpeg') or
-        #             path.endswith('.png'))]
-
-        # Check which paths are already in the dataset
-        existing_items = DatasetItem.objects.filter(dataset=dataset,path__in=paths).order_by('pk')
-        existing_paths = [di.path for di in existing_items]
-
-        # How to generate identifiers
-        # Add items, then get auto-generated identifiers
-        identifiers = []
-        for path in paths:
-            if (path not in existing_paths):
-                newItem = DatasetItem.objects.create(dataset=dataset,identifier="",path=path,google=True)
-                identifiers.append(newItem.pk)
-            else:
-                pathIndex = existing_paths.index(path)
-                identifiers.append(existing_items[pathIndex].pk)
-
-        req = HttpRequest()
-        req.method = 'GET'
         return JsonResponse({
             'status': 'success',
-            'identifiers': identifiers
+            'identifiers': identifiers,
+            'paths': paths,
+            'num_total': num_total
         })
     except ValidationError:
         return JsonResponse({
@@ -871,3 +880,52 @@ def lookup_svm(request, dataset_name):
     # 4. Return knn results
     return JsonResponse(response)
 
+@api_view(['GET'])
+@csrf_exempt
+def active_batch(request, dataset_name):
+    label_function = request.GET['user']
+    label_category = request.GET['category']
+    cluster_id = request.GET['cluster_id']
+    index_id = request.GET['index_id']
+    augmentations = [x.split(":") for x in request.GET['augmentations'].split(',')]
+
+    # 1. Retrieve dataset info from db
+    dataset = Dataset.objects.get(name=dataset_name)
+    data_directory = dataset.directory
+    split_dir = data_directory[len('gs://'):].split('/')
+    bucket_name = split_dir[0]
+    bucket_path = '/'.join(split_dir[1:])
+
+    # 2. Get google images
+    _, paths, _ = query_google(request, dataset)
+    print(paths)
+
+    # 3. Send paths and patches to /active_batch
+    params = {
+        "cluster_id": cluster_id,
+        "index_id": index_id,
+        "bucket": bucket_name,
+        "paths": paths,
+        "augmentations": augmentations,
+        "num_results": 100
+    }
+    r = requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/active_batch",
+        data=params, headers=POST_HEADERS
+    )
+    response_data = r.json()
+    response = {
+        'identifiers': [],
+        'paths': []
+    }
+    ditems = DatasetItem.objects.filter(path__in=response_data['results'])
+    path_to_id = {}
+    for ditem in ditems:
+        path_to_id[ditem.path] = ditem.pk
+    for path in response_data['results']:
+        path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
+        response['paths'].append(path_template.format(path))
+        response['identifiers'].append(path_to_id[path])
+
+    # 4. Return knn results
+    return JsonResponse(response)
