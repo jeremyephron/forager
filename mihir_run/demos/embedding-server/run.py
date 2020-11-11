@@ -24,6 +24,7 @@ from typing import (
     Callable,
     Dict,
     DefaultDict,
+    Set,
     TypeVar,
     Optional,
     MutableMapping,
@@ -51,6 +52,8 @@ class ClusterData:
 
 class LabeledIndexReducer(Reducer):
     LABEL_FILENAME = "labels.json"
+    INDEX_PARENT_DIR = Path("~/forager/indexes").expanduser()
+
     FULL_INDEX_FOLDER = "f"
     SPATIAL_INDEX_FOLDER = "s"
     FULL_DOT_INDEX_FOLDER = "fd"
@@ -77,16 +80,16 @@ class LabeledIndexReducer(Reducer):
         dot_index_kwargs = dict(**index_kwargs, metric="inner_product")
 
         self.index_id = str(uuid.uuid4())
-        self.index_dir = f"/tmp/{self.index_id}"
+        self.index_dir = self.INDEX_PARENT_DIR / self.index_id
         self.labels = []
         self.full_index = InteractiveIndex(
-            tempdir=f"{self.index_dir}/{self.FULL_INDEX_FOLDER}/", **index_kwargs
+            tempdir=str(self.index_dir / self.FULL_INDEX_FOLDER), **index_kwargs
         )
         self.spatial_index = InteractiveIndex(
-            tempdir=f"{self.index_dir}/{self.SPATIAL_INDEX_FOLDER}/", **index_kwargs
+            tempdir=str(self.index_dir / self.SPATIAL_INDEX_FOLDER), **index_kwargs
         )
         self.full_dot_index = InteractiveIndex(
-            tempdir=f"{self.index_dir}/{self.FULL_DOT_INDEX_FOLDER}/",
+            tempdir=str(self.index_dir / self.FULL_DOT_INDEX_FOLDER),
             **dot_index_kwargs,
         )
 
@@ -111,6 +114,7 @@ class LabeledIndexReducer(Reducer):
         self = cls(*args, **kwargs)
 
         # Download from Cloud Storage
+        self.INDEX_PARENT_DIR.mkdir(parents=True, exist_ok=True)
         proc = await asyncio.create_subprocess_exec(
             "gsutil",
             "-m",
@@ -118,22 +122,22 @@ class LabeledIndexReducer(Reducer):
             "-r",
             "-n",
             f"{config.INDEX_UPLOAD_GCS_PATH}{index_id}",
-            "/tmp/",
+            str(self.INDEX_PARENT_DIR),
         )
         await proc.wait()
 
         # Initialize indexes
         self.index_id = index_id
-        self.index_dir = f"/tmp/{self.index_id}"
-        self.labels = json.load((Path(self.index_dir) / self.LABEL_FILENAME).open())
+        self.index_dir = self.INDEX_PARENT_DIR / self.index_id
+        self.labels = json.load((self.index_dir / self.LABEL_FILENAME).open())
         self.full_index = InteractiveIndex.load(
-            f"{self.index_dir}/{self.FULL_INDEX_FOLDER}/"
+            str(self.index_dir / self.FULL_INDEX_FOLDER)
         )
         self.spatial_index = InteractiveIndex.load(
-            f"{self.index_dir}/{self.SPATIAL_INDEX_FOLDER}/"
+            str(self.index_dir / self.SPATIAL_INDEX_FOLDER)
         )
         self.full_dot_index = InteractiveIndex.load(
-            f"{self.index_dir}/{self.FULL_DOT_INDEX_FOLDER}/"
+            str(self.index_dir / self.FULL_DOT_INDEX_FOLDER)
         )
 
         self.flush_thread = threading.Thread()  # dummy thread
@@ -239,7 +243,7 @@ class LabeledIndexReducer(Reducer):
 
     async def upload(self) -> None:
         # Dump labels
-        json.dump(self.labels, (Path(self.index_dir) / self.LABEL_FILENAME).open("w"))
+        json.dump(self.labels, (self.index_dir / self.LABEL_FILENAME).open("w"))
 
         # Upload to Cloud Storage
         proc = await asyncio.create_subprocess_exec(
@@ -248,7 +252,7 @@ class LabeledIndexReducer(Reducer):
             "cp",
             "-r",
             "-n",
-            self.index_dir,
+            str(self.index_dir),
             config.INDEX_UPLOAD_GCS_PATH,
         )
         await proc.wait()
@@ -312,8 +316,8 @@ class ExpiringDict(MutableMapping[KT, VT]):
         self,
         sanic_app: Sanic,
         cleanup_func: Callable[[VT], Awaitable[None]],
-        timeout: float,
-        interval: float,
+        timeout: Optional[float] = None,
+        interval: float = 1.0,
     ) -> None:
         self.schedule = sanic_app.add_task
         self.cleanup_func = cleanup_func
@@ -322,7 +326,7 @@ class ExpiringDict(MutableMapping[KT, VT]):
 
         self.store: Dict[KT, VT] = {}
         self.last_accessed: Dict[KT, float] = {}
-        self.locks: DefaultDict[KT, int] = defaultdict(int)
+        self.locks: DefaultDict[KT, Set[str]] = defaultdict(set)
 
         self.schedule(self.sleep_and_cleanup())
 
@@ -346,13 +350,13 @@ class ExpiringDict(MutableMapping[KT, VT]):
     def __len__(self) -> int:
         return len(self.store)
 
-    def lock(self, key: KT) -> None:
-        self.locks[key] += 1
+    def lock(self, key: KT, lock_name: str) -> None:
+        self.locks[key].add(lock_name)
 
-    def unlock(self, key: KT) -> None:
-        assert self.locks[key] >= 1
+    def unlock(self, key: KT, lock_name: str) -> None:
         self.last_accessed[key] = time.time()
-        self.locks[key] -= 1
+        if lock_name in self.locks[key]:
+            self.locks[key].remove(lock_name)
 
     def clear(self) -> None:
         asyncio.run(self.clear_async())
@@ -366,6 +370,9 @@ class ExpiringDict(MutableMapping[KT, VT]):
         await asyncio.gather(*map(self.cleanup_key, self.store.keys()))
 
     async def sleep_and_cleanup(self) -> None:
+        if not self.timeout:
+            return
+
         await asyncio.sleep(self.interval)
 
         current = time.time()
@@ -391,7 +398,7 @@ async def _stop_cluster(cluster_data):
 
 async def _stop_job(job):
     await job.stop()
-    current_clusters.unlock(job.cluster_id)
+    current_clusters.unlock(job.cluster_id, job.job_id)
     job.reducer.delete()
 
 
@@ -406,8 +413,8 @@ current_clusters = ExpiringDict(
 current_jobs = ExpiringDict(
     app, _stop_job, config.CLEANUP_TIMEOUT, config.CLEANUP_INTERVAL
 )  # type: ExpiringDict[str, MapReduceJob]
-current_indexes = ExpiringDict(
-    app, _delete_index, config.CLEANUP_TIMEOUT, config.CLEANUP_INTERVAL
+current_indexes = ExpiringDict(  # never evict (for now)
+    app, _delete_index  # , config.CLEANUP_TIMEOUT, config.CLEANUP_INTERVAL
 )  # type: ExpiringDict[str, LabeledIndexReducer]
 
 
@@ -467,7 +474,6 @@ async def start_job(request):
     bucket = request.form["bucket"][0]
     paths = request.form["paths"]
 
-    current_clusters.lock(cluster_id)
     cluster_data = current_clusters[cluster_id]
     await cluster_data.ready.wait()
 
@@ -484,21 +490,26 @@ async def start_job(request):
     index_id = index.index_id
     current_jobs[index_id] = job
 
-    augmentation_dict = {}
+    # Lock cluster to prevent deletion during long-running jobs
+    job_id = job.job_id
+    current_clusters.lock(cluster_id, job_id)
+
     # Construct input iterable
+    augmentation_dict = {}
     iterable = [{"image": path, "augmentations": augmentation_dict} for path in paths]
     callback_func = functools.partial(
-        _handle_job_result, index_id=index_id, cluster_id=cluster_id
+        _handle_job_result, index_id=index_id, cluster_id=cluster_id, job_id=job_id
     )
+
     await job.start(iterable, callback_func)
 
     return resp.json({"index_id": index_id})
 
 
-async def _handle_job_result(index, index_id, cluster_id):
+async def _handle_job_result(index, index_id, cluster_id, job_id):
     await index.upload()
     current_indexes[index_id] = index
-    current_clusters.unlock(cluster_id)
+    current_clusters.unlock(cluster_id, job_id)
 
 
 @app.route("/job_status", methods=["GET"])
@@ -819,9 +830,10 @@ async def _cleanup_clusters():
 
 
 async def _cleanup_indexes():
-    n = len(current_indexes)
-    await current_indexes.clear_async()
-    print(f"- deleted {n} indexes")
+    pass  # never evict (for now)
+    # n = len(current_indexes)
+    # await current_indexes.clear_async()
+    # print(f"- deleted {n} indexes")
 
 
 if __name__ == "__main__":
