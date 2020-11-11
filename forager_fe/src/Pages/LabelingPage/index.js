@@ -159,10 +159,7 @@ function LabelingPage() {
   var currKeyIdentifiers = [];
 
   const cluster = useSelector(state => state.cluster);
-  const index = useSelector(state => state.indexes[datasetName] || {
-    id: undefined,
-    status: 'INDEX_NOT_BUILT',
-  });
+  const index = useSelector(state => state.indexes[datasetName] || {});
 
   const clusterRef = useRef();
   const indexRef = useRef();
@@ -909,14 +906,11 @@ function LabelingPage() {
         <OptionsSelect alt="true" id="fetch_image_mode">
           <option value="random">Random</option>
           <option value="google">Google</option>
-          {cluster.status === 'CLUSTER_STARTED' &&
-          index.status == 'INDEX_BUILT' &&
+          {index.status == 'INDEX_READY' &&
           <option value="knn">KNN</option>}
-          {cluster.status === 'CLUSTER_STARTED' &&
-          index.status == 'INDEX_BUILT' &&
+          {index.status == 'INDEX_READY' &&
           <option value="spatialKnn">Spatial KNN</option>}
-          {cluster.status === 'CLUSTER_STARTED' &&
-          index.status == 'INDEX_BUILT' &&
+          {index.status === 'INDEX_READY' &&
           <option value="svm">Category SVM</option>}
         </OptionsSelect>
         <select id="augmentations" size="1" multiple>

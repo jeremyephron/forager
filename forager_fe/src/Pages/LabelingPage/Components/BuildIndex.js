@@ -15,6 +15,7 @@ const BuildButton = styled(Button)`
 
 const API_BASE = baseUrl;
 const CREATE_INDEX_ENDPOINT = "/create_index";
+const DOWNLOAD_INDEX_ENDPOINT = "/download_index";
 const DELETE_INDEX_ENDPOINT = "/delete_index";
 const STATUS_POLL_INTERVAL = 3000;  // ms
 
@@ -27,29 +28,40 @@ function BuildIndex({ dataset }) {
   const dispatch = useDispatch();
 
   let text;
-  let enabled;
+  let enabled = true;
 
   if (index.id) {
-    if (index.status === 'INDEX_BUILT') {
-      text = 'Delete KNN index';
-      enabled = true;
+    if (index.status === 'INDEX_READY') {
+      text = 'Delete index';
+    } else if (index.status === 'INDEX_NOT_DOWNLOADED')
+      text = 'Download index';
     } else {
-      text = 'Building...';
+      text = 'Loading index...';
       enabled = false;
     }
   } else {
-    text = 'Build KNN index';
+    text = 'Build index';
     enabled = cluster.status === 'CLUSTER_STARTED';
   }
 
   const handleClick = async () => {
+    if (!enabled) return;
+
     let endpoint;
-    if (!enabled) {
-      return;
-    } else if (index.id) {
-      endpoint = DELETE_INDEX_ENDPOINT + '/' + index.id;
+    let callback;
+
+    if (index.id) {
+      if (index.status === 'INDEX_READY') {
+        endpoint = DELETE_INDEX_ENDPOINT;
+        callback = 'DELETE_INDEX';
+      } else {
+        endpoint = DOWNLOAD_INDEX_ENDPOINT;
+        callback = 'DOWNLOAD_INDEX';
+      }
+      endpoint += '/' + index.id;
     } else {
       endpoint = CREATE_INDEX_ENDPOINT + '/' + dataset;
+      callback = 'CREATE_INDEX';
     }
 
     const response = await fetch(API_BASE + endpoint, {
@@ -61,7 +73,7 @@ function BuildIndex({ dataset }) {
       body: JSON.stringify({cluster_id: cluster.id}),
     }).then(response => response.json());
     dispatch({
-      'type': 'SET_INDEX_ID',
+      'type': callback,
       'dataset': dataset,
       'payload': response,
     });
