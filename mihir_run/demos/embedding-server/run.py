@@ -14,6 +14,7 @@ import numpy as np
 from sanic import Sanic
 import sanic.response as resp
 from sklearn import svm
+from sklearn.metrics import accuracy_score
 
 from dataclasses import dataclass, field
 
@@ -586,6 +587,57 @@ async def query_index(request):
     paths = [x[0] for x in query_results]
     return resp.json({"results": paths})
 
+@app.route("/active_batch", methods=["POST"])
+async def active_batch(request):
+    cluster_id = request.form["cluster_id"][0]
+    image_paths = request.form["paths"] # Paths of seed images (at first from google)
+    #patches = [
+    #    [float(patch[k]) for k in ("x1", "y1", "x2", "y2")]
+    #    for patch in json.loads(request.form["patches"][0]) # Modified to pass all patches, not just the first
+    #]  # [0, 1]^2
+    bucket = request.form["bucket"][0]
+    index_id = request.form["index_id"][0]
+    num_results = int(request.form["num_results"][0])
+    augmentations = []
+    if "augmentations" in request.form:
+        augmentations = request.form["augmentations"]
+
+    augmentation_dict = {}
+    for i in range(len(augmentations) // 2):
+        augmentation_dict[augmentations[2 * i]] = float(augmentations[2 * i + 1])
+
+    use_full_image = True
+
+    cluster_data = current_clusters[cluster_id]
+    await cluster_data.ready.wait()
+
+    # Generate query vector as average of patch embeddings
+    job = MapReduceJob(
+        MapperSpec(url=cluster_data.service_url, n_mappers=cluster_data.n_nodes), 
+        TrivialReducer(extract_func=_extract_pooled_embedding_from_mapper_output),
+        {"input_bucket": bucket},
+        n_retries=config.N_RETRIES,
+        chunk_size=1,
+    )
+    query_vectors = await job.run_until_complete(
+        [
+            {"image": image_path, "augmentations": augmentation_dict}
+            for image_path in image_paths
+        ]
+    )
+
+    paths = []
+    # Results per vector
+    perVector = (int)(num_results/len(query_vectors)) + 2
+    for vec in query_vectors:
+        # Return nearby images
+        query_results = current_indexes[index_id].query(
+            np.float32(vec), perVector, config.INDEX_NUM_QUERY_PROBES, use_full_image, False # False bc just standard nearest neighbor
+        )
+        paths.extend([x[0] for x in query_results])
+    paths = list(set(paths)) # Unordered, could choose to order this by distance
+
+    return resp.json({"results": paths})
 
 # SVM
 
@@ -604,6 +656,7 @@ async def query_svm(request):
     ]  # [0, 1]^2
     neg_image_paths = request.form["negative_paths"]
     num_results = int(request.form["num_results"][0])
+    mode = request.form["mode"][0]
 
     cluster_data = current_clusters[cluster_id]
     await cluster_data.ready.wait()
@@ -658,30 +711,54 @@ async def query_svm(request):
     )
 
     # Train the SVM using pos/neg + their corresponding embeddings
-    # svm = svm.SVC(kernel='linear')
-    model = svm.LinearSVC()
+    model = svm.SVC(kernel='linear')
     model.fit(training_features, training_labels)
-    w = model.coef_  # This will be the query vector
-    # Also consider returning the support vectors--good to look at examples along hyperplane
-    w = np.float32(w[0])
+    predicted = model.predict(training_features)
 
-    # Evaluate the SVM by querying index
-    augmentations = []
-    if "augmentations" in request.form:
-        augmentations = request.form["augmentations"]
-
-    augmentation_dict = {}
-    for i in range(len(augmentations) // 2):
-        augmentation_dict[augmentations[2 * i]] = float(augmentations[2 * i + 1])
+    # get the accuracy
+    print(accuracy_score(training_labels, predicted))
 
     use_full_image = bool(request.form.get("use_full_image", [True])[0])
 
-    # Run query and return results
-    query_results = current_indexes[index_id].query(
-        w, num_results, config.INDEX_NUM_QUERY_PROBES, use_full_image, True
-    )
-    paths = [x[0] for x in query_results]
-    return resp.json({"results": paths})
+    if (mode == "svmPos"):
+        # Evaluate the SVM by querying index
+        w = model.coef_ # This will be the query vector
+        # Also consider returning the support vectors--good to look at examples along hyperplane
+        w = np.float32(w[0])
+
+        augmentations = []
+        if "augmentations" in request.form:
+            augmentations = request.form["augmentations"]
+
+        augmentation_dict = {}
+        for i in range(len(augmentations) // 2):
+            augmentation_dict[augmentations[2 * i]] = float(augmentations[2 * i + 1])
+
+        # Run query and return results
+        query_results = current_indexes[index_id].query(
+            w, num_results, config.INDEX_NUM_QUERY_PROBES, use_full_image, True
+        )
+        paths = [x[0] for x in query_results]
+        return resp.json({"results": paths})
+    elif (mode == "svmBoundary"):
+        # Get samples close to boundary vectors
+        # For now, looks like most vectors end up being support vectors since underparamtrized system
+        sv = model.support_vectors_
+        paths = []
+        # Results per vector
+        perVector = (int)(num_results/len(sv)) + 2
+        for vec in sv:
+            # Return nearby images
+            query_results = current_indexes[index_id].query(
+                np.float32(vec), perVector, config.INDEX_NUM_QUERY_PROBES, use_full_image, False # False bc just standard nearest neighbor
+            )
+            paths.extend([x[0] for x in query_results])
+        # Remove duplicates (without maintaining order for now)
+        paths = list(set(paths))
+        return resp.json({"results": paths})
+    else:
+        return resp.json({"results": []})
+
 
 
 # CLEANUP

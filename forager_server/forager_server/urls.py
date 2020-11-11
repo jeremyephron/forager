@@ -83,7 +83,10 @@ urlpatterns = [
     path('api/query_svm/<slug:dataset_name>',
          views.lookup_svm,
          name='query_svm'),
-    path('api/gen_identifiers/<slug:dataset_name>',
-         views.gen_identifiers,
-         name='gen_identifiers'),
+    path('api/get_google/<slug:dataset_name>',
+         views.get_google,
+         name='get_google'),
+    path('api/active_batch/<slug:dataset_name>',
+         views.active_batch,
+         name='active_batch'),
 ]
