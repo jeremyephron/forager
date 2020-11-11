@@ -106,6 +106,7 @@ class LabeledIndexReducer(Reducer):
             "-m",
             "cp",
             "-r",
+            "-n",
             f"{config.INDEX_UPLOAD_GCS_PATH}/{index_id}",
             "/tmp",
         )
@@ -236,6 +237,7 @@ class LabeledIndexReducer(Reducer):
             "-m",
             "cp",
             "-r",
+            "-n",
             self.index_dir,
             config.INDEX_UPLOAD_GCS_PATH,
         )

@@ -73,23 +73,25 @@ function BuildIndex({ dataset }) {
       body: JSON.stringify({cluster_id: cluster.id}),
     }).then(response => response.json());
     dispatch({
-      'type': callback,
-      'dataset': dataset,
-      'payload': response,
+      type: callback,
+      payload: response,
+      dataset,
     });
   };
 
   const updateStatus = async () => {
     if (!index.id) return;
 
-    const response = await fetch(API_BASE + '/index/' + index.id, {
+    var url = new URL(API_BASE + '/index/' + index.id);
+    url.search = new URLSearchParams({ dataset }).toString();
+    const response = await fetch(url, {
       credentials: 'include',
     }).then(response => response.json());
     console.log(response);
     dispatch({
-      'type': 'SET_INDEX_STATUS',
-      'dataset': dataset,
-      'payload': response,
+      type: 'SET_INDEX_STATUS',
+      payload: response,
+      dataset,
     });
   }
 

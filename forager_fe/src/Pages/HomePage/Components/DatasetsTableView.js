@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useHistory } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
 import styled from "styled-components";
 
 import { colors, baseUrl } from "../../../Constants";
@@ -65,6 +66,7 @@ const Table = styled.table`
 
 const DatasetsTable = ({ datasets, loadingLabels, setLoadingLabels }) => {
   const history = useHistory();
+  const dispatch = useDispatch();
   const datasetInfoUrlBase = baseUrl + "/dataset/";
   const downloadLabelsUrlBase = baseUrl + "/dump_annotations/";
 
@@ -72,6 +74,11 @@ const DatasetsTable = ({ datasets, loadingLabels, setLoadingLabels }) => {
     const datasetInfo = await fetch(datasetInfoUrlBase + datasetName, {
       credentials: 'include',
     }).then(results => results.json());
+    dispatch({
+      type: 'SET_PREBUILT_INDEX_ID',
+      index_id: datasetInfo.indexId,
+      dataset: datasetInfo.datasetName,
+    });
     history.push('/label', {
       datasetName: datasetInfo.datasetName,
       paths: datasetInfo.paths,

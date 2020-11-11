@@ -206,11 +206,21 @@ def create_index(request, dataset_name, dataset=None):
 @api_view(['GET'])
 @csrf_exempt
 def get_index_status(request, index_id):
+    dataset_name = request.GET['dataset']
+
     params = {"index_id": index_id}
     r = requests.get(
         settings.EMBEDDING_SERVER_ADDRESS + "/job_status", params=params
     )
     response_data = r.json()
+
+    if (response_data["has_index"]) {
+        # Index has been successfully created & uploaded -> persist
+        dataset = get_object_or_404(Dataset, name=dataset_name)
+        dataset.index_id = index_id
+        dataset.save()
+    }
+
     return JsonResponse(response_data)
 
 

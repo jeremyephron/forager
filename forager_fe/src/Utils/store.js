@@ -25,10 +25,12 @@ function reducer(state = initialState, action) {
     }
     case 'SET_PREBUILT_INDEX_ID': {
       let indexes = {...state.indexes};
-      indexes[action.dataset] = {
-        id: action.index_id,
-        status: 'INDEX_NOT_DOWNLOADED',
-      };
+      if (action.index_id && !(action.dataset in indexes)) {
+        indexes[action.dataset] = {
+          id: action.index_id,
+          status: 'INDEX_NOT_DOWNLOADED',
+        };
+      }
       return {...state, indexes};
     }
     case 'CREATE_INDEX': {
