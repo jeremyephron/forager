@@ -18,6 +18,15 @@ from interactive_index.utils import (merge_on_disk,
                                      invert_cantor_pairing)
 
 
+# Replicates Path.unlink(missing_ok=True) functionality that was added in Python 3.8;
+# we want to preserve compatibility with Python 3.7
+def _unlink(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+
+
 class InteractiveIndex:
     """
     This class is a sharded, on-disk index that can be iteratively trained,
@@ -298,27 +307,22 @@ class InteractiveIndex:
     def cleanup(self) -> None:
         """Deletes all persistent files associated with this index."""
 
-        (self.tempdir/self.TRAINED_INDEX_NAME).unlink(missing_ok=True)
-        (self.tempdir/self.MERGED_INDEX_NAME).unlink(missing_ok=True)
-        (self.tempdir/self.MERGED_INDEX_DATA_NAME).unlink(missing_ok=True)
-        (self.tempdir/self.META_FILE_NAME).unlink(missing_ok=True)
-        for shard_num in range(self.n_indexes):
-            (self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num)).unlink(
-                missing_ok=True
-            )
-            
+        _unlink(self.tempdir/self.TRAINED_INDEX_NAME)
+        _unlink(self.tempdir/self.MERGED_INDEX_NAME)
+        _unlink(self.tempdir/self.MERGED_INDEX_DATA_NAME)
+        _unlink(self.tempdir/self.META_FILE_NAME)
+        self.delete_shards()
+
     def delete_shards(self) -> None:
         """
         Deletes all shard indexes. merge_partial_indexes() and add() will
         fail after calling.
-        
+
         """
-        
+
         for shard_num in range(self.n_indexes):
-            (self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num)).unlink(
-                missing_ok=True
-            )
-        
+            _unlink(self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num))
+
     #####################
     # Private Functions #
     #####################

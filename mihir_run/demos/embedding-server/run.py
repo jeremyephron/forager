@@ -216,13 +216,17 @@ class LabeledIndexReducer(Reducer):
                 gc.collect()
 
     @property
+    def indexes(self):
+        return (self.full_index, self.full_dot_index, self.spatial_index)
+
+    @property
     def result(self):  # called only once to finalize
         self.should_finalize.set()
         self.flush_thread.join()
 
-        self.full_index.merge_partial_indexes()
-        self.full_dot_index.merge_partial_indexes()
-        self.spatial_index.merge_partial_indexes()
+        for index in self.indexes:
+            index.merge_partial_indexes()
+            index.delete_shards()
 
         return self
 
@@ -249,9 +253,8 @@ class LabeledIndexReducer(Reducer):
             self.should_finalize.set()
             self.flush_thread.join()
 
-        self.full_index.cleanup()
-        self.full_dot_index.cleanup()
-        self.spatial_index.cleanup()
+        for index in self.indexes:
+            index.cleanup()
 
     # QUERYING
 
@@ -587,14 +590,15 @@ async def query_index(request):
     paths = [x[0] for x in query_results]
     return resp.json({"results": paths})
 
+
 @app.route("/active_batch", methods=["POST"])
 async def active_batch(request):
     cluster_id = request.form["cluster_id"][0]
-    image_paths = request.form["paths"] # Paths of seed images (at first from google)
-    #patches = [
+    image_paths = request.form["paths"]  # Paths of seed images (at first from google)
+    # patches = [
     #    [float(patch[k]) for k in ("x1", "y1", "x2", "y2")]
     #    for patch in json.loads(request.form["patches"][0]) # Modified to pass all patches, not just the first
-    #]  # [0, 1]^2
+    # ]  # [0, 1]^2
     bucket = request.form["bucket"][0]
     index_id = request.form["index_id"][0]
     num_results = int(request.form["num_results"][0])
@@ -613,7 +617,7 @@ async def active_batch(request):
 
     # Generate query vector as average of patch embeddings
     job = MapReduceJob(
-        MapperSpec(url=cluster_data.service_url, n_mappers=cluster_data.n_nodes), 
+        MapperSpec(url=cluster_data.service_url, n_mappers=cluster_data.n_nodes),
         TrivialReducer(extract_func=_extract_pooled_embedding_from_mapper_output),
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
@@ -628,16 +632,21 @@ async def active_batch(request):
 
     paths = []
     # Results per vector
-    perVector = (int)(num_results/len(query_vectors)) + 2
+    perVector = (int)(num_results / len(query_vectors)) + 2
     for vec in query_vectors:
         # Return nearby images
         query_results = current_indexes[index_id].query(
-            np.float32(vec), perVector, config.INDEX_NUM_QUERY_PROBES, use_full_image, False # False bc just standard nearest neighbor
+            np.float32(vec),
+            perVector,
+            config.INDEX_NUM_QUERY_PROBES,
+            use_full_image,
+            False,  # False bc just standard nearest neighbor
         )
         paths.extend([x[0] for x in query_results])
-    paths = list(set(paths)) # Unordered, could choose to order this by distance
+    paths = list(set(paths))  # Unordered, could choose to order this by distance
 
     return resp.json({"results": paths})
+
 
 # SVM
 
@@ -711,7 +720,7 @@ async def query_svm(request):
     )
 
     # Train the SVM using pos/neg + their corresponding embeddings
-    model = svm.SVC(kernel='linear')
+    model = svm.SVC(kernel="linear")
     model.fit(training_features, training_labels)
     predicted = model.predict(training_features)
 
@@ -720,9 +729,9 @@ async def query_svm(request):
 
     use_full_image = bool(request.form.get("use_full_image", [True])[0])
 
-    if (mode == "svmPos"):
+    if mode == "svmPos":
         # Evaluate the SVM by querying index
-        w = model.coef_ # This will be the query vector
+        w = model.coef_  # This will be the query vector
         # Also consider returning the support vectors--good to look at examples along hyperplane
         w = np.float32(w[0])
 
@@ -740,17 +749,21 @@ async def query_svm(request):
         )
         paths = [x[0] for x in query_results]
         return resp.json({"results": paths})
-    elif (mode == "svmBoundary"):
+    elif mode == "svmBoundary":
         # Get samples close to boundary vectors
         # For now, looks like most vectors end up being support vectors since underparamtrized system
         sv = model.support_vectors_
         paths = []
         # Results per vector
-        perVector = (int)(num_results/len(sv)) + 2
+        perVector = (int)(num_results / len(sv)) + 2
         for vec in sv:
             # Return nearby images
             query_results = current_indexes[index_id].query(
-                np.float32(vec), perVector, config.INDEX_NUM_QUERY_PROBES, use_full_image, False # False bc just standard nearest neighbor
+                np.float32(vec),
+                perVector,
+                config.INDEX_NUM_QUERY_PROBES,
+                use_full_image,
+                False,  # False bc just standard nearest neighbor
             )
             paths.extend([x[0] for x in query_results])
         # Remove duplicates (without maintaining order for now)
@@ -758,7 +771,6 @@ async def query_svm(request):
         return resp.json({"results": paths})
     else:
         return resp.json({"results": []})
-
 
 
 # CLEANUP
