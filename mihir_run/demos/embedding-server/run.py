@@ -68,7 +68,7 @@ class LabeledIndexReducer(Reducer):
         dot_index_kwargs = dict(**index_kwargs, metric="inner_product")
 
         self.index_id = str(uuid.uuid4())
-        self.index_dir = f"/tmp/{index_id}"
+        self.index_dir = f"/tmp/{self.index_id}"
         self.labels = []
         self.full_index = InteractiveIndex(
             tempdir=f"{index_dir}/{self.FULL_INDEX_FOLDER}/", **index_kwargs
@@ -114,7 +114,7 @@ class LabeledIndexReducer(Reducer):
 
         # Initialize indexes
         self.index_id = index_id
-        self.index_dir = f"/tmp/{index_id}"
+        self.index_dir = f"/tmp/{self.index_id}"
         self.labels = json.load((Path(self.index_dir) / self.LABEL_FILENAME).open())
         self.full_index = InteractiveIndex.load(
             f"{index_dir}/{self.FULL_INDEX_FOLDER}/"
