@@ -23,12 +23,42 @@ function reducer(state = initialState, action) {
       }
       return {...state, cluster: {...state.cluster, status}};
     }
-    case 'SET_INDEX_ID': {
+    case 'SET_PREBUILT_INDEX_ID': {
+      let indexes = {...state.indexes};
+      if (action.index_id && !(action.dataset in indexes)) {
+        indexes[action.dataset] = {
+          id: action.index_id,
+          status: 'INDEX_NOT_DOWNLOADED',
+        };
+      }
+      return {...state, indexes};
+    }
+    case 'CREATE_INDEX': {
       let indexes = {...state.indexes};
       indexes[action.dataset] = {
         id: action.payload.index_id,
-        status: 'INDEX_NOT_BUILT',
+        status: 'INDEX_LOADING',
       };
+      return {...state, indexes};
+    }
+    case 'DOWNLOAD_INDEX': {
+      let indexes = {...state.indexes};
+      if (action.dataset in indexes) {
+        indexes[action.dataset] = {
+          id: indexes[action.dataset].id,
+          status: 'INDEX_LOADING',
+        };
+      }
+      return {...state, indexes};
+    }
+    case 'DELETE_INDEX': {
+      let indexes = {...state.indexes};
+      if (action.dataset in indexes) {
+        indexes[action.dataset] = {
+          id: indexes[action.dataset].id,
+          status: 'INDEX_NOT_DOWNLOADED',
+        };
+      }
       return {...state, indexes};
     }
     case 'SET_INDEX_STATUS': {
@@ -36,7 +66,7 @@ function reducer(state = initialState, action) {
       if (action.dataset in indexes) {
         indexes[action.dataset] = {
           id: indexes[action.dataset].id,
-          status: action.payload.has_index ? 'INDEX_BUILT' : 'INDEX_BUILDING',
+          status: action.payload.has_index ? 'INDEX_READY' : 'INDEX_LOADING',
         };
       }
       return {...state, indexes};

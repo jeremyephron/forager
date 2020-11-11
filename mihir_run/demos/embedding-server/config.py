@@ -3,7 +3,11 @@ GCP_ZONE = "us-central1-a"
 GCP_MACHINE_TYPE = "n2-highcpu-4"
 
 OUTPUT_FILENAME = "lvis-embeddings.npy"
+MAPPER_CLOUD_RUN_URL = (
+    "https://vishnu-demo-full-image-embedding-spatial-g6rwrca4fq-uc.a.run.app"
+)
 MAPPER_CONTAINER = "gcr.io/visualdb-1046/vishnu-demo-full-image-embedding-spatial"
+CLOUD_RUN_N_MAPPERS = 50
 
 N_RETRIES = 1
 CHUNK_SIZE = 1
@@ -26,6 +30,8 @@ INDEX_ENCODING = "SQ"
 INDEX_ENCODING_ARGS = [8]
 
 INDEX_FLUSH_SLEEP = 1  # seconds
+
+INDEX_UPLOAD_GCS_PATH = "gs://forager/indexes/"  # trailing slash = directory
 
 CLEANUP_TIMEOUT = 30 * 60  # seconds
 CLEANUP_INTERVAL = CLEANUP_TIMEOUT // 4

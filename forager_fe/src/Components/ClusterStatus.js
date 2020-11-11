@@ -68,8 +68,8 @@ function ClusterStatus() {
       credentials: 'include',
     }).then(response => response.json());
     dispatch({
-      'type': 'SET_CLUSTER_ID',
-      'payload': response,
+      type: 'SET_CLUSTER_ID',
+      payload: response,
     });
   };
 
@@ -78,8 +78,8 @@ function ClusterStatus() {
       credentials: 'include',
     }).then(response => response.json());
     dispatch({
-      'type': 'SET_CLUSTER_STATUS',
-      'payload': response,
+      type: 'SET_CLUSTER_STATUS',
+      payload: response,
     });
   }
 

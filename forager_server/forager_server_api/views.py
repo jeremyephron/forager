@@ -206,12 +206,35 @@ def create_index(request, dataset_name, dataset=None):
 @api_view(['GET'])
 @csrf_exempt
 def get_index_status(request, index_id):
+    dataset_name = request.GET['dataset']
+
     params = {"index_id": index_id}
     r = requests.get(
         settings.EMBEDDING_SERVER_ADDRESS + "/job_status", params=params
     )
     response_data = r.json()
+
+    if response_data["has_index"]:
+        # Index has been successfully created & uploaded -> persist
+        dataset = get_object_or_404(Dataset, name=dataset_name)
+        dataset.index_id = index_id
+        dataset.save()
+
     return JsonResponse(response_data)
+
+
+@api_view(['POST'])
+@csrf_exempt
+def download_index(request, index_id):
+    params = {"index_id": index_id}
+    requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/download_index",
+        data=params,
+        headers=POST_HEADERS,
+    )
+    return JsonResponse({
+        "status": "success",
+    })
 
 
 @api_view(['POST'])
@@ -345,6 +368,7 @@ def get_dataset_info(request, dataset_name, dataset=None):
     return JsonResponse({
         'status': 'success',
         'datasetName': dataset.name,
+        'indexId': dataset.index_id,
         'paths': dataset_item_paths,
         'identifiers': dataset_item_identifiers
     })

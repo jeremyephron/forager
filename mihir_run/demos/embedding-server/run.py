@@ -5,6 +5,7 @@ import gc
 import heapq
 import json
 import operator
+from pathlib import Path
 import threading
 import time
 import uuid
@@ -12,6 +13,8 @@ import uuid
 import numpy as np
 from sanic import Sanic
 import sanic.response as resp
+from sklearn import svm
+from sklearn.metrics import accuracy_score
 
 from dataclasses import dataclass, field
 
@@ -23,9 +26,6 @@ from knn.reducers import Reducer, PoolingReducer, TrivialReducer
 from knn.clusters import GKECluster
 
 from interactive_index import InteractiveIndex
-
-from sklearn import svm
-from sklearn.metrics import accuracy_score
 
 import config
 
@@ -41,8 +41,19 @@ class ClusterData:
 
 
 class LabeledIndexReducer(Reducer):
+    LABEL_FILENAME = "labels.json"
+    FULL_INDEX_FOLDER = "f"
+    SPATIAL_INDEX_FOLDER = "s"
+    FULL_DOT_INDEX_FOLDER = "fd"
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+    # CONSTRUCTORS
+
+    @classmethod
+    def new(cls, *args, **kwargs) -> "LabeledIndexReducer":
+        self = cls(*args, **kwargs)
 
         index_kwargs = dict(
             d=config.EMBEDDING_DIM,
@@ -54,28 +65,20 @@ class LabeledIndexReducer(Reducer):
             encoding=config.INDEX_ENCODING,
             encoding_args=config.INDEX_ENCODING_ARGS,
         )
-        dot_index_kwargs = dict(
-            d=config.EMBEDDING_DIM,
-            n_centroids=config.INDEX_NUM_CENTROIDS,
-            vectors_per_index=config.INDEX_SUBINDEX_SIZE,
-            use_gpu=config.INDEX_USE_GPU,
-            transform=config.INDEX_TRANSFORM,
-            transform_args=config.INDEX_TRANSFORM_ARGS,
-            encoding=config.INDEX_ENCODING,
-            encoding_args=config.INDEX_ENCODING_ARGS,
-            metric='inner_product'
-        )
-        filepath_id = str(uuid.uuid4())
+        dot_index_kwargs = dict(**index_kwargs, metric="inner_product")
 
+        self.index_id = str(uuid.uuid4())
+        self.index_dir = f"/tmp/{self.index_id}"
         self.labels = []
         self.full_index = InteractiveIndex(
-            tempdir=f"/tmp/f-{filepath_id}/", **index_kwargs
+            tempdir=f"{self.index_dir}/{self.FULL_INDEX_FOLDER}/", **index_kwargs
         )
         self.spatial_index = InteractiveIndex(
-            tempdir=f"/tmp/s-{filepath_id}/", **index_kwargs
+            tempdir=f"{self.index_dir}/{self.SPATIAL_INDEX_FOLDER}/", **index_kwargs
         )
         self.full_dot_index = InteractiveIndex(
-            tempdir=f"/tmp/fd-{filepath_id}/", **dot_index_kwargs
+            tempdir=f"{self.index_dir}/{self.FULL_DOT_INDEX_FOLDER}/",
+            **dot_index_kwargs,
         )
 
         self.accumulated_lock = threading.Lock()
@@ -86,6 +89,49 @@ class LabeledIndexReducer(Reducer):
         self.should_finalize = threading.Event()
         self.flush_thread = threading.Thread(target=self.flush)
         self.flush_thread.start()
+
+        return self
+
+    @classmethod
+    async def download(
+        cls,
+        index_id: str,
+        *args,
+        **kwargs,
+    ) -> "LabeledIndexReducer":
+        self = cls(*args, **kwargs)
+
+        # Download from Cloud Storage
+        proc = await asyncio.create_subprocess_exec(
+            "gsutil",
+            "-m",
+            "cp",
+            "-r",
+            "-n",
+            f"{config.INDEX_UPLOAD_GCS_PATH}{index_id}",
+            "/tmp/",
+        )
+        await proc.wait()
+
+        # Initialize indexes
+        self.index_id = index_id
+        self.index_dir = f"/tmp/{self.index_id}"
+        self.labels = json.load((Path(self.index_dir) / self.LABEL_FILENAME).open())
+        self.full_index = InteractiveIndex.load(
+            f"{self.index_dir}/{self.FULL_INDEX_FOLDER}/"
+        )
+        self.spatial_index = InteractiveIndex.load(
+            f"{self.index_dir}/{self.SPATIAL_INDEX_FOLDER}/"
+        )
+        self.full_dot_index = InteractiveIndex.load(
+            f"{self.index_dir}/{self.FULL_DOT_INDEX_FOLDER}/"
+        )
+
+        self.flush_thread = threading.Thread()  # dummy thread
+
+        return self
+
+    # REDUCER LIFECYCLE
 
     def handle_result(self, input, output):
         i = len(self.labels)
@@ -180,13 +226,38 @@ class LabeledIndexReducer(Reducer):
 
         return self
 
-    def delete(self):
-        self.result
+    # INDEX MANAGEMENT
+
+    async def upload(self) -> None:
+        # Dump labels
+        json.dump(self.labels, (Path(self.index_dir) / self.LABEL_FILENAME).open("w"))
+
+        # Upload to Cloud Storage
+        proc = await asyncio.create_subprocess_exec(
+            "gsutil",
+            "-m",
+            "cp",
+            "-r",
+            "-n",
+            self.index_dir,
+            config.INDEX_UPLOAD_GCS_PATH,
+        )
+        await proc.wait()
+
+    def delete(self) -> None:
+        if self.flush_thread.is_alive():
+            self.should_finalize.set()
+            self.flush_thread.join()
+
         self.full_index.cleanup()
         self.full_dot_index.cleanup()
         self.spatial_index.cleanup()
 
-    def query(self, query_vector, num_results, num_probes, use_full_image=False, svm=False):
+    # QUERYING
+
+    def query(
+        self, query_vector, num_results, num_probes, use_full_image=False, svm=False
+    ):
         assert not self.flush_thread.is_alive()
 
         if svm:
@@ -328,7 +399,7 @@ async def start_cluster(request):
         config.GCP_PROJECT, config.GCP_ZONE, config.GCP_MACHINE_TYPE, n_nodes
     )
     cluster_data = ClusterData(cluster, n_nodes)
-    asyncio.create_task(_start_cluster(cluster_data))
+    app.add_task(_start_cluster(cluster_data))
 
     cluster_id = cluster.cluster_id
     current_clusters[cluster_id] = cluster_data
@@ -379,15 +450,16 @@ async def start_job(request):
     cluster_data = current_clusters[cluster_id]
     await cluster_data.ready.wait()
 
+    index = LabeledIndexReducer.new()
     job = MapReduceJob(
         MapperSpec(url=cluster_data.service_url, n_mappers=cluster_data.n_nodes),
-        LabeledIndexReducer(),
+        index,
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
         chunk_size=config.CHUNK_SIZE,
     )
 
-    index_id = job.job_id
+    index_id = index.index_id
     current_jobs[index_id] = job
 
     augmentation_dict = {}
@@ -399,7 +471,8 @@ async def start_job(request):
     return resp.json({"index_id": index_id})
 
 
-def _handle_job_result(index, index_id):
+async def _handle_job_result(index, index_id):
+    await index.upload()
     current_indexes[index_id] = index
 
 
@@ -434,9 +507,29 @@ async def stop_job(request):
 
 # INDEX MANAGEMENT
 
+
 def _extract_pooled_embedding_from_mapper_output(output):
     print(utils.base64_to_numpy(output[config.EMBEDDING_LAYER]).shape)
     return utils.base64_to_numpy(output[config.EMBEDDING_LAYER]).mean(axis=(1, 2))
+
+
+async def _download_index(index_id):
+    index = await LabeledIndexReducer.download(index_id)
+    current_indexes[index_id] = index
+
+
+@app.route("/download_index", methods=["POST"])
+async def download_index(request):
+    index_id = request.form["index_id"][0]
+    app.add_task(_download_index(index_id))
+    return resp.text("", status=204)
+
+
+@app.route("/delete_index", methods=["POST"])
+async def delete_index(request):
+    index_id = request.form["index_id"][0]
+    await _delete_index(current_indexes.pop(index_id))
+    return resp.text("", status=204)
 
 
 @app.route("/query_index", methods=["POST"])
@@ -446,7 +539,9 @@ async def query_index(request):
     bucket = request.form["bucket"][0]
     patches = [
         [float(patch[k]) for k in ("x1", "y1", "x2", "y2")]
-        for patch in json.loads(request.form["patches"][0]) # Modified to pass all patches, not just the first
+        for patch in json.loads(
+            request.form["patches"][0]
+        )  # Modified to pass all patches, not just the first
     ]  # [0, 1]^2
     print(patches)
     index_id = request.form["index_id"][0]
@@ -461,12 +556,18 @@ async def query_index(request):
 
     use_full_image = bool(request.form.get("use_full_image", [False])[0])
 
-    cluster_data = current_clusters[cluster_id]
-    await cluster_data.ready.wait()
+    if cluster_id in current_clusters:
+        cluster_data = current_clusters[cluster_id]
+        await cluster_data.ready.wait()
+        mapper_url = cluster_data.service_url
+        n_mappers = cluster_data.n_nodes
+    else:
+        mapper_url = config.MAPPER_CLOUD_RUN_URL
+        n_mappers = config.CLOUD_RUN_N_MAPPERS
 
     # Generate query vector as average of patch embeddings
     job = MapReduceJob(
-        MapperSpec(url=cluster_data.service_url, n_mappers=1), 
+        MapperSpec(url=mapper_url, n_mappers=n_mappers),
         PoolingReducer(extract_func=_extract_pooled_embedding_from_mapper_output),
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
@@ -538,14 +639,9 @@ async def active_batch(request):
 
     return resp.json({"results": paths})
 
-@app.route("/delete_index", methods=["POST"])
-async def delete_index(request):
-    index_id = request.form["index_id"][0]
-    await _delete_index(current_indexes.pop(index_id))
-    return resp.text("", status=204)
+# SVM
 
 
-# SVM Management
 @app.route("/query_svm", methods=["POST"])
 async def query_svm(request):
     cluster_id = request.form["cluster_id"][0]
@@ -554,7 +650,9 @@ async def query_svm(request):
     pos_image_paths = request.form["positive_paths"]
     pos_patches = [
         [float(patch[k]) for k in ("x1", "y1", "x2", "y2")]
-        for patch in json.loads(request.form["positive_patches"][0]) # Pass all patches, not just the first
+        for patch in json.loads(
+            request.form["positive_patches"][0]
+        )  # Pass all patches, not just the first
     ]  # [0, 1]^2
     neg_image_paths = request.form["negative_paths"]
     num_results = int(request.form["num_results"][0])
@@ -571,8 +669,12 @@ async def query_svm(request):
 
     # Generate training vectors
     job = MapReduceJob(
-        MapperSpec(url=cluster_data.service_url, n_mappers=cluster_data.n_nodes), # Figure out n_mappers later
-        TrivialReducer(extract_func=_extract_pooled_embedding_from_mapper_output), # Returns all individual inputs back
+        MapperSpec(
+            url=cluster_data.service_url, n_mappers=cluster_data.n_nodes
+        ),  # Figure out n_mappers later
+        TrivialReducer(
+            extract_func=_extract_pooled_embedding_from_mapper_output
+        ),  # Returns all individual inputs back
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
         chunk_size=1,
@@ -586,10 +688,27 @@ async def query_svm(request):
         {"image": image_path, "augmentations": augmentation_dict}
         for image_path in neg_image_paths
     ]
-    training_features = await job.run_until_complete(
-        pos_inputs + neg_inputs
+    training_features = await job.run_until_complete(pos_inputs + neg_inputs)
+    training_labels = np.concatenate(
+        [
+            np.ones(
+                (
+                    len(
+                        pos_inputs,
+                    )
+                ),
+                dtype=int,
+            ),
+            np.zeros(
+                (
+                    len(
+                        neg_inputs,
+                    )
+                ),
+                dtype=int,
+            ),
+        ]
     )
-    training_labels = np.concatenate([np.ones((len(pos_inputs,)), dtype=int),np.zeros((len(neg_inputs,)), dtype=int)])
 
     # Train the SVM using pos/neg + their corresponding embeddings
     model = svm.SVC(kernel='linear')
@@ -643,6 +762,8 @@ async def query_svm(request):
 
 
 # CLEANUP
+
+
 @app.listener("after_server_stop")
 async def cleanup(app, loop):
     print("Terminating:")

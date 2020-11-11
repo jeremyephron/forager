@@ -3,7 +3,6 @@ import io
 import os
 
 import aiohttp
-from gcloud.aio.storage import Storage
 import numpy as np
 from PIL import Image, ImageEnhance
 import torch
@@ -51,9 +50,8 @@ class ResNetBackboneMapper(Mapper):
         self.resize = lambda image, params: image.resize(((int)(params*image.size[0]), (int)(params*image.size[1])))
         self.rotate = lambda image, angle: image.rotate(angle)
 
-        # Create connection pools
+        # Create connection pool
         self.session = aiohttp.ClientSession()
-        self.storage_client = Storage(session=self.session)
 
     async def download_and_process_image(
         self, image_bucket, image_path, image_patch, augmentations, request_id, num_retries=4
