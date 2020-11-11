@@ -33,7 +33,7 @@ function BuildIndex({ dataset }) {
   if (index.id) {
     if (index.status === 'INDEX_READY') {
       text = 'Delete index';
-    } else if (index.status === 'INDEX_NOT_DOWNLOADED')
+    } else if (index.status === 'INDEX_NOT_DOWNLOADED') {
       text = 'Download index';
     } else {
       text = 'Loading index...';
