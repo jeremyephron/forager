@@ -450,7 +450,7 @@ async def start_job(request):
     index = LabeledIndexReducer.new()
     job = MapReduceJob(
         MapperSpec(url=cluster_data.service_url, n_mappers=cluster_data.n_nodes),
-        ,
+        index,
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
         chunk_size=config.CHUNK_SIZE,
@@ -553,12 +553,16 @@ async def query_index(request):
 
     use_full_image = bool(request.form.get("use_full_image", [False])[0])
 
-    cluster_data = current_clusters[cluster_id]
-    await cluster_data.ready.wait()
+    if cluster_id in current_clusters:
+        cluster_data = current_clusters[cluster_id]
+        await cluster_data.ready.wait()
+        mapper_url = cluster_data.service_url
+    else:
+        mapper_url = config.MAPPER_CLOUD_RUN_URL
 
     # Generate query vector as average of patch embeddings
     job = MapReduceJob(
-        MapperSpec(url=cluster_data.service_url, n_mappers=1),
+        MapperSpec(url=mapper_url, n_mappers=len(image_paths)),
         PoolingReducer(extract_func=_extract_pooled_embedding_from_mapper_output),
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
