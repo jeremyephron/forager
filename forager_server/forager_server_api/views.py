@@ -214,12 +214,11 @@ def get_index_status(request, index_id):
     )
     response_data = r.json()
 
-    if (response_data["has_index"]) {
+    if response_data["has_index"]:
         # Index has been successfully created & uploaded -> persist
         dataset = get_object_or_404(Dataset, name=dataset_name)
         dataset.index_id = index_id
         dataset.save()
-    }
 
     return JsonResponse(response_data)
 
