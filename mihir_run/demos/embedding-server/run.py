@@ -71,13 +71,14 @@ class LabeledIndexReducer(Reducer):
         self.index_dir = f"/tmp/{self.index_id}"
         self.labels = []
         self.full_index = InteractiveIndex(
-            tempdir=f"{index_dir}/{self.FULL_INDEX_FOLDER}/", **index_kwargs
+            tempdir=f"{self.index_dir}/{self.FULL_INDEX_FOLDER}/", **index_kwargs
         )
         self.spatial_index = InteractiveIndex(
-            tempdir=f"{index_dir}/{self.SPATIAL_INDEX_FOLDER}/", **index_kwargs
+            tempdir=f"{self.index_dir}/{self.SPATIAL_INDEX_FOLDER}/", **index_kwargs
         )
         self.full_dot_index = InteractiveIndex(
-            tempdir=f"{index_dir}/{self.FULL_DOT_INDEX_FOLDER}/", **dot_index_kwargs
+            tempdir=f"{self.index_dir}/{self.FULL_DOT_INDEX_FOLDER}/",
+            **dot_index_kwargs,
         )
 
         self.accumulated_lock = threading.Lock()
@@ -93,7 +94,7 @@ class LabeledIndexReducer(Reducer):
 
     @classmethod
     async def download(
-        self,
+        cls,
         index_id: str,
         *args,
         **kwargs,
@@ -101,7 +102,7 @@ class LabeledIndexReducer(Reducer):
         self = cls(*args, **kwargs)
 
         # Download from Cloud Storage
-        proc = await asyncio.create_subprocess_shell(
+        proc = await asyncio.create_subprocess_exec(
             "gsutil",
             "-m",
             "cp",
@@ -117,13 +118,13 @@ class LabeledIndexReducer(Reducer):
         self.index_dir = f"/tmp/{self.index_id}"
         self.labels = json.load((Path(self.index_dir) / self.LABEL_FILENAME).open())
         self.full_index = InteractiveIndex.load(
-            f"{index_dir}/{self.FULL_INDEX_FOLDER}/"
+            f"{self.index_dir}/{self.FULL_INDEX_FOLDER}/"
         )
         self.spatial_index = InteractiveIndex.load(
-            f"{index_dir}/{self.SPATIAL_INDEX_FOLDER}/"
+            f"{self.index_dir}/{self.SPATIAL_INDEX_FOLDER}/"
         )
         self.full_dot_index = InteractiveIndex.load(
-            f"{index_dir}/{self.FULL_DOT_INDEX_FOLDER}/"
+            f"{self.index_dir}/{self.FULL_DOT_INDEX_FOLDER}/"
         )
 
         self.flush_thread = threading.Thread()  # dummy thread
@@ -229,10 +230,10 @@ class LabeledIndexReducer(Reducer):
 
     async def upload(self) -> None:
         # Dump labels
-        json.dump(labels, (Path(self.index_dir) / self.LABEL_FILENAME).open("w"))
+        json.dump(self.labels, (Path(self.index_dir) / self.LABEL_FILENAME).open("w"))
 
         # Upload to Cloud Storage
-        proc = await asyncio.create_subprocess_shell(
+        proc = await asyncio.create_subprocess_exec(
             "gsutil",
             "-m",
             "cp",
