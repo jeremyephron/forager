@@ -4,6 +4,7 @@ from django.db import models
 class Dataset(models.Model):
     name = models.SlugField(unique=True)
     directory = models.CharField(max_length=600)
+    index_id = models.CharField(max_length=300, blank=True)
 
 
 class DatasetItem(models.Model):

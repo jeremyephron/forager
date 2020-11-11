@@ -112,7 +112,7 @@ class MapReduceJob:
     async def start(
         self,
         iterable: Iterable[JSONType],
-        callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+        callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
     ) -> None:
         async def task():
             try:
@@ -121,7 +121,7 @@ class MapReduceJob:
                 pass
             else:
                 if callback is not None:
-                    callback(result)
+                    await callback(result)
 
         self.task = asyncio.create_task(task())
 

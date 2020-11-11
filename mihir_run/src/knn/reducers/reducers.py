@@ -75,6 +75,7 @@ class PoolingReducer(Reducer):
     def result(self) -> np.ndarray:
         return self.pool_func(np.stack(self._results), axis=0)
 
+
 class TrivialReducer(Reducer):
     def __init__(
         self,
@@ -94,6 +95,7 @@ class TrivialReducer(Reducer):
     @property
     def result(self) -> np.ndarray:
         return np.stack(self._results)
+
 
 class StatisticsReducer(Reducer):
     def __init__(self, extract_func: Optional[Callable[[JSONType], float]] = None):

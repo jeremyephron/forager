@@ -216,6 +216,20 @@ def get_index_status(request, index_id):
 
 @api_view(['POST'])
 @csrf_exempt
+def download_index(request, index_id):
+    params = {"index_id": index_id}
+    requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/download_index",
+        data=params,
+        headers=POST_HEADERS,
+    )
+    return JsonResponse({
+        "status": "success",
+    })
+
+
+@api_view(['POST'])
+@csrf_exempt
 def delete_index(request, index_id):
     params = {"index_id": index_id}
     requests.post(
@@ -336,6 +350,7 @@ def get_dataset_info(request, dataset_name, dataset=None):
     return JsonResponse({
         'status': 'success',
         'datasetName': dataset.name,
+        'indexId': dataset.index_id,
         'paths': dataset_item_paths,
         'identifiers': dataset_item_identifiers
     })

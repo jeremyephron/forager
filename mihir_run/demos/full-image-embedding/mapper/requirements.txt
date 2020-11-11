@@ -6,8 +6,6 @@ pycocotools
 detectron2==0.1.1+cpu
 Pillow
 aiohttp[speedups]
-gcloud-aio-auth
-gcloud-aio-storage
 numpy
 sanic
 uvicorn
