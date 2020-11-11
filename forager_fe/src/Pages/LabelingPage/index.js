@@ -924,7 +924,9 @@ function LabelingPage() {
           {cluster.status === 'CLUSTER_STARTED' &&
           index.status == 'INDEX_BUILT' &&
           <option value="svmBoundary">SVM Boundary</option>}
-          <option value="activeBatch">Active Batch</option>
+          {cluster.status === 'CLUSTER_STARTED' &&
+          index.status == 'INDEX_BUILT' &&
+          <option value="activeBatch">Active Batch</option>}
         </OptionsSelect>
         <select id="augmentations" size="1" multiple>
           <option>flip</option>
