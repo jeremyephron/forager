@@ -115,6 +115,7 @@ class LabeledIndexReducer(Reducer):
 
         # Download from Cloud Storage
         self.INDEX_PARENT_DIR.mkdir(parents=True, exist_ok=True)
+        # TODO(mihirg): Speed up - https://medium.com/@duhroach/gcs-read-performance-of-large-files-bd53cfca4410
         proc = await asyncio.create_subprocess_exec(
             "gsutil",
             "-m",
@@ -246,6 +247,7 @@ class LabeledIndexReducer(Reducer):
         json.dump(self.labels, (self.index_dir / self.LABEL_FILENAME).open("w"))
 
         # Upload to Cloud Storage
+        # TODO(mihirg): Speed up - https://medium.com/google-cloud/google-cloud-storage-large-object-upload-speeds-7339751eaa24
         proc = await asyncio.create_subprocess_exec(
             "gsutil",
             "-m",
