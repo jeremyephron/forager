@@ -297,19 +297,28 @@ class InteractiveIndex:
 
     def cleanup(self) -> None:
         """Deletes all persistent files associated with this index."""
-        def unlink(path):
-            try:
-                path.unlink()
-            except FileNotFoundError:
-                pass
 
-        unlink(self.tempdir/self.TRAINED_INDEX_NAME)
-        unlink(self.tempdir/self.MERGED_INDEX_NAME)
-        unlink(self.tempdir/self.MERGED_INDEX_DATA_NAME)
-        unlink(self.tempdir/self.META_FILE_NAME)
+        (self.tempdir/self.TRAINED_INDEX_NAME).unlink(missing_ok=True)
+        (self.tempdir/self.MERGED_INDEX_NAME).unlink(missing_ok=True)
+        (self.tempdir/self.MERGED_INDEX_DATA_NAME).unlink(missing_ok=True)
+        (self.tempdir/self.META_FILE_NAME).unlink(missing_ok=True)
         for shard_num in range(self.n_indexes):
-            unlink(self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num))
-
+            (self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num)).unlink(
+                missing_ok=True
+            )
+            
+    def delete_shards(self) -> None:
+        """
+        Deletes all shard indexes. merge_partial_indexes() and add() will
+        fail after calling.
+        
+        """
+        
+        for shard_num in range(self.n_indexes):
+            (self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num)).unlink(
+                missing_ok=True
+            )
+        
     #####################
     # Private Functions #
     #####################
