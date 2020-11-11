@@ -7,6 +7,7 @@ MAPPER_CLOUD_RUN_URL = (
     "https://vishnu-demo-full-image-embedding-spatial-g6rwrca4fq-uc.a.run.app"
 )
 MAPPER_CONTAINER = "gcr.io/visualdb-1046/vishnu-demo-full-image-embedding-spatial"
+CLOUD_RUN_N_MAPPERS = 50
 
 N_RETRIES = 1
 CHUNK_SIZE = 1

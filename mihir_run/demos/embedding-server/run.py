@@ -559,12 +559,14 @@ async def query_index(request):
         cluster_data = current_clusters[cluster_id]
         await cluster_data.ready.wait()
         mapper_url = cluster_data.service_url
+        n_mappers = cluster_data.n_nodes
     else:
         mapper_url = config.MAPPER_CLOUD_RUN_URL
+        n_mappers = config.CLOUD_RUN_N_MAPPERS
 
     # Generate query vector as average of patch embeddings
     job = MapReduceJob(
-        MapperSpec(url=mapper_url, n_mappers=len(image_paths)),
+        MapperSpec(url=mapper_url, n_mappers=n_mappers),
         PoolingReducer(extract_func=_extract_pooled_embedding_from_mapper_output),
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
