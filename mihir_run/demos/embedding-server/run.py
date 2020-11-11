@@ -6,6 +6,7 @@ import heapq
 import json
 import operator
 from pathlib import Path
+from shutil import rmtree
 import threading
 import time
 import uuid
@@ -18,7 +19,15 @@ from sklearn.metrics import accuracy_score
 
 from dataclasses import dataclass, field
 
-from typing import Awaitable, Callable, Dict, TypeVar, Optional, MutableMapping
+from typing import (
+    Awaitable,
+    Callable,
+    Dict,
+    DefaultDict,
+    TypeVar,
+    Optional,
+    MutableMapping,
+)
 
 from knn import utils
 from knn.jobs import MapReduceJob, MapperSpec
@@ -216,15 +225,11 @@ class LabeledIndexReducer(Reducer):
                 gc.collect()
 
     @property
-    def indexes(self):
-        return (self.full_index, self.full_dot_index, self.spatial_index)
-
-    @property
     def result(self):  # called only once to finalize
         self.should_finalize.set()
         self.flush_thread.join()
 
-        for index in self.indexes:
+        for index in (self.full_index, self.full_dot_index, self.spatial_index):
             index.merge_partial_indexes()
             index.delete_shards()
 
@@ -252,9 +257,7 @@ class LabeledIndexReducer(Reducer):
         if self.flush_thread.is_alive():
             self.should_finalize.set()
             self.flush_thread.join()
-
-        for index in self.indexes:
-            index.cleanup()
+        rmtree(self.index_dir)
 
     # QUERYING
 
@@ -319,6 +322,7 @@ class ExpiringDict(MutableMapping[KT, VT]):
 
         self.store: Dict[KT, VT] = {}
         self.last_accessed: Dict[KT, float] = {}
+        self.locks: DefaultDict[KT, int] = defaultdict(int)
 
         self.schedule(self.sleep_and_cleanup())
 
@@ -334,12 +338,21 @@ class ExpiringDict(MutableMapping[KT, VT]):
     def __delitem__(self, key: KT) -> None:
         del self.store[key]
         del self.last_accessed[key]
+        del self.locks[key]
 
     def __iter__(self):
         raise NotImplementedError()
 
     def __len__(self) -> int:
         return len(self.store)
+
+    def lock(self, key: KT) -> None:
+        self.locks[key] += 1
+
+    def unlock(self, key: KT) -> None:
+        assert self.locks[key] >= 1
+        self.last_accessed[key] = time.time()
+        self.locks[key] -= 1
 
     def clear(self) -> None:
         asyncio.run(self.clear_async())
@@ -349,6 +362,7 @@ class ExpiringDict(MutableMapping[KT, VT]):
         del self.last_accessed[key]
 
     async def clear_async(self) -> None:
+        self.locks.clear()
         await asyncio.gather(*map(self.cleanup_key, self.store.keys()))
 
     async def sleep_and_cleanup(self) -> None:
@@ -356,7 +370,9 @@ class ExpiringDict(MutableMapping[KT, VT]):
 
         current = time.time()
         keys_to_delete = [
-            k for k, v in self.last_accessed.items() if current - v > self.timeout
+            k
+            for k, v in self.last_accessed.items()
+            if current - v > self.timeout and not self.locks[k]
         ]
         await asyncio.gather(*map(self.cleanup_key, keys_to_delete))
 
@@ -375,6 +391,7 @@ async def _stop_cluster(cluster_data):
 
 async def _stop_job(job):
     await job.stop()
+    current_clusters.unlock(job.cluster_id)
     job.reducer.delete()
 
 
@@ -450,6 +467,7 @@ async def start_job(request):
     bucket = request.form["bucket"][0]
     paths = request.form["paths"]
 
+    current_clusters.lock(cluster_id)
     cluster_data = current_clusters[cluster_id]
     await cluster_data.ready.wait()
 
@@ -461,6 +479,7 @@ async def start_job(request):
         n_retries=config.N_RETRIES,
         chunk_size=config.CHUNK_SIZE,
     )
+    job.cluster_id = cluster_id
 
     index_id = index.index_id
     current_jobs[index_id] = job
@@ -468,15 +487,18 @@ async def start_job(request):
     augmentation_dict = {}
     # Construct input iterable
     iterable = [{"image": path, "augmentations": augmentation_dict} for path in paths]
-    callback_func = functools.partial(_handle_job_result, index_id=index_id)
+    callback_func = functools.partial(
+        _handle_job_result, index_id=index_id, cluster_id=cluster_id
+    )
     await job.start(iterable, callback_func)
 
     return resp.json({"index_id": index_id})
 
 
-async def _handle_job_result(index, index_id):
+async def _handle_job_result(index, index_id, cluster_id):
     await index.upload()
     current_indexes[index_id] = index
+    current_clusters.unlock(cluster_id)
 
 
 @app.route("/job_status", methods=["GET"])

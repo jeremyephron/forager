@@ -85,7 +85,7 @@ function ClusterStatus() {
 
   useEffect(() => {
     updateStatus();
-    if (cluster.status.endsWith('ING') || cluster.status === 'CLUSTER_STARTED') {
+    if (cluster.status.endsWith('ING')) {
       const interval = setInterval(updateStatus, STATUS_POLL_INTERVAL);
       return () => clearInterval(interval);
     }
