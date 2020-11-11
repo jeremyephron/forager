@@ -13,6 +13,7 @@ import uuid
 import numpy as np
 from sanic import Sanic
 import sanic.response as resp
+from sklearn import svm
 
 from dataclasses import dataclass, field
 
@@ -24,8 +25,6 @@ from knn.reducers import Reducer, PoolingReducer, TrivialReducer
 from knn.clusters import GKECluster
 
 from interactive_index import InteractiveIndex
-
-from sklearn import svm
 
 import config
 
@@ -108,8 +107,8 @@ class LabeledIndexReducer(Reducer):
             "cp",
             "-r",
             "-n",
-            f"{config.INDEX_UPLOAD_GCS_PATH}/{index_id}",
-            "/tmp",
+            f"{config.INDEX_UPLOAD_GCS_PATH}{index_id}",
+            "/tmp/",
         )
         await proc.wait()
 
