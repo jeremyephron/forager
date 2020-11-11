@@ -15,15 +15,7 @@ from knn.reducers import Reducer
 
 from . import defaults
 
-from typing import (
-    Optional,
-    Callable,
-    Tuple,
-    List,
-    Dict,
-    Any,
-    Iterable,
-)
+from typing import Optional, Callable, Tuple, List, Dict, Any, Iterable, Awaitable
 
 
 # Increase maximum number of open sockets if necessary
