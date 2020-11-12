@@ -289,7 +289,7 @@ def create_dataset(request):
                         path=path)
             for path in paths
         ]
-        DatasetItem.objects.bulk_create(items)
+        DatasetItem.objects.bulk_create(items, batch_size=10000)
 
         req = HttpRequest()
         req.method = 'GET'

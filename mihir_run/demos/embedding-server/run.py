@@ -77,7 +77,7 @@ class LabeledIndexReducer(Reducer):
             encoding=config.INDEX_ENCODING,
             encoding_args=config.INDEX_ENCODING_ARGS,
         )
-        dot_index_kwargs = dict(**index_kwargs, metric="inner_product")
+        dot_index_kwargs = dict(**index_kwargs, metric="inner product")
 
         self.index_id = str(uuid.uuid4())
         self.index_dir = self.INDEX_PARENT_DIR / self.index_id
