@@ -708,6 +708,7 @@ async def query_svm(request):
     # Get embeddings from index
     # We may want to get patch embeddings for labeled images in future--might as well use the bounding box
     # Only do this if we are using spatial KNN?
+    # Can't really do the following lines on a large index--too expensive
     # embedding_keys = current_indexes[index_id].labels
     # embedding = current_indexes[index_id].values
 
@@ -732,7 +733,21 @@ async def query_svm(request):
         {"image": image_path, "augmentations": augmentation_dict}
         for image_path in neg_image_paths
     ]
-    training_features = await job.run_until_complete(pos_inputs + neg_inputs)
+    # Run positive and negatives separately in case the reducer doesn't maintain order
+    print(pos_inputs + neg_inputs)
+    pos_features = await job.run_until_complete(pos_inputs)
+    job = MapReduceJob(
+        MapperSpec(
+            url=cluster_data.service_url, n_mappers=cluster_data.n_nodes
+        ),  # Figure out n_mappers later
+        TrivialReducer(
+            extract_func=_extract_pooled_embedding_from_mapper_output
+        ),  # Returns all individual inputs back
+        {"input_bucket": bucket},
+        n_retries=config.N_RETRIES,
+        chunk_size=1,
+    )
+    neg_features = await job.run_until_complete(neg_inputs)
     training_labels = np.concatenate(
         [
             np.ones(
@@ -753,6 +768,7 @@ async def query_svm(request):
             ),
         ]
     )
+    training_features = np.concatenate((pos_features, neg_features), axis=0)
 
     # Train the SVM using pos/neg + their corresponding embeddings
     model = svm.SVC(kernel="linear")
@@ -762,13 +778,13 @@ async def query_svm(request):
     # get the accuracy
     print(accuracy_score(training_labels, predicted))
 
-    use_full_image = bool(request.form.get("use_full_image", [True])[0])
+    use_full_image = True #bool(request.form.get("use_full_image", [True])[0])
 
     if mode == "svmPos":
         # Evaluate the SVM by querying index
         w = model.coef_  # This will be the query vector
         # Also consider returning the support vectors--good to look at examples along hyperplane
-        w = np.float32(w[0])
+        w = np.float32(w[0]*1000)
 
         augmentations = []
         if "augmentations" in request.form:
@@ -782,6 +798,7 @@ async def query_svm(request):
         query_results = current_indexes[index_id].query(
             w, num_results, config.INDEX_NUM_QUERY_PROBES, use_full_image, True
         )
+
         paths = [x[0] for x in query_results]
         return resp.json({"results": paths})
     elif mode == "svmBoundary":

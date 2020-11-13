@@ -913,14 +913,11 @@ function LabelingPage() {
           <option value="knn">KNN</option>}
           {index.status == 'INDEX_READY' &&
           <option value="spatialKnn">Spatial KNN</option>}
-          {cluster.status === 'CLUSTER_STARTED' &&
-          index.status == 'INDEX_BUILT' &&
+          {index.status == 'INDEX_READY' &&
           <option value="svmPos">SVM Positive</option>}
-          {cluster.status === 'CLUSTER_STARTED' &&
-          index.status == 'INDEX_BUILT' &&
+          {index.status == 'INDEX_READY' &&
           <option value="svmBoundary">SVM Boundary</option>}
-          {cluster.status === 'CLUSTER_STARTED' &&
-          index.status == 'INDEX_BUILT' &&
+          {index.status == 'INDEX_READY' &&
           <option value="activeBatch">Active Batch</option>}
         </OptionsSelect>
         <select id="augmentations" size="1" multiple>

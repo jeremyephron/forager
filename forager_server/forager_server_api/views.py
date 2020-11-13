@@ -214,6 +214,7 @@ def get_index_status(request, index_id):
     )
     response_data = r.json()
 
+    # Comment this out to prevent uploading and storage
     if response_data["has_index"]:
         # Index has been successfully created & uploaded -> persist
         dataset = get_object_or_404(Dataset, name=dataset_name)
@@ -892,7 +893,7 @@ def lookup_svm(request, dataset_name):
         'identifiers': [],
         'paths': []
     }
-    ditems = DatasetItem.objects.filter(path__in=response_data['results'])
+    ditems = DatasetItem.objects.filter(dataset=dataset, path__in=response_data['results'])
     path_to_id = {}
     for ditem in ditems:
         path_to_id[ditem.path] = ditem.pk
@@ -942,7 +943,7 @@ def active_batch(request, dataset_name):
         'identifiers': [],
         'paths': []
     }
-    ditems = DatasetItem.objects.filter(path__in=response_data['results'])
+    ditems = DatasetItem.objects.filter(dataset=dataset, path__in=response_data['results'])
     path_to_id = {}
     for ditem in ditems:
         path_to_id[ditem.path] = ditem.pk
