@@ -520,7 +520,7 @@ export class ImageLabeler {
 		ctx.fillStyle = this.color_background;
 		ctx.fillRect(0, 0, this.main_canvas_el.width, this.main_canvas_el.height);
 		
-        if (this.frames.length == 0) {
+        if (this.frames.length === 0) {
           return;
         }
 		var cur_frame = this.get_current_frame();
@@ -693,7 +693,7 @@ export class ImageLabeler {
 
 	handle_image_load(source_url, image_index) {
 		//console.log("KLabeler: Image " + image_index + " loaded.");
-        if (image_index < this.frames.length && this.frames[image_index].data.source_url == source_url) {
+        if (image_index < this.frames.length && this.frames[image_index].data.source_url === source_url) {
 		  this.frames[image_index].image_load_complete = true;
 		  this.render();
         }
@@ -975,7 +975,6 @@ export class ImageLabeler {
 
 	clear_boxes() {
 		var cur_frame = this.get_current_frame();
-		var num_annotations = cur_frame.data.annotations.length;
 
 		cur_frame.data.annotations = [];
 		this.clear_in_progress_points();

@@ -16,15 +16,6 @@ const Container = styled.div`
   box-sizing: border-box;
 `;
 
-const CopyrightText = styled.span`
-  && {
-    color: ${colors.lightText};
-    font-size: 11px;
-    font-family: "AirBnbCereal-Book";
-    vertical-align: middle;
-  }
-`;
-
 function Footer() {
   return (
     <Container>

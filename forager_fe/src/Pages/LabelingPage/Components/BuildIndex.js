@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { useSelector, useDispatch } from 'react-redux';
 import styled from "styled-components";
 
-import { Button, Select } from "../../../Components";
-import { colors, baseUrl } from "../../../Constants";
+import { Button } from "../../../Components";
+import { baseUrl } from "../../../Constants";
 
 const BuildButton = styled(Button)`
   font-size: 13px;

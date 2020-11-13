@@ -1,14 +1,11 @@
 import React, { useEffect, useState, useMemo, useRef } from "react";
-import { useSelector, useDispatch } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { useLocation } from "react-router-dom";
 import styled from "styled-components";
 
 import { colors, baseUrl } from "../../Constants";
 import { MainCanvas, ImageGrid, BuildIndex, TrainProgress } from "./Components";
 import { Button, Select } from "../../Components";
-import {
-  BBox2D,
-} from "../../assets/js/kmath.js";
 import {
   ImageLabeler,
   ImageData,
@@ -29,13 +26,6 @@ const RowContainer = styled.div`
   flex-direction: row;
   background-color: white;
   margin-top: 0.25vh;
-`;
-
-const RowWrapContainer = styled.div`
-  display: flex;
-  flex-direction: row;
-  background-color: white;
-  flex-wrap: wrap;
 `;
 
 const ColContainer = styled.div`
@@ -140,11 +130,8 @@ function LabelingPage() {
   const datasetName = location.state.datasetName;
   const [paths, setPaths] = useState(location.state.paths);
   const [identifiers, setIdentifiers] = useState(location.state.identifiers);
-  var currIdentifiers = location.state.identifiers;
   const [imageSize, setImageSize] = useState(150);
-  const [imageSubset, setImageSubset] = useState(7);
   // Same thing with imagesubset
-  var currImageSubset = 7;
   const [categories, setCategories] = useState(["Hello","There"]);
   const [users, setUsers] = useState(["Kenobi"]);
   const [numTotalFilteredImages, setNumTotalFilteredImages] = useState(0);
@@ -175,16 +162,12 @@ function LabelingPage() {
   const deleteAnnotationUrl = baseUrl + "/delete_annotation/" + datasetName;
   const lookupKnnUrl = baseUrl + "/lookup_knn/" + datasetName;
   // can modify the other urls like this
-  const getConflictsUrl = baseUrl + "/get_conflicts/" + datasetName;
   const getNextImagesURL = baseUrl + "/get_next_images/" + datasetName;
   const getUsersAndCategoriesUrl = baseUrl + "/get_users_and_categories/" + datasetName;
   const setNotesUrl = baseUrl + "/set_notes/" + datasetName;
   const getNotesUrl = baseUrl + "/get_notes/" + datasetName;
-  const setKeyUrl = baseUrl + "/set_marked/" + datasetName;
-  const getKeyUrl = baseUrl + "/get_marked/" + datasetName;
   const querySvmUrl = baseUrl + "/query_svm/" + datasetName;
   const activeBatchUrl = baseUrl + "/active_batch/" + datasetName;
-  const queryGoogleUrl = `https://www.googleapis.com/customsearch/v1`
   const getGoogleUrl = baseUrl + "/get_google/" + datasetName;
 
   const [PAGINATION_NUM, setPaginationNum] = useState(500);
@@ -198,7 +181,6 @@ function LabelingPage() {
   var forager_mode = 'forager_annotate';
 
   // Category keymap
-  const filterMap = {'positive': 1, 'negative': 2, 'hard_negative': 3, 'unsure': 4}
   const labelTypeStrings = {0: 'klabel_frame', 1: 'klabel_point', 2: 'klabel_box', 3: 'klabel_extreme'}
 
   const image_data = [];
@@ -211,9 +193,9 @@ function LabelingPage() {
   const [OnKeyImageClick, SetOnKeyImageClick] = useState(() => (e, idx) => {})
 
   useEffect(() => {
-    SetOnKeyImageClick ( () => (e, idx) => {
+    SetOnKeyImageClick ( () => (e, keyIdx) => {
       // This works, now do something useful with it
-      var identifier = keyIdentifiers[idx];
+      var identifier = keyIdentifiers[keyIdx];
       var idx = identifiers.indexOf(identifier);
       if (idx >= 0) {
         labeler.set_current_frame_num(idx);
@@ -369,6 +351,15 @@ function LabelingPage() {
 
       var url;
       var res;
+
+      // Get augmentations
+      var augmentations = []
+      var augSelect = document.getElementById("augmentations");
+      var augParams = document.getElementById("augmentationParam");
+      for (var i = 0; i < augSelect.length; i++) {
+          if (augSelect.options[i].selected) augmentations.push(augSelect.options[i].value + ":" + augParams.value);
+      }
+
       if (method.localeCompare("knn") === 0 || method.localeCompare("spatialKnn") === 0) {
         // Get relevant frames
         if (labeler.current_indices.length === 0) {
@@ -383,14 +374,6 @@ function LabelingPage() {
               filteredAnnotations.push(labeler.frames[k].data.annotations[i])
             }
           }
-        }
-
-        // Get augmentations
-        var augmentations = []
-        var augSelect = document.getElementById("augmentations");
-        var augParams = document.getElementById("augmentationParam");
-        for (var i = 0; i < augSelect.length; i++) {
-            if (augSelect.options[i].selected) augmentations.push(augSelect.options[i].value + ":" + augParams.value);
         }
 
         url = new URL(lookupKnnUrl);
@@ -412,12 +395,6 @@ function LabelingPage() {
         // Get positive image paths, positive patches, negative image paths?
         // For now makes more sense to pass the user/category, the backend should be able to find the corresponding labels and paths
         // Get augmentations
-        var augmentations = []
-        var augSelect = document.getElementById("augmentations");
-        var augParams = document.getElementById("augmentationParam");
-        for (var i = 0; i < augSelect.length; i++) {
-            if (augSelect.options[i].selected) augmentations.push(augSelect.options[i].value + ":" + augParams.value);
-        }
 
         url = new URL(querySvmUrl);
         url.search = new URLSearchParams({
@@ -497,7 +474,7 @@ function LabelingPage() {
       setNumTotalFilteredImages(res.num_total);
 
       // Get ann summary
-      var url = new URL(getAnnotationsSummaryUrl);
+      url = new URL(getAnnotationsSummaryUrl);
       fetch(url, {
         method: "GET",
         credentials: 'include',
@@ -654,9 +631,6 @@ function LabelingPage() {
   }
 
   useEffect(() => {
-    const handle_clear_boxes = () => {
-      labeler.clear_boxes();
-    }
 
     const toggle_extreme_points_display = () => {
       const button = document.getElementById("toggle_pt_viz_button");
@@ -697,16 +671,11 @@ function LabelingPage() {
       }
     }
 
-    const handle_get_annotations = () => {
-      const results = labeler.get_annotations();
-      console.log(results);
-    }
-
     const handle_annotation_added = async (currFrame, annotation) => {
       let labelUser = document.getElementById("labelUser").value;
       let labelCategory = document.getElementById("labelCategory").value;
 
-      if (annotation.type == Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+      if (annotation.type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
         annotation.labeling_time = currFrame.data.labeling_time;
       }
 
@@ -909,15 +878,15 @@ function LabelingPage() {
         <OptionsSelect alt="true" id="fetch_image_mode">
           <option value="random">Random</option>
           <option value="google">Google</option>
-          {index.status == 'INDEX_READY' &&
+          {index.status === 'INDEX_READY' &&
           <option value="knn">KNN</option>}
-          {index.status == 'INDEX_READY' &&
+          {index.status === 'INDEX_READY' &&
           <option value="spatialKnn">Spatial KNN</option>}
-          {index.status == 'INDEX_READY' &&
+          {index.status === 'INDEX_READY' &&
           <option value="svmPos">SVM Positive</option>}
-          {index.status == 'INDEX_READY' &&
+          {index.status === 'INDEX_READY' &&
           <option value="svmBoundary">SVM Boundary</option>}
-          {index.status == 'INDEX_READY' &&
+          {index.status === 'INDEX_READY' &&
           <option value="activeBatch">Active Batch</option>}
         </OptionsSelect>
         <select id="augmentations" size="1" multiple>
