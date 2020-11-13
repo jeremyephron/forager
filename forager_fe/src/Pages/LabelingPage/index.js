@@ -360,6 +360,10 @@ function LabelingPage() {
           if (augSelect.options[i].selected) augmentations.push(augSelect.options[i].value + ":" + augParams.value);
       }
 
+      // Get receptive field window
+      var window = document.getElementById("windowSlider").value/1000.;
+      console.log("Window: " + window)
+
       if (method.localeCompare("knn") === 0 || method.localeCompare("spatialKnn") === 0) {
         // Get relevant frames
         if (labeler.current_indices.length === 0) {
@@ -382,7 +386,8 @@ function LabelingPage() {
           cluster_id: clusterRef.current.id,
           index_id: indexRef.current.id,
           use_full_image: (method.localeCompare("knn") === 0),
-          augmentations: augmentations
+          augmentations: augmentations,
+          window: window
         };
         if (method.localeCompare("knn") === 0) {
           knnPayload.use_full_image = true;
@@ -404,7 +409,8 @@ function LabelingPage() {
           index_id: indexRef.current.id,
           use_full_image: true,
           augmentations: augmentations,
-          mode: method
+          mode: method,
+          window: window
         }).toString();
         res = await fetch(url, {method: "GET",
           credentials: 'include',
@@ -433,6 +439,7 @@ function LabelingPage() {
           use_full_image: true,
           augmentations: augmentations,
           start: 1 + (currPage - 1)*10,
+          window: window
         }).toString();
         res = await fetch(url, {
           method: "GET",
@@ -849,6 +856,7 @@ function LabelingPage() {
         <HideButton id="keyimage_toggle" onClick={onKeyImageClick}>Hide Key Images</HideButton>
         <p style={{width:"320px"}}></p>
         <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
+        <Slider id="windowSlider" type="range" min="0" max="500" defaultValue="100" ></Slider>
       </RowContainer>
       <RowContainer>
         <TitleHeader>Filter: </TitleHeader>
@@ -878,8 +886,7 @@ function LabelingPage() {
         <OptionsSelect alt="true" id="fetch_image_mode">
           <option value="random">Random</option>
           <option value="google">Google</option>
-          {index.status === 'INDEX_READY' &&
-          <option value="knn">KNN</option>}
+          <option value="knn">KNN</option>
           {index.status === 'INDEX_READY' &&
           <option value="spatialKnn">Spatial KNN</option>}
           {index.status === 'INDEX_READY' &&

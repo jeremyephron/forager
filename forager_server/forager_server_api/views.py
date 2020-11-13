@@ -788,10 +788,11 @@ def lookup_knn(request, dataset_name):
     # 2. Retrieve annotations from db
     query_annotations = Annotation.objects.filter(pk__in=ann_identifiers)
     paths = [ann.dataset_item.path for ann in query_annotations]
-    patches = [{'x1': bbox['bmin']['x'],
-                'y1': bbox['bmin']['y'],
-                'x2': bbox['bmax']['x'],
-                'y2': bbox['bmax']['y']}
+    window = float(request.GET['window'])
+    patches = [{'x1': max(bbox['bmin']['x'] - window, 0.),
+                'y1': max(bbox['bmin']['y'] - window, 0.),
+                'x2': min(bbox['bmax']['x'] + window, 1.),
+                'y2': min(bbox['bmax']['y'] + window, 1.)}
                for bbox in [json.loads(ann.label_data)['bbox']
                             for ann in query_annotations]]
 
