@@ -57,6 +57,7 @@ class LabeledIndexReducer(Reducer):
     FULL_INDEX_FOLDER = "f"
     SPATIAL_INDEX_FOLDER = "s"
     FULL_DOT_INDEX_FOLDER = "fd"
+    SPATIAL_DOT_INDEX_FOLDER = "sd"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -90,6 +91,10 @@ class LabeledIndexReducer(Reducer):
         )
         self.full_dot_index = InteractiveIndex(
             tempdir=str(self.index_dir / self.FULL_DOT_INDEX_FOLDER),
+            **dot_index_kwargs,
+        )
+        self.spatial_dot_index = InteractiveIndex(
+            tempdir=str(self.index_dir / self.SPATIAL_DOT_INDEX_FOLDER),
             **dot_index_kwargs,
         )
 
@@ -139,6 +144,9 @@ class LabeledIndexReducer(Reducer):
         )
         self.full_dot_index = InteractiveIndex.load(
             str(self.index_dir / self.FULL_DOT_INDEX_FOLDER)
+        )
+        self.spatial_dot_index = InteractiveIndex.load(
+            str(self.index_dir / self.SPATIAL_DOT_INDEX_FOLDER)
         )
 
         self.flush_thread = threading.Thread()  # dummy thread
@@ -221,7 +229,10 @@ class LabeledIndexReducer(Reducer):
 
                 if not self.spatial_index.is_trained:
                     self.spatial_index.train(spatial_vectors)
+                if not self.spatial_dot_index.is_trained:
+                    self.spatial_dot_index.train(spatial_vectors)
                 self.spatial_index.add(spatial_vectors, spatial_ids)
+                self.spatial_dot_index.add(spatial_vectors, spatial_ids)
                 print(f"Added {len(spatial_ids)} spatial embeddings to index")
 
             if not should_finalize and not should_add_full and not should_add_spatial:
@@ -234,7 +245,7 @@ class LabeledIndexReducer(Reducer):
         self.should_finalize.set()
         self.flush_thread.join()
 
-        for index in (self.full_index, self.full_dot_index, self.spatial_index):
+        for index in (self.full_index, self.full_dot_index, self.spatial_index, self.spatial_dot_index):
             index.merge_partial_indexes()
             index.delete_shards()
 
@@ -272,22 +283,31 @@ class LabeledIndexReducer(Reducer):
     ):
         assert not self.flush_thread.is_alive()
 
-        if svm:
-            dists, ids = self.full_dot_index.query(
-                query_vector, num_results, n_probes=num_probes
-            )
-            sorted_id_dist_tuples = [(i, d) for i, d in zip(ids[0], dists[0]) if i >= 0]
-        elif use_full_image:
-            dists, ids = self.full_index.query(
-                query_vector, num_results, n_probes=num_probes
-            )
+        if use_full_image:
+            dists, ids = None
+            if svm:
+                dists, ids = self.full_dot_index.query(
+                    query_vector, num_results, n_probes=num_probes
+                )
+            else:
+                dists, ids = self.full_index.query(
+                    query_vector, num_results, n_probes=num_probes
+                )
             sorted_id_dist_tuples = [(i, d) for i, d in zip(ids[0], dists[0]) if i >= 0]
         else:
-            dists, ids = self.spatial_index.query(
-                query_vector,
-                config.QUERY_NUM_RESULTS_MULTIPLE * num_results,
-                n_probes=num_probes,
-            )
+            dists, ids = None
+            if svm:
+                dists, ids = self.spatial_dot_index.query(
+                    query_vector,
+                    config.QUERY_NUM_RESULTS_MULTIPLE * num_results,
+                    n_probes=num_probes,
+                )
+            else: 
+                dists, ids = self.spatial_index.query(
+                    query_vector,
+                    config.QUERY_NUM_RESULTS_MULTIPLE * num_results,
+                    n_probes=num_probes,
+                )
             assert len(ids) == 1 and len(dists) == 1
 
             # Gather lowest QUERY_PATCHES_PER_IMAGE distances for each image
@@ -778,9 +798,9 @@ async def query_svm(request):
     # get the accuracy
     print(accuracy_score(training_labels, predicted))
 
-    use_full_image = True #bool(request.form.get("use_full_image", [True])[0])
+    use_full_image = bool(request.form.get("use_full_image", [False])[0])
 
-    if mode == "svmPos":
+    if mode == "svmPos" or mode == "spatialSvmPos":
         # Evaluate the SVM by querying index
         w = model.coef_  # This will be the query vector
         # Also consider returning the support vectors--good to look at examples along hyperplane

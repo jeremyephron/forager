@@ -814,7 +814,7 @@ def lookup_knn(request, dataset_name):
     cluster_id = request.GET['cluster_id']
     index_id = request.GET['index_id']
     augmentations = [x.split(":") for x in request.GET['augmentations'].split(',')]
-    use_full_image = 'use_full_image' in request.GET
+    use_full_image = request.GET.get('use_full_image', False)
 
     # 1. Retrieve dataset info from db
     dataset = Dataset.objects.get(name=dataset_name)
@@ -863,7 +863,7 @@ def lookup_svm(request, dataset_name):
     cluster_id = request.GET['cluster_id']
     index_id = request.GET['index_id']
     augmentations = [x.split(":") for x in request.GET['augmentations'].split(',')]
-    use_full_image = 'use_full_image' in request.GET
+    use_full_image = request.GET.get('use_full_image', False)
     mode = request.GET['mode']
 
     # 1. Retrieve dataset info from db

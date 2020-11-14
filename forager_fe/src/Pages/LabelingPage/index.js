@@ -438,14 +438,11 @@ function LabelingPage() {
           augmentations: augmentations,
           window: window
         };
-        if (method.localeCompare("knn") === 0) {
-          knnPayload.use_full_image = true;
-        }
         url.search = new URLSearchParams(knnPayload).toString();
         res = await fetch(url, {method: "GET",
           credentials: 'include',
         }).then(results => results.json());
-      } else if (method.localeCompare("svmPos") === 0 || method.localeCompare("svmBoundary") === 0) {
+      } else if (method.localeCompare("svmPos") === 0 || method.localeCompare("spatialSvmPos") === 0) {
         // Get positive image paths, positive patches, negative image paths?
         // For now makes more sense to pass the user/category, the backend should be able to find the corresponding labels and paths
         // Get augmentations
@@ -457,7 +454,7 @@ function LabelingPage() {
           filter: filter,
           cluster_id: clusterRef.current.id,
           index_id: indexRef.current.id,
-          use_full_image: true,
+          use_full_image: (method.localeCompare("svmPos") === 0),
           augmentations: augmentations,
           mode: method,
           window: window
@@ -465,6 +462,8 @@ function LabelingPage() {
         res = await fetch(url, {method: "GET",
           credentials: 'include',
         }).then(results => results.json());
+      } else if (method.localeCompare("svmBoundary") === 0) {
+        // Turned this off for now, add back to querySvmUrl call when desired
       } else if (method.localeCompare("activeBatch") === 0) {
         url = new URL(activeBatchUrl);
         url.search = new URLSearchParams({
@@ -946,9 +945,9 @@ function LabelingPage() {
                   {index.status === 'INDEX_READY' &&
                   <option value="spatialKnn">Spatial KNN</option>}
                   {index.status === 'INDEX_READY' &&
-                  <option value="svmPos">SVM Positive</option>}
+                  <option value="svmPos">SVM</option>}
                   {index.status === 'INDEX_READY' &&
-                  <option value="svmBoundary">SVM Boundary</option>}
+                  <option value="spatialSvmPos">Spatial SVM</option>}
                   {index.status === 'INDEX_READY' &&
                   <option value="activeBatch">Active Batch</option>}
                 </OptionsSelect>
