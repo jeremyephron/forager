@@ -32,7 +32,15 @@ const ColContainer = styled.div`
   display: flex;
   flex-direction: column;
   background-color: white;
-  margin-right: 1vw;
+`;
+
+const LabelContainer = styled.div`
+  display: block;
+  flex-direction: column;
+  background-color: white;
+`;
+
+const TextInput = styled.input`
 `;
 
 const BaseColContainer = styled.div`
@@ -78,7 +86,6 @@ const Slider = styled.input`
   width: 100px; /* Full-width */
   height: 25px; /* Specified height */
   border-radius: 5px;
-  margin-left: 20px;
 `;
 
 const FetchButton = styled(Button)`
@@ -98,7 +105,6 @@ const StatsContainer = styled.div`
   flex-direction: row;
   justify-content: space-between;
   align-items: center;
-  margin-top: 1vh;
 `;
 
 const StatsBar = (props) => {
@@ -120,7 +126,7 @@ const StatsBar = (props) => {
 const SummaryBar = (props) => {
   return (
     <StatsContainer>
-      <div>Images {1 + (props.page - 1)*props.pageSize} to {Math.min(props.numTotalFilteredImages, props.page*props.pageSize)} out of {props.numTotalFilteredImages}</div>
+      <label>Images {1 + (props.page - 1)*props.pageSize} to {Math.min(props.numTotalFilteredImages, props.page*props.pageSize)} out of {props.numTotalFilteredImages}</label>
     </StatsContainer>
   );
 }
@@ -171,6 +177,7 @@ function LabelingPage() {
   const getGoogleUrl = baseUrl + "/get_google/" + datasetName;
 
   const [PAGINATION_NUM, setPaginationNum] = useState(500);
+  const [pageSize, setPageSize] = useState(500);
   const [page, setPage] = useState(1);
 
   /* Klabel stuff */
@@ -260,6 +267,34 @@ function LabelingPage() {
     }
   }
 
+  const onDataSource = (event) => {
+    var source = document.getElementById("select_data_source").value;
+    if (source === "dataset") {
+      // Show relevant filters
+      document.getElementById("filterUserWrapper").style.display = "block"
+      document.getElementById("filterCategoryWrapper").style.display = "block"
+      document.getElementById("searchQueryWrapper").style.display = "none"
+      document.getElementById("imageSubsetWrapper").style.display = "flex"
+    } else if (source === "google") {
+      // Show relevant filters
+      document.getElementById("filterUserWrapper").style.display = "none"
+      document.getElementById("filterCategoryWrapper").style.display = "none"
+      document.getElementById("searchQueryWrapper").style.display = "block"
+      document.getElementById("imageSubsetWrapper").style.display = "none"
+    }
+  }
+
+  const onOrderingMode = (event) => {
+    var order = document.getElementById("fetch_image_mode").value;
+    if (order !== "default") {
+      // Show relevant filters
+      document.getElementById("knnParamWrapper").style.display = "flex"
+    } else  {
+      // Show relevant filters
+      document.getElementById("knnParamWrapper").style.display = "none"
+    }
+  }
+
   const onFilterCategory = (event) => {
     document.getElementById("labelCategory").value = event.target.value;
     OnLabel()
@@ -337,6 +372,7 @@ function LabelingPage() {
     SetHandleFetchImages ( () => async(currPage) => {
       let filter = document.getElementById("select_image_subset").value;
       let method = document.getElementById("fetch_image_mode").value;
+      let dataset = document.getElementById("select_data_source").value;
 
       // If KNN fetch, then default to fetching all? We can decide whether to reset the filter later
       if (method.localeCompare("knn") === 0) {
@@ -348,6 +384,7 @@ function LabelingPage() {
       // Fetch images by filterCategory
       let filterCategory = document.getElementById("filterCategory").value;
       let labelCategory = document.getElementById("labelCategory").value;
+      let googleQuery = document.getElementById("searchQuery").value;
 
       var url;
       var res;
@@ -357,14 +394,28 @@ function LabelingPage() {
       var augSelect = document.getElementById("augmentations");
       var augParams = document.getElementById("augmentationParam");
       for (var i = 0; i < augSelect.length; i++) {
-          if (augSelect.options[i].selected) augmentations.push(augSelect.options[i].value + ":" + augParams.value);
+          if (augSelect.options[i].selected && augSelect.options[i].value !== "none") augmentations.push(augSelect.options[i].value + ":" + augParams.value);
       }
 
       // Get receptive field window
       var window = document.getElementById("windowSlider").value/1000.;
       console.log("Window: " + window)
 
-      if (method.localeCompare("knn") === 0 || method.localeCompare("spatialKnn") === 0) {
+      if (dataset.localeCompare("google") === 0) {
+        url = new URL(getGoogleUrl);
+        url.search = new URLSearchParams({
+          category: googleQuery,
+          start: 1 + (currPage - 1)*10,
+        }).toString();
+        res = await fetch(url, {
+          method: "GET",
+          credentials: 'include',
+          headers: {
+          'Content-Type': 'application/json'
+          }
+        })
+        .then(results => results.json());
+      } else if (method.localeCompare("knn") === 0 || method.localeCompare("spatialKnn") === 0) {
         // Get relevant frames
         if (labeler.current_indices.length === 0) {
           labeler.current_indices = [labeler.get_current_frame_num()]
@@ -415,20 +466,6 @@ function LabelingPage() {
         res = await fetch(url, {method: "GET",
           credentials: 'include',
         }).then(results => results.json());
-      } else if (method.localeCompare("google") === 0) {
-        url = new URL(getGoogleUrl);
-        url.search = new URLSearchParams({
-          category: filterCategory,
-          start: 1 + (currPage - 1)*10,
-        }).toString();
-        res = await fetch(url, {
-          method: "GET",
-          credentials: 'include',
-          headers: {
-          'Content-Type': 'application/json'
-          }
-        })
-        .then(results => results.json());
       } else if (method.localeCompare("activeBatch") === 0) {
         url = new URL(activeBatchUrl);
         url.search = new URLSearchParams({
@@ -468,6 +505,8 @@ function LabelingPage() {
         })
         .then(results => results.json());
       }
+
+      setPageSize(res.paths.length)
 
       // Add in any key images not present in identifiers (add to res.identifiers and res.paths)
       for (var i = 0; i < keyIdentifiers.length; i++) {
@@ -535,14 +574,11 @@ function LabelingPage() {
 
   useEffect(() => {
     let button = document.getElementById("filter_button");
-    var currPaginationNum = 500;
-    if (document.getElementById("fetch_image_mode").value.localeCompare("google") === 0) {
+    var currPaginationNum = PAGINATION_NUM;
+    if (document.getElementById("select_data_source").value.localeCompare("google") === 0) {
       currPaginationNum = 10;
     }
     var maxPage = Math.ceil(numTotalFilteredImages/currPaginationNum)
-    setPaginationNum(currPaginationNum)
-    console.log("Page:")
-    console.log(page)
     if (button) {
       button.onclick = (function() {
         setPage(1);
@@ -854,68 +890,93 @@ function LabelingPage() {
         <HideButton id="klabel_toggle" onClick={onKLabelClick}>Hide KLabel</HideButton>
         <HideButton id="summary_toggle" onClick={onSummaryClick}>Hide Label Summary</HideButton>
         <HideButton id="keyimage_toggle" onClick={onKeyImageClick}>Hide Key Images</HideButton>
-        <p style={{width:"320px"}}></p>
-        <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
-        <Slider id="windowSlider" type="range" min="0" max="500" defaultValue="100" ></Slider>
-      </RowContainer>
-      <RowContainer>
-        <TitleHeader>Filter: </TitleHeader>
-        <input type="text" list="users" id="filterUser" onChange={onFilterUser} placeholder="FilterUser" />
-        <datalist id="users">
-          {users.map((item, key) =>
-            <option key={key} value={item} />
-          )}
-        </datalist>
-        <input type="text" list="categories" id="filterCategory" onChange={onFilterCategory} placeholder="FilterCategory" />
-        <OptionsSelect alt="true" id="select_image_subset">
-          <option value="all">All</option>
-          <option value="unlabeled">Unlabeled</option>
-          <option value="positive">Positive</option>
-          <option value="negative">Negative</option>
-          <option value="hard_negative">Hard Negative</option>
-          <option value="unsure">Unsure</option>
-          <option value="interesting">Interesting</option>
-          <option value="conflict">Conflict</option>
-          <option value="google">Googled Earlier</option>
-        </OptionsSelect>
-        <datalist id="categories">
-          {categories.map((item, key) =>
-            <option key={key} value={item} />
-          )}
-        </datalist>
-        <OptionsSelect alt="true" id="fetch_image_mode">
-          <option value="random">Random</option>
-          <option value="google">Google</option>
-          <option value="knn">KNN</option>
-          {index.status === 'INDEX_READY' &&
-          <option value="spatialKnn">Spatial KNN</option>}
-          {index.status === 'INDEX_READY' &&
-          <option value="svmPos">SVM Positive</option>}
-          {index.status === 'INDEX_READY' &&
-          <option value="svmBoundary">SVM Boundary</option>}
-          {index.status === 'INDEX_READY' &&
-          <option value="activeBatch">Active Batch</option>}
-        </OptionsSelect>
-        <select id="augmentations" size="1" multiple>
-          <option>flip</option>
-          <option>gray</option>
-          <option>brightness</option>
-          <option>resize</option>
-          <option>rotate</option>
-          <option>contrast</option>
-        </select>
-        <input id="augmentationParam" style={{width: "70px"}}></input>
-        <FetchButton id="filter_button">Apply Filter</FetchButton>
-        <p style={{width:"170px"}}></p>
-        <SummaryBar id="image_summary" numTotalFilteredImages={numTotalFilteredImages} page={page} pageSize={PAGINATION_NUM}/>
-        <p style={{width:"10px"}}></p>
-        <FetchButton id="first_button">First</FetchButton>
-        <FetchButton id="prev_button">Prev</FetchButton>
-        <FetchButton id="next_button">Next</FetchButton>
-        <FetchButton id="last_button">Last</FetchButton>
       </RowContainer>
       <RowContainer>
         <ColContainer id="klabel_container">
+          <RowContainer>
+            <LabelContainer>
+              <label>Source</label><br/>
+              <OptionsSelect alt="true" id="select_data_source" onChange={onDataSource}>
+                <option value="dataset">Dataset</option>
+                <option value="google">Google</option>
+              </OptionsSelect>
+            </LabelContainer>
+            <LabelContainer id="filterUserWrapper">
+              <label>User</label><br/>
+              <TextInput type="text" list="users" id="filterUser" onChange={onFilterUser} />
+            </LabelContainer>
+            <datalist id="users">
+              {users.map((item, key) =>
+                <option key={key} value={item} />
+              )}
+            </datalist>
+            <LabelContainer id="filterCategoryWrapper">
+              <label>Category</label><br/>
+              <TextInput type="text" list="categories" id="filterCategory" onChange={onFilterCategory}/>
+            </LabelContainer>
+            <LabelContainer id="searchQueryWrapper" style={{display: "none"}}>
+              <label>Query</label><br/>
+              <TextInput type="text" id="searchQuery"/>
+            </LabelContainer>
+            <RowContainer id="imageSubsetWrapper">
+              <LabelContainer>
+                <label htmlFor="select_image_subset">Image Subset</label><br/>
+                <OptionsSelect alt="true" id="select_image_subset">
+                  <option value="all">All</option>
+                  <option value="unlabeled">Unlabeled</option>
+                  <option value="positive">Positive</option>
+                  <option value="negative">Negative</option>
+                  <option value="hard_negative">Hard Negative</option>
+                  <option value="unsure">Unsure</option>
+                  <option value="interesting">Interesting</option>
+                  <option value="conflict">Conflict</option>
+                </OptionsSelect>
+              </LabelContainer>
+              <datalist id="categories">
+                {categories.map((item, key) =>
+                  <option key={key} value={item} />
+                )}
+              </datalist>
+              <LabelContainer id="orderingWrapper">
+                <label>Ordering</label><br/>
+                <OptionsSelect alt="true" id="fetch_image_mode" onChange={onOrderingMode}>
+                  <option value="default">Default</option>
+                  <option value="knn">KNN</option>
+                  {index.status === 'INDEX_READY' &&
+                  <option value="spatialKnn">Spatial KNN</option>}
+                  {index.status === 'INDEX_READY' &&
+                  <option value="svmPos">SVM Positive</option>}
+                  {index.status === 'INDEX_READY' &&
+                  <option value="svmBoundary">SVM Boundary</option>}
+                  {index.status === 'INDEX_READY' &&
+                  <option value="activeBatch">Active Batch</option>}
+                </OptionsSelect>
+              </LabelContainer>
+              <RowContainer id="knnParamWrapper" style={{display: "none"}}>
+                <LabelContainer>
+                  <label>Optic Window</label><br/>
+                  <Slider id="windowSlider" type="range" min="0" max="500" defaultValue="0" ></Slider>
+                </LabelContainer>
+                <LabelContainer>
+                  <label>Augment</label><br/>
+                  <select id="augmentations" size="2" multiple>
+                    <option>none</option>
+                    <option>flip</option>
+                    <option>gray</option>
+                    <option>brightness</option>
+                    <option>resize</option>
+                    <option>rotate</option>
+                    <option>contrast</option>
+                  </select>
+                </LabelContainer>
+                <LabelContainer>
+                  <label>AugParam</label><br/>
+                  <TextInput id="augmentationParam" style={{width: "70px"}}/>
+                </LabelContainer>
+              </RowContainer>
+            </RowContainer>
+            <FetchButton id="filter_button">Apply Filter</FetchButton>
+          </RowContainer>
           <MainCanvas numTotalFilteredImages={numTotalFilteredImages} onCategory={OnLabel} onUser={OnLabel} annotationsSummary={annotationsSummary}/>
           <Divider/>
           <TrainProgress/>
@@ -923,6 +984,21 @@ function LabelingPage() {
           <StatsBar annotationsSummary={annotationsSummary}/>
         </ColContainer>
         <ColContainer id="explore_container">
+          <RowContainer>
+            <LabelContainer>
+              <label>Image Size</label><br/>
+              <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
+            </LabelContainer>
+            <LabelContainer>
+              <SummaryBar id="image_summary" numTotalFilteredImages={numTotalFilteredImages} page={page} pageSize={pageSize}/>
+              <RowContainer>
+                <FetchButton id="first_button">First</FetchButton>
+                <FetchButton id="prev_button">Prev</FetchButton>
+                <FetchButton id="next_button">Next</FetchButton>
+                <FetchButton id="last_button">Last</FetchButton>
+              </RowContainer>
+            </LabelContainer>
+          </RowContainer>
           <ImageGridContainer id="explore_grid">
               <ImageGrid onImageClick={onImageClick} imagePaths={paths} imageHeight={imageSize} currentIndex={labeler.current_frame_index} selectedIndices={labeler.current_indices}/>
           </ImageGridContainer>
