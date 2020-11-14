@@ -374,11 +374,6 @@ function LabelingPage() {
       let method = document.getElementById("fetch_image_mode").value;
       let dataset = document.getElementById("select_data_source").value;
 
-      // If KNN fetch, then default to fetching all? We can decide whether to reset the filter later
-      if (method.localeCompare("knn") === 0) {
-        filter = "all";
-      }
-
       let filterUser = document.getElementById("filterUser").value;
       let labelUser = document.getElementById("labelUser").value;
       // Fetch images by filterCategory
@@ -433,6 +428,9 @@ function LabelingPage() {
 
         url = new URL(lookupKnnUrl);
         let knnPayload = {
+          user: filterUser,
+          category: filterCategory,
+          filter: filter,
           ann_identifiers: filteredAnnotations.map(ann => ann.identifier),
           cluster_id: clusterRef.current.id,
           index_id: indexRef.current.id,
@@ -456,6 +454,7 @@ function LabelingPage() {
         url.search = new URLSearchParams({
           user: filterUser,
           category: filterCategory,
+          filter: filter,
           cluster_id: clusterRef.current.id,
           index_id: indexRef.current.id,
           use_full_image: true,
@@ -471,6 +470,7 @@ function LabelingPage() {
         url.search = new URLSearchParams({
           user: filterUser,
           category: filterCategory,
+          filter: filter,
           cluster_id: clusterRef.current.id,
           index_id: indexRef.current.id,
           use_full_image: true,
@@ -941,7 +941,8 @@ function LabelingPage() {
                 <label>Ordering</label><br/>
                 <OptionsSelect alt="true" id="fetch_image_mode" onChange={onOrderingMode}>
                   <option value="default">Default</option>
-                  <option value="knn">KNN</option>
+                  {index.status === 'INDEX_READY' &&
+                  <option value="knn">KNN</option>}
                   {index.status === 'INDEX_READY' &&
                   <option value="spatialKnn">Spatial KNN</option>}
                   {index.status === 'INDEX_READY' &&

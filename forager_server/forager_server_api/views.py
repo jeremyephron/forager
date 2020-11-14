@@ -398,13 +398,7 @@ def get_users_and_categories(request, dataset_name):
 
     return JsonResponse(result)
 
-
-@api_view(['GET'])
-@csrf_exempt
-def get_next_images(request, dataset_name, dataset=None):
-    if not dataset:
-        dataset = get_object_or_404(Dataset, name=dataset_name)
-
+def filtered_images(request, dataset, path_filter=None):
     CATEGORIES = {
         'positive': 1,
         'negative': 2,
@@ -414,12 +408,15 @@ def get_next_images(request, dataset_name, dataset=None):
     label_function = request.GET['user']
     category = request.GET['category']
     label_value = request.GET['filter']
-    offset_to_return = int(request.GET.get('offset', 0))
-    num_to_return = int(request.GET.get('num', 100))
 
-    bucket_name = dataset.directory[len('gs://'):].split('/')[0]
-    path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
     dataset_items = DatasetItem.objects.filter(dataset=dataset,google=False).order_by('pk')
+    print(len(dataset_items))
+    if path_filter:
+        print("Filtering items")
+        dataset_items = dataset_items.filter(path__in=path_filter)
+        print(len(dataset_items))
+
+    print(label_value)
 
     # Find all annotations for the user and category in this dataset
     annotations = Annotation.objects.filter(
@@ -427,7 +424,6 @@ def get_next_images(request, dataset_name, dataset=None):
         label_function=label_function,
         label_category=category,
         label_type='klabel_frame')
-    print(len(annotations))
 
     next_images = []
     if label_value == 'all':
@@ -464,6 +460,24 @@ def get_next_images(request, dataset_name, dataset=None):
         for ditem in dataset_items:
             if ditem in images_with_label:
                 next_images.append(ditem)
+    
+    print("Post-filter:")
+    print(len(next_images))
+
+    return next_images
+
+@api_view(['GET'])
+@csrf_exempt
+def get_next_images(request, dataset_name, dataset=None):
+    if not dataset:
+        dataset = get_object_or_404(Dataset, name=dataset_name)
+
+    bucket_name = dataset.directory[len('gs://'):].split('/')[0]
+    path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
+    offset_to_return = int(request.GET.get('offset', 0))
+    num_to_return = int(request.GET.get('num', 100))
+
+    next_images = filtered_images(request, dataset)
 
     ret_images = next_images[offset_to_return:offset_to_return+num_to_return]
 
@@ -768,6 +782,30 @@ def delete_annotation(request, dataset_name, image_identifier, ann_identifier):
             safe=False,
             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+def process_ordering_data(request, dataset, ordered_paths):
+    data_directory = dataset.directory
+    split_dir = data_directory[len('gs://'):].split('/')
+    bucket_name = split_dir[0]
+
+    ditems = filtered_images(request, dataset, ordered_paths)
+
+    response = {
+        'identifiers': [],
+        'paths': []
+    }
+
+    path_to_id = {}
+    for ditem in ditems:
+        path_to_id[ditem.path] = ditem.pk
+    path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
+    for path in ordered_paths:
+        if path in path_to_id:
+            response['paths'].append(path_template.format(path))
+            response['identifiers'].append(path_to_id[path])
+
+    response['num_total'] = len(response['paths'])
+
+    return response
 
 @api_view(['GET'])
 @csrf_exempt
@@ -812,18 +850,7 @@ def lookup_knn(request, dataset_name):
         data=params, headers=POST_HEADERS
     )
     response_data = r.json()
-    response = {
-        'identifiers': [],
-        'paths': []
-    }
-    ditems = DatasetItem.objects.filter(dataset=dataset, path__in=response_data['results'])
-    path_to_id = {}
-    for ditem in ditems:
-        path_to_id[ditem.path] = ditem.pk
-    for path in response_data['results']:
-        path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
-        response['paths'].append(path_template.format(path))
-        response['identifiers'].append(path_to_id[path])
+    response = process_ordering_data(request, dataset, response_data['results'])
 
     # 4. Return knn results
     return JsonResponse(response)
@@ -890,18 +917,8 @@ def lookup_svm(request, dataset_name):
         data=params, headers=POST_HEADERS
     )
     response_data = r.json()
-    response = {
-        'identifiers': [],
-        'paths': []
-    }
-    ditems = DatasetItem.objects.filter(dataset=dataset, path__in=response_data['results'])
-    path_to_id = {}
-    for ditem in ditems:
-        path_to_id[ditem.path] = ditem.pk
-    for path in response_data['results']:
-        path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
-        response['paths'].append(path_template.format(path))
-        response['identifiers'].append(path_to_id[path])
+    
+    response = process_ordering_data(request, dataset, response_data['results'])
 
     # 4. Return knn results
     return JsonResponse(response)
@@ -940,18 +957,9 @@ def active_batch(request, dataset_name):
         data=params, headers=POST_HEADERS
     )
     response_data = r.json()
-    response = {
-        'identifiers': [],
-        'paths': []
-    }
-    ditems = DatasetItem.objects.filter(dataset=dataset, path__in=response_data['results'])
-    path_to_id = {}
-    for ditem in ditems:
-        path_to_id[ditem.path] = ditem.pk
-    for path in response_data['results']:
-        path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
-        response['paths'].append(path_template.format(path))
-        response['identifiers'].append(path_to_id[path])
+
+    # Apply filtering to generated order
+    response = process_ordering_data(request, dataset, response_data['results'])
 
     # 4. Return knn results
     return JsonResponse(response)
