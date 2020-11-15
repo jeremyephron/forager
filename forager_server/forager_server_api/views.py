@@ -1,7 +1,7 @@
+import distutils.util
 import json
 import os
 import requests
-import time
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from google.cloud import storage
@@ -331,7 +331,7 @@ def query_google(request, dataset):
         else:
             pathIndex = existing_paths.index(path)
             identifiers.append(existing_items[pathIndex].pk)
-    
+
     return [identifiers, paths, num_total]
 
 @api_view(['GET'])
@@ -460,7 +460,7 @@ def filtered_images(request, dataset, path_filter=None):
         for ditem in dataset_items:
             if ditem in images_with_label:
                 next_images.append(ditem)
-    
+
     print("Post-filter:")
     print(len(next_images))
 
@@ -814,7 +814,7 @@ def lookup_knn(request, dataset_name):
     cluster_id = request.GET['cluster_id']
     index_id = request.GET['index_id']
     augmentations = [x.split(":") for x in request.GET['augmentations'].split(',')]
-    use_full_image = request.GET.get('use_full_image', False)
+    use_full_image = bool(distutils.util.strtobool(request.GET['use_full_image']))
 
     # 1. Retrieve dataset info from db
     dataset = Dataset.objects.get(name=dataset_name)
@@ -863,7 +863,7 @@ def lookup_svm(request, dataset_name):
     cluster_id = request.GET['cluster_id']
     index_id = request.GET['index_id']
     augmentations = [x.split(":") for x in request.GET['augmentations'].split(',')]
-    use_full_image = request.GET.get('use_full_image', False)
+    use_full_image = bool(distutils.util.strtobool(request.GET['use_full_image']))
     mode = request.GET['mode']
 
     # 1. Retrieve dataset info from db
@@ -873,9 +873,9 @@ def lookup_svm(request, dataset_name):
     bucket_name = split_dir[0]
     bucket_path = '/'.join(split_dir[1:])
 
-    # Get positive paths, negative paths, positive bounding boxes 
+    # Get positive paths, negative paths, positive bounding boxes
     # getNextImages shows good way to do this
-    # Positive patches: 
+    # Positive patches:
     pos_anns = Annotation.objects.filter(
         dataset_item__in=dataset.datasetitem_set.filter(),
         label_type="klabel_extreme",
@@ -917,7 +917,7 @@ def lookup_svm(request, dataset_name):
         data=params, headers=POST_HEADERS
     )
     response_data = r.json()
-    
+
     response = process_ordering_data(request, dataset, response_data['results'])
 
     # 4. Return knn results
