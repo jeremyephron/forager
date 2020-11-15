@@ -245,7 +245,12 @@ class LabeledIndexReducer(Reducer):
         self.should_finalize.set()
         self.flush_thread.join()
 
-        for index in (self.full_index, self.full_dot_index, self.spatial_index, self.spatial_dot_index):
+        for index in (
+            self.full_index,
+            self.spatial_index,
+            self.full_dot_index,
+            self.spatial_dot_index,
+        ):
             index.merge_partial_indexes()
             index.delete_shards()
 
@@ -284,30 +289,17 @@ class LabeledIndexReducer(Reducer):
         assert not self.flush_thread.is_alive()
 
         if use_full_image:
-            dists, ids = None
-            if svm:
-                dists, ids = self.full_dot_index.query(
-                    query_vector, num_results, n_probes=num_probes
-                )
-            else:
-                dists, ids = self.full_index.query(
-                    query_vector, num_results, n_probes=num_probes
-                )
+            index = self.full_dot_index if svm else self.full_index
+            dists, ids = index.query(query_vector, num_results, n_probes=num_probes)
+            assert len(ids) == 1 and len(dists) == 1
             sorted_id_dist_tuples = [(i, d) for i, d in zip(ids[0], dists[0]) if i >= 0]
         else:
-            dists, ids = None
-            if svm:
-                dists, ids = self.spatial_dot_index.query(
-                    query_vector,
-                    config.QUERY_NUM_RESULTS_MULTIPLE * num_results,
-                    n_probes=num_probes,
-                )
-            else: 
-                dists, ids = self.spatial_index.query(
-                    query_vector,
-                    config.QUERY_NUM_RESULTS_MULTIPLE * num_results,
-                    n_probes=num_probes,
-                )
+            index = self.spatial_dot_index if svm else self.spatial_index
+            dists, ids = index.query(
+                query_vector,
+                config.QUERY_NUM_RESULTS_MULTIPLE * num_results,
+                n_probes=num_probes,
+            )
             assert len(ids) == 1 and len(dists) == 1
 
             # Gather lowest QUERY_PATCHES_PER_IMAGE distances for each image
@@ -804,7 +796,7 @@ async def query_svm(request):
         # Evaluate the SVM by querying index
         w = model.coef_  # This will be the query vector
         # Also consider returning the support vectors--good to look at examples along hyperplane
-        w = np.float32(w[0]*1000)
+        w = np.float32(w[0] * 1000)
 
         augmentations = []
         if "augmentations" in request.form:
