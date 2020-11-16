@@ -160,6 +160,9 @@ class LabeledIndexReducer(Reducer):
         i = len(self.labels)
 
         self.labels.append(input["image"])
+        if len(self.labels) % 1000 == 0:
+            print(f"Total: {len(self.labels)} images")
+
         embeddings = utils.base64_to_numpy(output[config.EMBEDDING_LAYER])
 
         full = embeddings.mean(axis=(1, 2))
