@@ -431,8 +431,9 @@ async def _delete_index(index):
 current_clusters = ExpiringDict(
     app, _stop_cluster, config.CLEANUP_TIMEOUT, config.CLEANUP_INTERVAL
 )  # type: ExpiringDict[str, ClusterData]
-current_jobs = ExpiringDict(
-    app, _stop_job, config.CLEANUP_TIMEOUT, config.CLEANUP_INTERVAL
+current_jobs = ExpiringDict(  # never evict (for now)
+    app,
+    _stop_job,  # config.CLEANUP_TIMEOUT, config.CLEANUP_INTERVAL
 )  # type: ExpiringDict[str, MapReduceJob]
 current_indexes = ExpiringDict(  # never evict (for now)
     app, _delete_index  # , config.CLEANUP_TIMEOUT, config.CLEANUP_INTERVAL
