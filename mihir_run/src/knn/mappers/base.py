@@ -10,6 +10,7 @@ from typing import List, Dict, Any, DefaultDict
 
 from sanic import Sanic
 from sanic.response import json
+from sanic_compress import Compress
 
 from knn.utils import JSONType
 
@@ -104,6 +105,7 @@ class Mapper(abc.ABC):
 
         if start_server:
             self._server = Sanic(self.worker_id)
+            Compress(self._server)
             self._server.add_route(self._handle_request, "/", methods=["POST"])
             self._server.add_route(self._sleep, "/sleep", methods=["POST"])
         else:

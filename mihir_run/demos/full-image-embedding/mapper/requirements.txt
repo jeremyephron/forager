@@ -9,3 +9,4 @@ aiohttp[speedups]
 numpy
 sanic
 uvicorn
+sanic_compress

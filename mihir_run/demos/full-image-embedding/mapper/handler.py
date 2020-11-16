@@ -1,9 +1,7 @@
-import math
-import torch
+import numpy as np
 
 from knn import utils
 
-from knn.mappers import Mapper
 from base import ResNetBackboneMapper
 import config
 
@@ -39,7 +37,9 @@ class ImageEmbeddingMapper(ResNetBackboneMapper):
                 # temporary fix for OOM with spatial embeddings
                 # cropped = torch.mean(cropped, dim=(1, 2), keepdim=True)
 
-                result[layer] = utils.numpy_to_base64(cropped.numpy())
+                result[layer] = utils.numpy_to_base64(
+                    cropped.numpy().astype(np.float16)
+                )
 
             return result
 

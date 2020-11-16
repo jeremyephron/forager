@@ -6,7 +6,6 @@ import aiohttp
 import numpy as np
 from PIL import Image, ImageEnhance
 import torch
-from torchvision.transforms import transforms
 
 from detectron2.layers import ShapeSpec
 from detectron2.checkpoint.detection_checkpoint import DetectionCheckpointer
@@ -38,31 +37,41 @@ class ResNetBackboneMapper(Mapper):
         def brightness(image, factor):
             br_enhancer = ImageEnhance.Brightness(image)
             return br_enhancer.enhance(factor)
-        
+
         def contrast(image, factor):
             cn_enhancer = ImageEnhance.Contrast(image)
             return cn_enhancer.enhance(factor)
 
         self.flip = lambda image: image.transpose(Image.FLIP_LEFT_RIGHT)
-        self.grayscale = lambda image: image.convert('L')
+        self.grayscale = lambda image: image.convert("L")
         self.brightness = brightness
         self.contrast = contrast
-        self.resize = lambda image, params: image.resize(((int)(params*image.size[0]), (int)(params*image.size[1])))
+        self.resize = lambda image, params: image.resize(
+            ((int)(params * image.size[0]), (int)(params * image.size[1]))
+        )
         self.rotate = lambda image, angle: image.rotate(angle)
 
         # Create connection pool
         self.session = aiohttp.ClientSession()
 
     async def download_and_process_image(
-        self, image_bucket, image_path, image_patch, augmentations, request_id, num_retries=4
+        self,
+        image_bucket,
+        image_path,
+        image_patch,
+        augmentations,
+        request_id,
+        num_retries=4,
     ):
         # Download image
         for i in range(num_retries):
             try:
-                filename = image_path if image_path.find("http") != -1 else f"https://storage.googleapis.com/{os.path.join(image_bucket, image_path)}"
-                async with self.session.get(
-                    filename
-                ) as response:
+                filename = (
+                    image_path
+                    if image_path.find("http") != -1
+                    else f"https://storage.googleapis.com/{os.path.join(image_bucket, image_path)}"
+                )
+                async with self.session.get(filename) as response:
                     assert response.status == 200
                     image_bytes = await response.read()
             except Exception:
@@ -85,20 +94,22 @@ class ResNetBackboneMapper(Mapper):
                     print(image_patch)
                     x1f, y1f, x2f, y2f = image_patch
                     w, h = image.size
-                    image = image.crop(((int)(x1f*w), (int)(y1f*h), (int)(x2f*w), (int)(y2f*h)))
+                    image = image.crop(
+                        ((int)(x1f * w), (int)(y1f * h), (int)(x2f * w), (int)(y2f * h))
+                    )
 
                 # Apply transformations (augmentations is a dict)
-                if ("flip" in augmentations):  
+                if "flip" in augmentations:
                     image = self.flip(image)
-                if ("gray" in augmentations):
+                if "gray" in augmentations:
                     image = self.grayscale(image)
-                if ("brightness" in augmentations):
+                if "brightness" in augmentations:
                     image = self.brightness(image, augmentations["brightness"])
-                if ("contrast" in augmentations):
+                if "contrast" in augmentations:
                     image = self.contrast(image, augmentations["contrast"])
-                if ("resize" in augmentations):
+                if "resize" in augmentations:
                     image = self.rescale(image, augmentations["resize"])
-                if ("rotate" in augmentations):
+                if "rotate" in augmentations:
                     image = self.rotate(image, augmentations["rotate"])
 
                 image = torch.as_tensor(
