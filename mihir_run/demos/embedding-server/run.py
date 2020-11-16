@@ -218,7 +218,6 @@ class LabeledIndexReducer(Reducer):
 
                 if not self.full_index.is_trained:
                     self.full_index.train(full_vectors)
-                if not self.full_dot_index.is_trained:
                     self.full_dot_index.train(full_vectors)
                 self.full_index.add(full_vectors, full_ids)
                 self.full_dot_index.add(full_vectors, full_ids)
@@ -238,7 +237,6 @@ class LabeledIndexReducer(Reducer):
 
                 if not self.spatial_index.is_trained:
                     self.spatial_index.train(spatial_vectors)
-                if not self.spatial_dot_index.is_trained:
                     self.spatial_dot_index.train(spatial_vectors)
                 self.spatial_index.add(spatial_vectors, spatial_ids)
                 self.spatial_dot_index.add(spatial_vectors, spatial_ids)
