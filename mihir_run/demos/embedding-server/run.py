@@ -160,9 +160,7 @@ class LabeledIndexReducer(Reducer):
         i = len(self.labels)
 
         self.labels.append(input["image"])
-        embeddings = utils.base64_to_numpy(output[config.EMBEDDING_LAYER]).astype(
-            np.float32
-        )
+        embeddings = utils.base64_to_numpy(output[config.EMBEDDING_LAYER])
 
         full = embeddings.mean(axis=(1, 2))
         spatial = embeddings.reshape(config.EMBEDDING_DIM, -1).T
@@ -180,6 +178,7 @@ class LabeledIndexReducer(Reducer):
 
             accumulated_full_copy = {}
             accumulated_spatial_copy = {}
+            num_accumulated_spatial_copy = 0
 
             with self.accumulated_lock:
                 should_add_full = self.accumulated_full and (
@@ -202,14 +201,19 @@ class LabeledIndexReducer(Reducer):
                         accumulated_full_copy,
                     )
                 if should_add_spatial:
-                    (
-                        accumulated_spatial_copy,
+                    accumulated_spatial_copy, self.accumulated_spatial = (
                         self.accumulated_spatial,
+                        accumulated_spatial_copy,
+                    )
+                    num_accumulated_spatial_copy, self.num_accumulated_spatial = (
                         self.num_accumulated_spatial,
-                    ) = (self.accumulated_spatial, accumulated_spatial_copy, 0)
+                        num_accumulated_spatial_copy,
+                    )
 
             if should_add_full:
-                full_vectors = np.stack(list(accumulated_full_copy.values()))
+                n = len(accumulated_full_copy)
+                full_vectors = np.zeros((n, config.EMBEDDING_DIM), dtype=np.float32)
+                np.stack(list(accumulated_full_copy.values()), out=full_vectors)
                 full_ids = list(accumulated_full_copy.keys())
 
                 if not self.full_index.is_trained:
@@ -221,8 +225,10 @@ class LabeledIndexReducer(Reducer):
                 print(f"Added {len(full_ids)} full embeddings to index")
 
             if should_add_spatial:
-                spatial_vectors = np.concatenate(
-                    list(accumulated_spatial_copy.values())
+                n = num_accumulated_spatial_copy
+                spatial_vectors = np.zeros((n, config.EMBEDDING_DIM), dtype=np.float32)
+                np.concatenate(
+                    list(accumulated_spatial_copy.values()), out=spatial_vectors
                 )
                 spatial_ids = [
                     i
