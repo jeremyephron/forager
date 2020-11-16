@@ -177,7 +177,6 @@ class InteractiveIndex:
             faiss.index_gpu_to_cpu(index) if self.use_gpu else index,
             str(self.tempdir/self.TRAINED_INDEX_NAME)
         )
-        index.reset()  # free memory
 
         self.is_trained = True
         self._save_metadata()
@@ -284,7 +283,6 @@ class InteractiveIndex:
         )
 
         faiss.write_index(index, str(self.tempdir/self.MERGED_INDEX_NAME))
-        index.reset()  # free memory
 
     def query(
         self,
