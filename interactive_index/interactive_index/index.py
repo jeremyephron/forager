@@ -177,6 +177,7 @@ class InteractiveIndex:
             faiss.index_gpu_to_cpu(index) if self.use_gpu else index,
             str(self.tempdir/self.TRAINED_INDEX_NAME)
         )
+        index.reset()  # free memory
 
         self.is_trained = True
         self._save_metadata()
@@ -257,6 +258,7 @@ class InteractiveIndex:
                 faiss.index_gpu_to_cpu(index) if self.use_gpu else index,
                 str(self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num))
             )
+            index.reset()  # free memory
 
             self._save_metadata()
 
@@ -282,6 +284,7 @@ class InteractiveIndex:
         )
 
         faiss.write_index(index, str(self.tempdir/self.MERGED_INDEX_NAME))
+        index.reset()  # free memory
 
     def query(
         self,
@@ -298,6 +301,7 @@ class InteractiveIndex:
         index = faiss.read_index(str(self.tempdir/self.MERGED_INDEX_NAME))
         index.nprobe = n_probes if n_probes else self.n_probes
         dists, inds = index.search(xq, k)
+        index.reset()  # free memory
 
         if self.multi_id:
             inds = self._invert_cantor_pairing_vec(inds)
@@ -339,7 +343,7 @@ class InteractiveIndex:
         if isinstance(x_src, str):
             x = np.fromfile(x_src, dtype='float32').reshape(-1, self.d).copy()
         elif isinstance(x_src, np.ndarray):
-            x = x_src.reshape(-1, self.d).copy()
+            x = np.ascontiguousarray(x_src.reshape(-1, self.d))
         elif isinstance(x_src, list):
             x = np.array(x_src, size=(-1, self.d), ndmin=2, dtype='float32')
         else:
