@@ -160,7 +160,9 @@ class LabeledIndexReducer(Reducer):
         i = len(self.labels)
 
         self.labels.append(input["image"])
-        embeddings = utils.base64_to_numpy(output[config.EMBEDDING_LAYER])
+        embeddings = utils.base64_to_numpy(output[config.EMBEDDING_LAYER]).astype(
+            np.float32
+        )
 
         full = embeddings.mean(axis=(1, 2))
         spatial = embeddings.reshape(config.EMBEDDING_DIM, -1).T
@@ -565,8 +567,11 @@ async def stop_job(request):
 
 
 def _extract_pooled_embedding_from_mapper_output(output):
-    print(utils.base64_to_numpy(output[config.EMBEDDING_LAYER]).shape)
-    return utils.base64_to_numpy(output[config.EMBEDDING_LAYER]).mean(axis=(1, 2))
+    return (
+        utils.base64_to_numpy(output[config.EMBEDDING_LAYER])
+        .mean(axis=(1, 2))
+        .astype(np.float32)
+    )
 
 
 async def _download_index(index_id):
