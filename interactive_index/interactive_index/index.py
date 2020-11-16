@@ -3,6 +3,7 @@ TODO: docstring
 
 """
 
+import gc
 import json
 from pathlib import Path
 from typing import List, Optional, Tuple, Union, Sequence
@@ -227,6 +228,8 @@ class InteractiveIndex:
 
         idx = 0
         while idx < len(xb):
+            gc.collect()
+
             if self.n_vectors % self.vectors_per_index == 0:
                 # Need to create a new index
                 index = faiss.read_index(
@@ -240,7 +243,6 @@ class InteractiveIndex:
                 index = faiss.read_index(str(
                     self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num)
                 ))
-                print("ntotal: ", index.ntotal)
 
             # Move to GPU
             if self.use_gpu:
@@ -258,7 +260,8 @@ class InteractiveIndex:
                 faiss.index_gpu_to_cpu(index) if self.use_gpu else index,
                 str(self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num))
             )
-            index.reset()  # free memory
+
+            del index  # force free memory
 
             self._save_metadata()
 
