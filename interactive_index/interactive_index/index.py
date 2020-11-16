@@ -240,6 +240,7 @@ class InteractiveIndex:
                 index = faiss.read_index(str(
                     self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num)
                 ))
+                print("ntotal: ", index.ntotal)
 
             # Move to GPU
             if self.use_gpu:
