@@ -301,7 +301,6 @@ class InteractiveIndex:
         index = faiss.read_index(str(self.tempdir/self.MERGED_INDEX_NAME))
         index.nprobe = n_probes if n_probes else self.n_probes
         dists, inds = index.search(xq, k)
-        index.reset()  # free memory
 
         if self.multi_id:
             inds = self._invert_cantor_pairing_vec(inds)
