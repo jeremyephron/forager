@@ -47,6 +47,7 @@ class ClusterData:
     started: asyncio.Event = field(default_factory=asyncio.Event)
     ready: asyncio.Event = field(default_factory=asyncio.Event)
     deployment_id: Optional[str] = None
+    n_replicas: Optional[int] = None
     service_url: Optional[str] = None
 
 
@@ -451,8 +452,10 @@ async def _start_cluster(cluster_data):
     await cluster_data.cluster.start()
     cluster_data.started.set()
 
+    cluster_data.n_replicas = cluster_data.n_nodes * config.CLUSTER_NODE_N_MAPPERS
     deployment_id, service_url = await cluster_data.cluster.create_deployment(
-        container=config.MAPPER_CONTAINER, num_replicas=cluster_data.n_nodes
+        container=config.MAPPER_CONTAINER,
+        num_replicas=cluster_data.n_replicas,
     )
     cluster_data.deployment_id = deployment_id
     cluster_data.service_url = service_url
@@ -493,7 +496,10 @@ async def start_job(request):
 
     index = LabeledIndexReducer.new()
     job = MapReduceJob(
-        MapperSpec(url=cluster_data.service_url, n_mappers=cluster_data.n_nodes),
+        MapperSpec(
+            url=cluster_data.service_url,
+            n_mappers=cluster_data.n_replicas,
+        ),
         index,
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
@@ -610,7 +616,7 @@ async def query_index(request):
         cluster_data = current_clusters[cluster_id]
         await cluster_data.ready.wait()
         mapper_url = cluster_data.service_url
-        n_mappers = cluster_data.n_nodes
+        n_mappers = cluster_data.n_replicas
     else:
         mapper_url = config.MAPPER_CLOUD_RUN_URL
         n_mappers = config.CLOUD_RUN_N_MAPPERS
@@ -664,7 +670,10 @@ async def active_batch(request):
 
     # Generate query vector as average of patch embeddings
     job = MapReduceJob(
-        MapperSpec(url=cluster_data.service_url, n_mappers=cluster_data.n_nodes),
+        MapperSpec(
+            url=cluster_data.service_url,
+            n_mappers=cluster_data.n_replicas,
+        ),
         TrivialReducer(extract_func=_extract_pooled_embedding_from_mapper_output),
         {"input_bucket": bucket},
         n_retries=config.N_RETRIES,
@@ -727,7 +736,8 @@ async def query_svm(request):
     # Generate training vectors
     job = MapReduceJob(
         MapperSpec(
-            url=cluster_data.service_url, n_mappers=cluster_data.n_nodes
+            url=cluster_data.service_url,
+            n_mappers=cluster_data.n_replicas,
         ),  # Figure out n_mappers later
         TrivialReducer(
             extract_func=_extract_pooled_embedding_from_mapper_output
@@ -750,7 +760,8 @@ async def query_svm(request):
     pos_features = await job.run_until_complete(pos_inputs)
     job = MapReduceJob(
         MapperSpec(
-            url=cluster_data.service_url, n_mappers=cluster_data.n_nodes
+            url=cluster_data.service_url,
+            n_mappers=cluster_data.n_replicas,
         ),  # Figure out n_mappers later
         TrivialReducer(
             extract_func=_extract_pooled_embedding_from_mapper_output
