@@ -297,6 +297,7 @@ class LabeledIndexReducer(Reducer):
         self, query_vector, num_results, num_probes, use_full_image=False, svm=False
     ):
         assert not self.flush_thread.is_alive()
+        print(f"Query: use_full_image = {use_full_image}, svm = {svm}")
 
         if use_full_image:
             index = self.full_dot_index if svm else self.full_index
