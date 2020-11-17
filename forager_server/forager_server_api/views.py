@@ -321,7 +321,7 @@ def import_annotations(request, dataset_name, dataset = None):
 
         print("Annotations stored at: " + file_name)
 
-        coco=COCO(file_name) #'/var/folders/59/mjl0tzvn7yb090tst9hyvnxm0000gn/T/tmp8h3gjbha') # Only supporting coco-style annotation files for now (this includes inaturalist!)
+        coco=COCO(file_name) # Only supporting coco-style annotation files for now (this includes inaturalist!)
 
         # get all images containing given categories, select one at random
         category = data['category']
