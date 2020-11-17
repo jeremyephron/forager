@@ -89,4 +89,7 @@ urlpatterns = [
     path('api/active_batch/<slug:dataset_name>',
          views.active_batch,
          name='active_batch'),
+    path('api/import_annotations/<slug:dataset_name>',
+         views.import_annotations,
+         name='import_annotations'),
 ]

@@ -2,6 +2,8 @@ import distutils.util
 import json
 import os
 import requests
+import urllib.request
+import numpy as np
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from google.cloud import storage
@@ -12,6 +14,7 @@ from django.conf import settings
 from rest_framework import status
 from rest_framework.decorators import api_view
 from collections import defaultdict
+from pycocotools.coco import COCO
 
 from .models import Dataset, DatasetItem, Annotation
 
@@ -295,6 +298,115 @@ def create_dataset(request):
         req = HttpRequest()
         req.method = 'GET'
         return get_dataset_info(req, name, dataset)
+    except ValidationError:
+        return JsonResponse({
+            'status': 'failure',
+            'message': 'Something went wrong. Make sure the directory path is valid.',
+        })
+
+@api_view(['POST'])
+@csrf_exempt
+def import_annotations(request, dataset_name, dataset = None):
+    try:
+        if not dataset:
+            dataset = get_object_or_404(Dataset, name=dataset_name)
+
+        print(request)
+        data = json.loads(request.body)
+
+        # Download annotations to local tmp directory--should add a way to check if the file is already present?
+        ann_file = data['ann_file']
+
+        file_name, headers = urllib.request.urlretrieve(ann_file)
+
+        print("Annotations stored at: " + file_name)
+
+        coco=COCO(file_name) #'/var/folders/59/mjl0tzvn7yb090tst9hyvnxm0000gn/T/tmp8h3gjbha') # Only supporting coco-style annotation files for now (this includes inaturalist!)
+
+        # get all images containing given categories, select one at random
+        category = data['category']
+        catIds = coco.getCatIds(catNms=[category])
+        imgIds = coco.getImgIds(catIds=catIds)
+        annIds = coco.getAnnIds(imgIds=imgIds, catIds=catIds)
+        anns = coco.loadAnns(annIds)
+
+        strImgIds = [os.path.basename(coco.loadImgs(imgId)[0]['file_name']).split('.')[0] for imgId in imgIds] # np.array(imgIds).astype('str').tolist()
+        print("Have image ids for category: " + strImgIds[0])
+        print(strImgIds)
+        dataset_items = DatasetItem.objects.filter(dataset=dataset,google=False,identifier__in=strImgIds)
+        print(len(dataset_items))
+        # Create a map from identifier to pk
+        item_identifiers = [di.identifier for di in dataset_items]
+        item_pks = [di.pk for di in dataset_items]
+        item_dict = dict(zip(item_identifiers, item_pks))
+
+        returnAnns = []
+        print(anns)
+        # Check if bbox or just categories
+        if ('bbox' in anns[0]):
+            # Add bounding box labels, assume per-frame labels already loaded
+            for ann in anns:
+                img = coco.loadImgs(ann['image_id'])[0]
+                imgWidth = img['width'] #x
+                imgHeight = img['height'] #y
+                bbox = ann['bbox']
+                print(bbox)
+                xmin = bbox[0]/imgWidth
+                ymin = bbox[1]/imgHeight
+                xmax = (bbox[0] + bbox[2])/imgWidth
+                ymax = (bbox[1] + bbox[3])/imgHeight
+                print(xmin, ymin, xmax, ymax)
+                label_function = 'ground_truth' # Name associated with ground-truth annotations
+                label_type = 'klabel_box'
+                # Type: 2 means box, need to compute bbox on 0-1 scale
+                annotation = {
+                    'type': 2,
+                    'bbox': {
+                        'bmin': {
+                            'x':xmin,
+                            'y':ymin
+                        },
+                        'bmax': {
+                            'x':xmax,
+                            'y':ymax
+                        }
+                    }
+                }
+                annotation = json.dumps(annotation)
+                identifier = os.path.basename(img['file_name']).split('.')[0]
+                dataset_item = DatasetItem.objects.get(pk=item_dict[identifier])
+                ann = Annotation(
+                    dataset_item=dataset_item,
+                    label_function=label_function,
+                    label_category=category,
+                    label_type=label_type,
+                    label_data=annotation)
+                returnAnns.append(ann)
+        else:
+            for dataset_item in dataset_items:
+                label_function = 'ground_truth' # Name associated with ground-truth annotations
+                label_type = 'klabel_frame'
+                # Type: 0 means full-frame, value: 1 means positive
+                annotation = {
+                    'type': 0,
+                    'value': 1
+                }
+                annotation = json.dumps(annotation)
+                ann = Annotation(
+                    dataset_item=dataset_item,
+                    label_function=label_function,
+                    label_category=category,
+                    label_type=label_type,
+                    label_data=annotation)
+                returnAnns.append(ann)
+
+        print(len(returnAnns))
+        Annotation.objects.bulk_create(returnAnns, batch_size=10000)
+        print("Successful bulk create")
+
+        return JsonResponse({
+            'status': 'success'
+        })
     except ValidationError:
         return JsonResponse({
             'status': 'failure',
