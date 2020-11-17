@@ -299,13 +299,18 @@ class InteractiveIndex:
 
         """
 
+        print("A")
         xq = self._convert_src_to_numpy(xq_src)
+        print("B")
         index = faiss.read_index(str(self.tempdir/self.MERGED_INDEX_NAME))
+        print("C")
         index.nprobe = n_probes if n_probes else self.n_probes
         dists, inds = index.search(xq, k)
+        print("D")
 
         if self.multi_id:
             inds = self._invert_cantor_pairing_vec(inds)
+        print("E")
 
         return dists, inds
 
