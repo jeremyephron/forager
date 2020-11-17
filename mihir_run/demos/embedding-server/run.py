@@ -678,14 +678,20 @@ async def active_batch(request):
 
     use_full_image = True
 
-    cluster_data = current_clusters[cluster_id]
-    await cluster_data.ready.wait()
+    if cluster_id in current_clusters:
+        cluster_data = current_clusters[cluster_id]
+        await cluster_data.ready.wait()
+        mapper_url = cluster_data.service_url
+        n_mappers = cluster_data.n_replicas
+    else:
+        mapper_url = config.MAPPER_CLOUD_RUN_URL
+        n_mappers = config.CLOUD_RUN_N_MAPPERS
 
     # Generate query vector as average of patch embeddings
     job = MapReduceJob(
         MapperSpec(
-            url=cluster_data.service_url,
-            n_mappers=cluster_data.n_replicas,
+            url=mapper_url,
+            n_mappers=n_mappers,
         ),
         TrivialReducer(extract_func=_extract_pooled_embedding_from_mapper_output),
         {"input_bucket": bucket},
@@ -736,8 +742,14 @@ async def query_svm(request):
     num_results = int(request.form["num_results"][0])
     mode = request.form["mode"][0]
 
-    cluster_data = current_clusters[cluster_id]
-    await cluster_data.ready.wait()
+    if cluster_id in current_clusters:
+        cluster_data = current_clusters[cluster_id]
+        await cluster_data.ready.wait()
+        mapper_url = cluster_data.service_url
+        n_mappers = cluster_data.n_replicas
+    else:
+        mapper_url = config.MAPPER_CLOUD_RUN_URL
+        n_mappers = config.CLOUD_RUN_N_MAPPERS
 
     # Get embeddings from index
     # We may want to get patch embeddings for labeled images in future--might as well use the bounding box
@@ -749,8 +761,8 @@ async def query_svm(request):
     # Generate training vectors
     job = MapReduceJob(
         MapperSpec(
-            url=cluster_data.service_url,
-            n_mappers=cluster_data.n_replicas,
+            url=mapper_url,
+            n_mappers=n_mappers,
         ),  # Figure out n_mappers later
         TrivialReducer(
             extract_func=_extract_pooled_embedding_from_mapper_output
@@ -773,8 +785,8 @@ async def query_svm(request):
     pos_features = await job.run_until_complete(pos_inputs)
     job = MapReduceJob(
         MapperSpec(
-            url=cluster_data.service_url,
-            n_mappers=cluster_data.n_replicas,
+            url=mapper_url,
+            n_mappers=n_mappers,
         ),  # Figure out n_mappers later
         TrivialReducer(
             extract_func=_extract_pooled_embedding_from_mapper_output
