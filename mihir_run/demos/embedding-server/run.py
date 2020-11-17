@@ -1,5 +1,6 @@
 import asyncio
 from collections import defaultdict
+from distutils.util import strtobool
 import functools
 import gc
 import heapq
@@ -624,7 +625,7 @@ async def query_index(request):
     for i in range(len(augmentations) // 2):
         augmentation_dict[augmentations[2 * i]] = float(augmentations[2 * i + 1])
 
-    use_full_image = bool(request.form.get("use_full_image"))
+    use_full_image = bool(strtobool(request.form.get("use_full_image", "False")))
 
     if cluster_id in current_clusters:
         cluster_data = current_clusters[cluster_id]
@@ -827,7 +828,7 @@ async def query_svm(request):
     # get the accuracy
     print(accuracy_score(training_labels, predicted))
 
-    use_full_image = bool(request.form.get("use_full_image"))
+    use_full_image = bool(strtobool(request.form.get("use_full_image", "False")))
 
     if mode == "svmPos" or mode == "spatialSvmPos":
         # Evaluate the SVM by querying index
