@@ -338,6 +338,7 @@ export class ImageLabeler {
 	}
 
 	delete_annotation() {
+		console.log("Deleting annotation")
 
 		var cur_frame = this.get_current_frame();
 

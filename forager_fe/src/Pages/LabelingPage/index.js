@@ -175,6 +175,7 @@ function LabelingPage() {
   const querySvmUrl = baseUrl + "/query_svm/" + datasetName;
   const activeBatchUrl = baseUrl + "/active_batch/" + datasetName;
   const getGoogleUrl = baseUrl + "/get_google/" + datasetName;
+  const importAnnotationsUrl = baseUrl + "/import_annotations/" + datasetName;
 
   const [PAGINATION_NUM, setPaginationNum] = useState(500);
   const [pageSize, setPageSize] = useState(500);
@@ -363,6 +364,22 @@ function LabelingPage() {
     // Move currFrame to prev, behavior dependent on mode
     var prevFrame = labeler.current_frame_index - 1;
     return Math.max(prevFrame, 0)
+  }
+
+  const onImportClick = async(event) => {
+    const category = document.getElementById("import_category").value;
+    const path = document.getElementById("import_path").value;
+    let url = new URL(importAnnotationsUrl);
+    let body = {
+      category: category,
+      ann_file: path
+    };
+    // url.search = new URLSearchParams(payload).toString();
+    let res = await fetch(url, {method: "POST",
+      credentials: 'include',
+      body: JSON.stringify(body)
+    }).then(results => results.json());
+    console.log(res)
   }
 
   const [HandleFetchImages, SetHandleFetchImages] = useState(()=> async(currPage) => {})
@@ -746,6 +763,7 @@ function LabelingPage() {
     }
 
     const handle_annotation_deleted = async (currFrame, annotation) => {
+      console.log("Delete annotation")
       const endpoint = deleteAnnotationUrl + '/' + currFrame.data.identifier + '/' + annotation.identifier;
 
       await fetch(endpoint, { method: "DELETE",
@@ -869,6 +887,10 @@ function LabelingPage() {
 
       window.addEventListener("keyup", function(e) {
         e.preventDefault();
+        var activeElement = document.activeElement;
+        if (activeElement && (activeElement.tagName.toLowerCase() === 'input')) {
+          return;
+        }
         if (forager_mode === "forager_annotate") {
           labeler.handle_keyup(e);
         }
@@ -978,6 +1000,11 @@ function LabelingPage() {
             <FetchButton id="filter_button">Apply Filter</FetchButton>
           </RowContainer>
           <MainCanvas numTotalFilteredImages={numTotalFilteredImages} onCategory={OnLabel} onUser={OnLabel} annotationsSummary={annotationsSummary}/>
+          <RowContainer id="ann_import_container">
+            <input id="import_category" placeholder="Import Category"></input>
+            <input id="import_path" placeholder="gs://path-to-annotations"></input>
+            <FetchButton id="import_button" onClick={onImportClick}>Import Annotations</FetchButton>
+          </RowContainer>
           <Divider/>
           <TrainProgress/>
           <Divider/>
