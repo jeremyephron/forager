@@ -624,6 +624,7 @@ async def query_index(request):
     for i in range(len(augmentations) // 2):
         augmentation_dict[augmentations[2 * i]] = float(augmentations[2 * i + 1])
 
+    print(request.form.get("use_full_image", [False]))
     use_full_image = bool(request.form.get("use_full_image", [False])[0])
 
     if cluster_id in current_clusters:
