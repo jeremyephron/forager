@@ -6,11 +6,17 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
-knn = {editable = true,path = "./../.."}
-interactive_index = {editable = true,path = "./../../../interactive_index"}
 sanic = "*"
-sklearn = "*"
+scikit-learn = "*"
 chest = "*"
 
 [requires]
-python_version = "3.7"
+python_version = "3.8"
+
+[packages.knn]
+editable = true
+path = "./../.."
+
+[packages.interactive_index]
+editable = true
+path = "./../../../interactive_index"
