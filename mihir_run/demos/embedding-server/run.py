@@ -90,24 +90,22 @@ class LabeledIndexReducer(Reducer):
                 # encoding=config.INDEX_ENCODING,
                 # encoding_args=config.INDEX_ENCODING_ARGS,
                 train_on_gpu=config.INDEX_TRAIN_ON_GPU,
-                metric=metric
+                metric=metric,
             )
             return index_kwargs
-
-        dot_index_kwargs = dict(**index_kwargs, metric="inner product")
 
         self.index_id = str(uuid.uuid4())
         self.index_dir = self.INDEX_PARENT_DIR / self.index_id
         self.labels = []
         self.full_index = InteractiveIndex(
-            tempdir=str(self.index_dir / self.FULL_INDEX_FOLDER), **create_index_kwargs()
+            tempdir=str(self.index_dir / self.FULL_INDEX_FOLDER), **create_index_kwargs(),
         )
         self.spatial_index = InteractiveIndex(
-            tempdir=str(self.index_dir / self.SPATIAL_INDEX_FOLDER), **create_index_kwargs()
+            tempdir=str(self.index_dir / self.SPATIAL_INDEX_FOLDER), **create_index_kwargs(mult=config.SPATIAL_INDEX_MULTIPLE),
         )
         self.full_dot_index = InteractiveIndex(
             tempdir=str(self.index_dir / self.FULL_DOT_INDEX_FOLDER),
-            **create_index_kwargs(mult=config.SPATIAL_INDEX_MULTIPLE, metric='inner product'),
+            **create_index_kwargs(metric='inner product'),
         )
         self.spatial_dot_index = InteractiveIndex(
             tempdir=str(self.index_dir / self.SPATIAL_DOT_INDEX_FOLDER),

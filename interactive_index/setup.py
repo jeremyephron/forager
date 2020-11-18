@@ -5,7 +5,8 @@ setup(
     version="0.0.0",
     packages=find_packages(),
     install_requires=[
-        "faiss-gpu>=1.6.0",
+        "faiss-cpu",
+        "faiss-gpu",
         "numpy==1.18.5",
         "PyYAML>=5.3.1",
     ],  # TODO: put reqs here

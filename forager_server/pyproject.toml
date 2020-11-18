@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "forager_server"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+Django = "==3.1.1"
+Pillow = "*"
+django-cors-headers = "*"
+djangorestframework = "*"
+uvicorn = "*"
+psycopg2-binary = "*"
+numpy = "*"
+django-sslserver = "^0.22"
+pycocotools = "^2.0.2"
+google-cloud-storage = "^1.33.0"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
