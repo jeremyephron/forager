@@ -33,6 +33,8 @@ INDEX_TRANSFORM_ARGS = [64]
 INDEX_ENCODING = "SQ"
 INDEX_ENCODING_ARGS = [8]
 
+SPATIAL_INDEX_MULTIPLE = 400
+
 INDEX_FLUSH_SLEEP = 1  # seconds
 
 INDEX_UPLOAD_GCS_PATH = "gs://forager/indexes/"  # trailing slash = directory
