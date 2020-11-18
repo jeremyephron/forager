@@ -12,6 +12,7 @@ import threading
 import time
 import uuid
 
+from chest import Chest
 import numpy as np
 from sanic import Sanic
 import sanic.response as resp
@@ -101,8 +102,8 @@ class LabeledIndexReducer(Reducer):
         )
 
         self.accumulated_lock = threading.Lock()
-        self.accumulated_full = {}
-        self.accumulated_spatial = {}
+        self.accumulated_full = Chest()
+        self.accumulated_spatial = Chest()
         self.num_accumulated_spatial = 0
 
         self.should_finalize = threading.Event()
@@ -180,8 +181,8 @@ class LabeledIndexReducer(Reducer):
         while not should_finalize:
             should_finalize = self.should_finalize.is_set()
 
-            accumulated_full_copy = {}
-            accumulated_spatial_copy = {}
+            accumulated_full_copy = Chest()
+            accumulated_spatial_copy = Chest()
             num_accumulated_spatial_copy = 0
 
             with self.accumulated_lock:

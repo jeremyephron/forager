@@ -10,6 +10,7 @@ knn = {editable = true,path = "./../.."}
 interactive_index = {editable = true,path = "./../../../interactive_index"}
 sanic = "*"
 sklearn = "*"
+chest = "*"
 
 [requires]
 python_version = "3.7"
