@@ -297,6 +297,9 @@ class InteractiveIndex:
 
         xq = self._convert_src_to_numpy(xq_src)
         index = faiss.read_index(str(self.tempdir/self.MERGED_INDEX_NAME))
+#         if self.use_gpu:
+#             # TODO: perhaps add memory check for training on GPU?
+#             index = to_all_gpus(index, self.co)
         index.nprobe = n_probes if n_probes else self.n_probes
         dists, inds = index.search(xq, k)
 
@@ -383,10 +386,10 @@ class InteractiveIndex:
 
         transform_str = transform if transform else ''
         if transform_args:
-            if transform in ['PCA', 'ITQ']:
-                assert isinstance(transform_args[0], int)
+            if transform in ['PCA', 'PCAR', 'ITQ', 'OPQ']:
+                assert all(isinstance(arg, int) for arg in transform_args)
 
-                transform_str += str(transform_args[0])
+                transform_str += '_'.join(str(arg) for arg in transform_args)
 
         encoding_str = encoding
         if encoding_args:
