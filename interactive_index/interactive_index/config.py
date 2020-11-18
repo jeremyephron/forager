@@ -7,6 +7,7 @@ config dictionaries.
 """
 
 import copy
+import math
 import os
 
 import yaml
@@ -17,10 +18,11 @@ from interactive_index.utils import *
 CONFIG_DEFAULTS = {
     'd': 1_024,
     'n_centroids': 32, # only used with IVF
-    'n_probes': 4, # only used with IVF
+    'n_probes': 16, # only used with IVF
     'vectors_per_index': 10_000,
     'tempdir': '/tmp/',
     'use_gpu': False,
+    'train_on_gpu': False,
     'use_float16': False,
     'use_float16_quantizer': False,
     'use_precomputed_codes': False,
@@ -31,8 +33,8 @@ CONFIG_DEFAULTS = {
     'transform_args': None,
     
     # Search
-    'search': None # {'HNSW'}
-    'search_args': None
+    'search': None, # {'HNSW'}
+    'search_args': None,
 
     # Encoding
     'encoding': 'Flat', # {'SQ', 'PQ', 'LSH'}
@@ -68,26 +70,29 @@ def read_config(config_fpath: str) -> dict:
 
 def _set_config_for_mem_usage(d: int, n_vecs: int, max_mem: int, config: dict):
     """
+    
     Args:
         d: The vector dimension.
         n_vecs: The expected number of vectors.
         max_mem: The maximum amount of memory you want the 
             index to take up in bytes.
-        target_mem: The desired amount of memory you want 
-            the index to take up in bytes.
+        config: The configuration dictionary to set.
     
     """
     
-    # Determine optimal memory balance
+    FLOAT32_SZ = 4 * BYTES
+    MAX_SUBINDEX_SZ = 1 * GIGABYTE
     
     # Flat
     if n_vecs * d * FLOAT32_SZ <= max_mem:
         config['encoding'] = 'Flat'
+        config['vectors_per_index'] = MAX_SUBINDEX_SZ // (d * FLOAT32_SZ)
     
     # Scalar Quantization to 1 byte
     elif n_vecs * d <= max_mem:
         config['encoding'] = 'SQ'
         config['encoding_args'] = [8]
+        config['vectors_per_index'] = MAX_SUBINDEX_SZ // d
     
     else:
         # PCA target dim or PQ subvectors
@@ -102,6 +107,8 @@ def _set_config_for_mem_usage(d: int, n_vecs: int, max_mem: int, config: dict):
             config['encoding'] = 'SQ'
             config['encoding_args'] = [8]
             
+            config['vectors_per_index'] = MAX_SUBINDEX_SZ // x
+            
         # OPQ with PQ
         else:
             y = max(filter(
@@ -113,10 +120,12 @@ def _set_config_for_mem_usage(d: int, n_vecs: int, max_mem: int, config: dict):
             config['transform_args'] = [x, y]
             
             config['encoding'] = 'PQ'
-            config['encoding_args'] = x
+            config['encoding_args'] = [x]
+            
+            config['vectors_per_index'] = MAX_SUBINDEX_SZ // x
     
 
-def auto_config(d: int, n_vecs: int, max_mem: int, target_mem: int):
+def auto_config(d: int, n_vecs: int, max_mem: int, max_ram: int):
     """
     Automatically suggests a configuration given some information.
     
@@ -130,35 +139,10 @@ def auto_config(d: int, n_vecs: int, max_mem: int, target_mem: int):
         
     """
     
+    FLOAT32_SZ = 4 * BYTES
+    
     config = copy.copy(CONFIG_DEFAULTS)
     config['d'] = d
-    config
-#     {
-#     'd': 1_024,
-#     'n_centroids': 32,
-#     'n_probes': 4,
-#     'vectors_per_index': 10_000,
-#     'tempdir': '/tmp/',
-#     'use_gpu': True,
-#     'use_float16': True,
-#     'use_float16_quantizer': True,
-#     'use_precomputed_codes': False,
-#     'metric': 'L2',
-    
-#     # Transformation
-#     'transform': None,
-#     'transform_args': None,
-
-#     # Encoding
-#     'encoding': 'Flat',
-#     'encoding_args': None,
-
-#     # Misc
-#     'multi_id': False
-# }
-    
-    FLOAT32_SZ = 4  # bytes
-    
 
     _set_config_for_mem_usage(d, n_vecs, max_mem, config)
     
@@ -166,19 +150,62 @@ def auto_config(d: int, n_vecs: int, max_mem: int, target_mem: int):
 #         "HNSW32"
 #         memory_usage = d * 4 + 32 * 2 * 4
     
-    if n_vectors < 1_000_000:
-        "...,IVFx,..."
-        # where 4*sqrt(n) <= x <= 16*sqrt(n)
-        # train needs to be [30*x, 256*x]
+    if n_vecs < 1_000_000:
+        # IVFx
+        n_centroids = round_up_to_pow2(4 * math.sqrt(n_vecs))
+        if n_centroids > 16 * math.sqrt(n_vecs):
+            n_centroids = round_up_to_mult(4 * math.sqrt(n_vecs), 4)
         
-    elif n_vectors < 10_000_000:
-        "...,IVF65536_HNSW32,..."
-        # not supported on GPU, if need GPU use IVFx
+        # train needs to be [30*n_centroids, 256*n_centroids]
+        config['n_centroids'] = n_centroids
+        return config
     
-    elif n_vectors < 100_000_000:
-        "...,IVF262144_HNSW32,..."
-        # can train on GPU
+    config['use_gpu'] = False
+    config['search'] = 'HNSW'
+    config['search_args'] = [32]
+    
+    if n_vecs < 10_000_000:
+        # IVF65536_HNSW32
+        # not supported on GPU, if need GPU use IVFx
+        # can train on GPU though
+    
+        # Want 2**16, but RAM problem
+        for i in range(16, 3, -1):
+            n_centroids = 2**i
+            if max_ram / (FLOAT32_SZ * d) > n_centroids * 39:
+                config['n_centroids'] = n_centroids
+                config['recommended_n_train'] = n_centroids * 39
+                return config
+            
+        assert False, 'Too little RAM'
+    
+    elif n_vecs < 100_000_000:
+        # IVF262144_HNSW32
+        # not supported on GPU, if need GPU use IVFx
+        # can train on GPU though
         
+        # Want 2**18, but RAM problem
+        for i in range(18, 5, -1):
+            n_centroids = 2**i
+            if max_ram / (FLOAT32_SZ * d) > n_centroids * 39:
+                config['n_centroids'] = n_centroids
+                config['recommended_n_train'] = n_centroids * 39
+                return config
+            
+        assert False, 'Too little RAM'
+    
     else: # good for n_vectors < 1_000_000_000
-        "...,IVF1048576_HNSW32,..."
+        # IVF1048576_HNSW32
+        # not supported on GPU, if need GPU use IVFx
+        # can train on GPU though
+        
+        # Want 2**20, but RAM problem
+        for i in range(20, 7, -1):
+            n_centroids = 2**i
+            if max_ram / (FLOAT32_SZ * d) > n_centroids * 39:
+                config['n_centroids'] = n_centroids
+                config['recommended_n_train'] = n_centroids * 39
+                return config
+        
+        assert False, 'Too little RAM'
         
