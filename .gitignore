@@ -121,6 +121,7 @@ venv.bak/
 /site
 
 Pipfile.lock
+poetry.lock
 
 # mypy
 .mypy_cache/

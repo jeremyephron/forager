@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "embedding-server"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+sanic = "^20.9.1"
+scikit-learn = "^0.23.2"
+chest = "^0.2.3"
+interactive-index = {path = "../../../interactive_index"}
+knn = {path = "../.."}
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
