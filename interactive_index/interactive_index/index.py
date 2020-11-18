@@ -87,10 +87,13 @@ class InteractiveIndex:
         self.tempdir.mkdir(parents=True, exist_ok=True)
 
         self.use_gpu = self.cfg['use_gpu']
+        self.train_on_gpu = self.cfg['train_on_gpu'] or self.use_gpu
         self.use_float16 = self.cfg['use_float16']
         self.use_float16_quantizer = self.cfg['use_float16_quantizer']
         self.use_precomputed_codes = self.cfg['use_precomputed_codes']
 
+        self.search = self.cfg['search']
+        self.search_args = self.cfg['search_args']
         self.transform = self.cfg['transform']
         self.transform_args = self.cfg['transform_args']
         self.encoding = self.cfg['encoding']
@@ -98,6 +101,7 @@ class InteractiveIndex:
 
         self.index_str = self._create_index_str(
             self.n_centroids,
+            self.search, self.search_args,
             self.encoding, self.encoding_args,
             self.transform, self.transform_args
         )
@@ -168,14 +172,14 @@ class InteractiveIndex:
 
         index = faiss.read_index(str(self.tempdir/self.TRAINED_INDEX_NAME))
 
-        if self.use_gpu:
+        if self.train_on_gpu:
             # TODO: perhaps add memory check for training on GPU?
             index = to_all_gpus(index, self.co)
 
         index.train(xt)
 
         faiss.write_index(
-            faiss.index_gpu_to_cpu(index) if self.use_gpu else index,
+            faiss.index_gpu_to_cpu(index) if self.train_on_gpu else index,
             str(self.tempdir/self.TRAINED_INDEX_NAME)
         )
 
@@ -297,6 +301,9 @@ class InteractiveIndex:
 
         xq = self._convert_src_to_numpy(xq_src)
         index = faiss.read_index(str(self.tempdir/self.MERGED_INDEX_NAME))
+#         if self.use_gpu:
+#             # TODO: perhaps add memory check for training on GPU?
+#             index = to_all_gpus(index, self.co)
         index.nprobe = n_probes if n_probes else self.n_probes
         dists, inds = index.search(xq, k)
 
@@ -371,7 +378,9 @@ class InteractiveIndex:
     def _create_index_str(
         self,
         n_centroids: int,
-        encoding: str,
+        search: Optional[str],
+        search_args: Optional[List],
+        encoding: Optional[str],
         encoding_args: Optional[List],
         transform: Optional[str],
         transform_args: Optional[List]
@@ -380,14 +389,26 @@ class InteractiveIndex:
         TODO: docstring
 
         """
-
+        
+        # Search
+        search_str_parts = [f'IVF{n_centroids}'] if n_centroids else []
+        if search:
+            if search_args:
+                assert all(isinstance(arg, int) for arg in search_args)
+                search += 'x'.join(str(arg) for arg in search_args)
+            search_str_parts.append(search)
+            
+        search_str = '_'.join(search_str_parts)
+        
+        # Transformation
         transform_str = transform if transform else ''
         if transform_args:
-            if transform in ['PCA', 'ITQ']:
-                assert isinstance(transform_args[0], int)
+            if transform in ['PCA', 'PCAR', 'ITQ', 'OPQ']:
+                assert all(isinstance(arg, int) for arg in transform_args)
 
-                transform_str += str(transform_args[0])
+                transform_str += '_'.join(str(arg) for arg in transform_args)
 
+        # Encoding
         encoding_str = encoding
         if encoding_args:
             if encoding in ['SQ', 'PQ']:
@@ -405,8 +426,6 @@ class InteractiveIndex:
 
                 if encoding_args[0] == 'rotate':
                     encoding_str += 'r'
-
-        search_str = f'IVF{n_centroids}'
 
         return ','.join([transform_str, search_str, encoding_str])
 
