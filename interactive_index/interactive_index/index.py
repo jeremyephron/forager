@@ -244,10 +244,6 @@ class InteractiveIndex:
                     self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num)
                 ))
 
-            # Move to GPU
-            if self.use_gpu:
-                index = to_all_gpus(index, self.co)
-
             end_idx = idx + min(
                 self.vectors_per_index - (self.n_vectors % self.vectors_per_index),
                 xb.shape[0]
@@ -257,7 +253,7 @@ class InteractiveIndex:
             self.n_vectors += (end_idx - idx)
 
             faiss.write_index(
-                faiss.index_gpu_to_cpu(index) if self.use_gpu else index,
+                index,
                 str(self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num))
             )
 
@@ -299,18 +295,13 @@ class InteractiveIndex:
 
         """
 
-        print("A")
         xq = self._convert_src_to_numpy(xq_src)
-        print("B")
         index = faiss.read_index(str(self.tempdir/self.MERGED_INDEX_NAME))
-        print("C")
         index.nprobe = n_probes if n_probes else self.n_probes
         dists, inds = index.search(xq, k)
-        print("D")
 
         if self.multi_id:
             inds = self._invert_cantor_pairing_vec(inds)
-        print("E")
 
         return dists, inds
 
