@@ -72,8 +72,14 @@ class LabeledIndexReducer(Reducer):
     @classmethod
     def new(cls, n_vecs, *args, **kwargs) -> "LabeledIndexReducer":
         self = cls(*args, **kwargs)
-        
-        index_kwargs = auto_config(d=config.EMBEDDING_DIM, n_vecs=n_vecs, max_ram= 36 * GIGABYTES, pca_d=128, sq=8)
+
+        index_kwargs = auto_config(
+            d=config.EMBEDDING_DIM,
+            n_vecs=n_vecs,
+            max_ram=config.INDEX_TRAIN_MAX_RAM,
+            pca_d=128,
+            sq=8,
+        )
         index_kwargs.update(
             vectors_per_index=config.INDEX_SUBINDEX_SIZE,
             use_gpu=config.INDEX_USE_GPU,
@@ -82,9 +88,9 @@ class LabeledIndexReducer(Reducer):
             # transform_args=config.INDEX_TRANSFORM_ARGS,
             # encoding=config.INDEX_ENCODING,
             # encoding_args=config.INDEX_ENCODING_ARGS,
-            train_on_gpu=config.INDEX_TRAIN_ON_GPU
+            train_on_gpu=config.INDEX_TRAIN_ON_GPU,
         )
-        
+
         dot_index_kwargs = dict(**index_kwargs, metric="inner product")
 
         self.index_id = str(uuid.uuid4())
@@ -106,8 +112,8 @@ class LabeledIndexReducer(Reducer):
         )
 
         self.accumulated_lock = threading.Lock()
-        self.accumulated_full = Chest()
-        self.accumulated_spatial = Chest()
+        self.accumulated_full = Chest(available_memory=config.EMBEDDING_DICT_MAX_RAM)
+        self.accumulated_spatial = Chest(available_memory=config.EMBEDDING_DICT_MAX_RAM)
         self.num_accumulated_spatial = 0
 
         self.should_finalize = threading.Event()
@@ -185,8 +191,12 @@ class LabeledIndexReducer(Reducer):
         while not should_finalize:
             should_finalize = self.should_finalize.is_set()
 
-            accumulated_full_copy = Chest()
-            accumulated_spatial_copy = Chest()
+            accumulated_full_copy = Chest(
+                available_memory=config.EMBEDDING_DICT_MAX_RAM
+            )
+            accumulated_spatial_copy = Chest(
+                available_memory=config.EMBEDDING_DICT_MAX_RAM
+            )
             num_accumulated_spatial_copy = 0
 
             with self.accumulated_lock:
@@ -300,7 +310,12 @@ class LabeledIndexReducer(Reducer):
     # QUERYING
 
     def query(
-        self, query_vector, num_results, num_probes=None, use_full_image=False, svm=False
+        self,
+        query_vector,
+        num_results,
+        num_probes=None,
+        use_full_image=False,
+        svm=False,
     ):
         assert not self.flush_thread.is_alive()
         print(f"Query: use_full_image = {use_full_image}, svm = {svm}")
@@ -720,7 +735,7 @@ async def active_batch(request):
         query_results = current_indexes[index_id].query(
             np.float32(vec),
             perVector,
-            config.INDEX_NUM_QUERY_PROBES,
+            None,
             use_full_image,
             False,  # False bc just standard nearest neighbor
         )
@@ -851,7 +866,7 @@ async def query_svm(request):
 
         # Run query and return results
         query_results = current_indexes[index_id].query(
-            w, num_results, config.INDEX_NUM_QUERY_PROBES, use_full_image, True
+            w, num_results, None, use_full_image, True
         )
 
         paths = [x[0] for x in query_results]
@@ -868,7 +883,7 @@ async def query_svm(request):
             query_results = current_indexes[index_id].query(
                 np.float32(vec),
                 perVector,
-                config.INDEX_NUM_QUERY_PROBES,
+                None,
                 use_full_image,
                 False,  # False bc just standard nearest neighbor
             )
