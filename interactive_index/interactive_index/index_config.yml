@@ -1,14 +1,18 @@
 # This is a sample configuration file for an index
 d: 1024
 n_centroids: 32
-n_probes: 4
+n_probes: 16
 vectors_per_index: 5000
 tempdir: /tmp/
 use_gpu: true
+train_on_gpu: true
 use_float16: true
 use_float16_quantizer: true
 use_precomputed_codes: false
 metric: L2  # or 'inner product'
+
+search:
+search_args:
 
 # {None, PCA, ITQ}
 # None: no transformation

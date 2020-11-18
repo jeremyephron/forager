@@ -11,9 +11,36 @@ from typing import List, Optional, Tuple
 
 import faiss
 
-# Handle faiss compiled without GPU support
-if not hasattr(faiss, 'GpuMultipleClonerOptions'):
-    faiss.GpuMultipleClonerOptions = List
+
+# Units in bytes
+BYTE     = BYTES     = 2**0
+KILOBYTE = KILOBYTES = 2**10
+MEGABYTE = MEGABYTES = 2**20
+GIGABYTE = GIGABYTES = 2**30
+TERABYTE = TERABYTES = 2**40
+
+
+def round_down_to_pow2(x: int) -> int:
+    if x == 0:
+        return 0
+    
+    return 1 << (x.bit_length() - 1)
+
+
+def round_up_to_pow2(x: int) -> int:
+    if x == 0:
+        return 0
+    
+    return 1 << ((x - 1).bit_length)
+
+
+def round_down_to_mult(x: int, m: int) -> int:
+    return x // m * m
+
+
+def round_up_to_mult(x: int, m: int) -> int:
+    return (x + m - 1) // m * m
+
 
 def merge_on_disk(
 	trained_index: faiss.Index,
@@ -68,7 +95,7 @@ def merge_on_disk(
 
 def to_all_gpus(
     cpu_index: faiss.Index,
-    co: Optional[faiss.GpuMultipleClonerOptions] = None
+    co: Optional['faiss.GpuMultipleClonerOptions'] = None
 ) -> faiss.Index:
     """
     TODO: docstring

@@ -38,6 +38,8 @@ from knn.reducers import Reducer, PoolingReducer, TrivialReducer
 from knn.clusters import GKECluster
 
 from interactive_index import InteractiveIndex
+from interactive_index.config import auto_config
+from interactive_index.utils import *
 
 import config
 
@@ -68,19 +70,21 @@ class LabeledIndexReducer(Reducer):
     # CONSTRUCTORS
 
     @classmethod
-    def new(cls, *args, **kwargs) -> "LabeledIndexReducer":
+    def new(cls, n_vecs, *args, **kwargs) -> "LabeledIndexReducer":
         self = cls(*args, **kwargs)
-
-        index_kwargs = dict(
-            d=config.EMBEDDING_DIM,
-            n_centroids=config.INDEX_NUM_CENTROIDS,
+        
+        index_kwargs = auto_config(d=config.EMBEDDING_DIM, n_vecs=n_vecs, max_ram= 36 * GIGABYTES, pca_d=128, sq=8)
+        index_kwargs.update(
             vectors_per_index=config.INDEX_SUBINDEX_SIZE,
             use_gpu=config.INDEX_USE_GPU,
-            transform=config.INDEX_TRANSFORM,
-            transform_args=config.INDEX_TRANSFORM_ARGS,
-            encoding=config.INDEX_ENCODING,
-            encoding_args=config.INDEX_ENCODING_ARGS,
+            # hardcoded PCAR128, SQ8
+            # transform=config.INDEX_TRANSFORM,
+            # transform_args=config.INDEX_TRANSFORM_ARGS,
+            # encoding=config.INDEX_ENCODING,
+            # encoding_args=config.INDEX_ENCODING_ARGS,
+            train_on_gpu=config.INDEX_TRAIN_ON_GPU
         )
+        
         dot_index_kwargs = dict(**index_kwargs, metric="inner product")
 
         self.index_id = str(uuid.uuid4())
@@ -296,7 +300,7 @@ class LabeledIndexReducer(Reducer):
     # QUERYING
 
     def query(
-        self, query_vector, num_results, num_probes, use_full_image=False, svm=False
+        self, query_vector, num_results, num_probes=None, use_full_image=False, svm=False
     ):
         assert not self.flush_thread.is_alive()
         print(f"Query: use_full_image = {use_full_image}, svm = {svm}")
@@ -507,7 +511,7 @@ async def start_job(request):
     cluster_data = current_clusters[cluster_id]
     await cluster_data.ready.wait()
 
-    index = LabeledIndexReducer.new()
+    index = LabeledIndexReducer.new(n_vecs=len(paths))
     job = MapReduceJob(
         MapperSpec(
             url=cluster_data.service_url,
@@ -654,7 +658,7 @@ async def query_index(request):
 
     # Run query and return results
     query_results = current_indexes[index_id].query(
-        query_vector, num_results, config.INDEX_NUM_QUERY_PROBES, use_full_image, False
+        query_vector, num_results, None, use_full_image, False
     )
     paths = [x[0] for x in query_results]
     return resp.json({"results": paths})
