@@ -244,10 +244,6 @@ class InteractiveIndex:
                     self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num)
                 ))
 
-            # Move to GPU
-            if self.use_gpu:
-                index = to_all_gpus(index, self.co)
-
             end_idx = idx + min(
                 self.vectors_per_index - (self.n_vectors % self.vectors_per_index),
                 xb.shape[0]
@@ -257,7 +253,7 @@ class InteractiveIndex:
             self.n_vectors += (end_idx - idx)
 
             faiss.write_index(
-                faiss.index_gpu_to_cpu(index) if self.use_gpu else index,
+                index,
                 str(self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num))
             )
 
