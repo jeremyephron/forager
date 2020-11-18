@@ -125,26 +125,24 @@ def _set_config_for_mem_usage(d: int, n_vecs: int, max_mem: int, config: dict):
             config['vectors_per_index'] = MAX_SUBINDEX_SZ // x
     
 
-def auto_config(d: int, n_vecs: int, max_mem: int, max_ram: int):
+def auto_config(d: int, n_vecs: int, max_ram: int, pca_d: int = None, sq: int = None):
     """
-    Automatically suggests a configuration given some information.
-    
-    Args:
-        d: The vector dimension.
-        n_vecs: The expected number of vectors.
-        max_mem: The maximum amount of memory you want the 
-            index to take up in bytes.
-        target_mem: The desired amount of memory you want 
-            the index to take up in bytes.
-        
+
     """
     
     FLOAT32_SZ = 4 * BYTES
     
     config = copy.copy(CONFIG_DEFAULTS)
     config['d'] = d
+    
+    if pca_d:
+        config['transform'] = 'PCAR'
+        config['transform_args'] = [pca_d]
+    if sq:
+        config['encoding'] = 'SQ'
+        config['encoding_args'] = [sq]
 
-    _set_config_for_mem_usage(d, n_vecs, max_mem, config)
+#     _set_config_for_mem_usage(d, n_vecs, max_mem, config)
     
 #     if n_vectors < 10_000:
 #         "HNSW32"
@@ -158,6 +156,8 @@ def auto_config(d: int, n_vecs: int, max_mem: int, max_ram: int):
         
         # train needs to be [30*n_centroids, 256*n_centroids]
         config['n_centroids'] = n_centroids
+        config['recommended_n_train'] = n_centroids * 39
+        config['n_probes'] = n_centroids // 8
         return config
     
     config['use_gpu'] = False
@@ -175,6 +175,7 @@ def auto_config(d: int, n_vecs: int, max_mem: int, max_ram: int):
             if max_ram / (FLOAT32_SZ * d) > n_centroids * 39:
                 config['n_centroids'] = n_centroids
                 config['recommended_n_train'] = n_centroids * 39
+                config['n_probes'] = max(n_centroids // 8, 1)
                 return config
             
         assert False, 'Too little RAM'
@@ -190,6 +191,7 @@ def auto_config(d: int, n_vecs: int, max_mem: int, max_ram: int):
             if max_ram / (FLOAT32_SZ * d) > n_centroids * 39:
                 config['n_centroids'] = n_centroids
                 config['recommended_n_train'] = n_centroids * 39
+                config['n_probes'] = max(n_centroids // 8, 1)
                 return config
             
         assert False, 'Too little RAM'
@@ -200,11 +202,12 @@ def auto_config(d: int, n_vecs: int, max_mem: int, max_ram: int):
         # can train on GPU though
         
         # Want 2**20, but RAM problem
-        for i in range(20, 7, -1):
+        for i in range(20, 5, -1):
             n_centroids = 2**i
             if max_ram / (FLOAT32_SZ * d) > n_centroids * 39:
                 config['n_centroids'] = n_centroids
                 config['recommended_n_train'] = n_centroids * 39
+                config['n_probes'] = max(n_centroids // 8, 1)
                 return config
         
         assert False, 'Too little RAM'
