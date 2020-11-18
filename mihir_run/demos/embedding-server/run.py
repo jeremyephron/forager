@@ -368,7 +368,7 @@ class ExpiringDict(MutableMapping[KT, VT]):
     def __delitem__(self, key: KT) -> None:
         del self.store[key]
         del self.last_accessed[key]
-        del self.locks[key]
+        self.locks.pop(key, None)
 
     def __iter__(self):
         raise NotImplementedError()
