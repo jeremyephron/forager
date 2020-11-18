@@ -299,7 +299,7 @@ class LabeledIndexReducer(Reducer):
     # QUERYING
 
     def query(
-        self, query_vector, num_results, num_probes, use_full_image=False, svm=False
+        self, query_vector, num_results, num_probes=None, use_full_image=False, svm=False
     ):
         assert not self.flush_thread.is_alive()
         print(f"Query: use_full_image = {use_full_image}, svm = {svm}")
@@ -657,7 +657,7 @@ async def query_index(request):
 
     # Run query and return results
     query_results = current_indexes[index_id].query(
-        query_vector, num_results, config.INDEX_NUM_QUERY_PROBES, use_full_image, False
+        query_vector, num_results, None, use_full_image, False
     )
     paths = [x[0] for x in query_results]
     return resp.json({"results": paths})
