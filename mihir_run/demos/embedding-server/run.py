@@ -803,7 +803,7 @@ async def query_svm(request):
             np.ones(
                 (
                     len(
-                        pos_inputs,
+                        pos_features,
                     )
                 ),
                 dtype=int,
@@ -811,7 +811,7 @@ async def query_svm(request):
             np.zeros(
                 (
                     len(
-                        neg_inputs,
+                        neg_features,
                     )
                 ),
                 dtype=int,
