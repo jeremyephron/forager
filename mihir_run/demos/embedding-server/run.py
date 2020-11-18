@@ -73,23 +73,26 @@ class LabeledIndexReducer(Reducer):
     def new(cls, n_vecs, *args, **kwargs) -> "LabeledIndexReducer":
         self = cls(*args, **kwargs)
 
-        index_kwargs = auto_config(
-            d=config.EMBEDDING_DIM,
-            n_vecs=n_vecs,
-            max_ram=config.INDEX_TRAIN_MAX_RAM,
-            pca_d=128,
-            sq=8,
-        )
-        index_kwargs.update(
-            vectors_per_index=config.INDEX_SUBINDEX_SIZE,
-            use_gpu=config.INDEX_USE_GPU,
-            # hardcoded PCAR128, SQ8
-            # transform=config.INDEX_TRANSFORM,
-            # transform_args=config.INDEX_TRANSFORM_ARGS,
-            # encoding=config.INDEX_ENCODING,
-            # encoding_args=config.INDEX_ENCODING_ARGS,
-            train_on_gpu=config.INDEX_TRAIN_ON_GPU,
-        )
+        def create_index_kwargs(mult=1, metric='L2'):
+            index_kwargs = auto_config(
+                d=config.EMBEDDING_DIM,
+                n_vecs=n_vecs * mult,
+                max_ram=config.INDEX_TRAIN_MAX_RAM,
+                pca_d=128,
+                sq=8,
+            )
+            index_kwargs.update(
+                vectors_per_index=config.INDEX_SUBINDEX_SIZE,
+                use_gpu=config.INDEX_USE_GPU,
+                # hardcoded PCAR128, SQ8
+                # transform=config.INDEX_TRANSFORM,
+                # transform_args=config.INDEX_TRANSFORM_ARGS,
+                # encoding=config.INDEX_ENCODING,
+                # encoding_args=config.INDEX_ENCODING_ARGS,
+                train_on_gpu=config.INDEX_TRAIN_ON_GPU,
+                metric=metric
+            )
+            return index_kwargs
 
         dot_index_kwargs = dict(**index_kwargs, metric="inner product")
 
@@ -97,18 +100,18 @@ class LabeledIndexReducer(Reducer):
         self.index_dir = self.INDEX_PARENT_DIR / self.index_id
         self.labels = []
         self.full_index = InteractiveIndex(
-            tempdir=str(self.index_dir / self.FULL_INDEX_FOLDER), **index_kwargs
+            tempdir=str(self.index_dir / self.FULL_INDEX_FOLDER), **create_index_kwargs()
         )
         self.spatial_index = InteractiveIndex(
-            tempdir=str(self.index_dir / self.SPATIAL_INDEX_FOLDER), **index_kwargs
+            tempdir=str(self.index_dir / self.SPATIAL_INDEX_FOLDER), **create_index_kwargs()
         )
         self.full_dot_index = InteractiveIndex(
             tempdir=str(self.index_dir / self.FULL_DOT_INDEX_FOLDER),
-            **dot_index_kwargs,
+            **create_index_kwargs(mult=config.SPATIAL_INDEX_MULTIPLE, metric='inner product'),
         )
         self.spatial_dot_index = InteractiveIndex(
             tempdir=str(self.index_dir / self.SPATIAL_DOT_INDEX_FOLDER),
-            **dot_index_kwargs,
+            **create_index_kwargs(mult=config.SPATIAL_INDEX_MULTIPLE, metric='inner product'),
         )
 
         self.accumulated_lock = threading.Lock()
