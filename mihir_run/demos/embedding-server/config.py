@@ -1,10 +1,10 @@
 GCP_PROJECT = "visualdb-1046"
-GCP_ZONE = "us-central1-a"
+GCP_ZONE = "us-west1-b"
 GCP_MACHINE_TYPE = "n2-highcpu-4"
 
 OUTPUT_FILENAME = "lvis-embeddings.npy"
 MAPPER_CLOUD_RUN_URL = (
-    "https://vishnu-demo-full-image-embedding-spatial-g6rwrca4fq-uc.a.run.app"
+    "https://vishnu-demo-full-image-embedding-spatial-g6rwrca4fq-uw.a.run.app"
 )
 MAPPER_CONTAINER = "gcr.io/visualdb-1046/vishnu-demo-full-image-embedding-spatial"
 CLUSTER_NODE_N_MAPPERS = 2

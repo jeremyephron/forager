@@ -259,7 +259,10 @@ class GKECluster:
             service = client.V1Service(
                 api_version="v1",
                 kind="Service",
-                metadata=client.V1ObjectMeta(name=service_id),
+                metadata=client.V1ObjectMeta(
+                    name=service_id,
+                    # annotations={"cloud.google.com/load-balancer-type": "Internal"},
+                ),
                 spec=client.V1ServiceSpec(
                     selector={"dep": deployment_id},
                     ports=[

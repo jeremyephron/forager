@@ -131,7 +131,7 @@ class MapReduceJob:
         chunked = utils.chunk(iterable, self.chunk_size)
 
         async with self.mapper as mapper_url:
-            connector = aiohttp.TCPConnector(limit=0, force_close=True)
+            connector = aiohttp.TCPConnector(limit=0)
             timeout = aiohttp.ClientTimeout(total=self.request_timeout)
             async with aiohttp.ClientSession(
                 connector=connector, timeout=timeout

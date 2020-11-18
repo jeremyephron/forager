@@ -1,7 +1,7 @@
 project=`gcloud config get-value project 2> /dev/null`
 folder=mapper
 name=vishnu-demo-${PWD##*/}-spatial
-region=us-central1
+region=us-west1
 root_path=../..
 
 # Copy shared resources in
@@ -22,5 +22,5 @@ gcloud run deploy $name --image gcr.io/$project/$name \
                         --max-instances 1000 \
                         --memory 1Gi \
                         --timeout 900 \
-                        --region us-central1 \
+                        --region $region \
                         --allow-unauthenticated
