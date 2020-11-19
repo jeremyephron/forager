@@ -31,7 +31,7 @@ def round_up_to_pow2(x: int) -> int:
     if x == 0:
         return 0
     
-    return 1 << ((x - 1).bit_length)
+    return 1 << ((x - 1).bit_length())
 
 
 def round_down_to_mult(x: int, m: int) -> int:

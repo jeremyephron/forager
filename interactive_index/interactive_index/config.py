@@ -150,9 +150,9 @@ def auto_config(d: int, n_vecs: int, max_ram: int, pca_d: int = None, sq: int = 
     
     if n_vecs < 1_000_000:
         # IVFx
-        n_centroids = round_up_to_pow2(4 * math.sqrt(n_vecs))
+        n_centroids = round_up_to_pow2(4 * int(math.sqrt(n_vecs)))
         if n_centroids > 16 * math.sqrt(n_vecs):
-            n_centroids = round_up_to_mult(4 * math.sqrt(n_vecs), 4)
+            n_centroids = round_up_to_mult(4 * int(math.sqrt(n_vecs)), 4)
         
         # train needs to be [30*n_centroids, 256*n_centroids]
         config['n_centroids'] = n_centroids
