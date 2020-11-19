@@ -73,7 +73,7 @@ class LabeledIndexReducer(Reducer):
     def new(cls, n_vecs, *args, **kwargs) -> "LabeledIndexReducer":
         self = cls(*args, **kwargs)
 
-        def create_index_kwargs(mult=1, metric='L2'):
+        def create_index_kwargs(tempdir, mult=1, metric='L2'):
             index_kwargs = auto_config(
                 d=config.EMBEDDING_DIM,
                 n_vecs=n_vecs * mult,
@@ -82,6 +82,7 @@ class LabeledIndexReducer(Reducer):
                 sq=8,
             )
             index_kwargs.update(
+                tempdir=tempdir,
                 vectors_per_index=config.INDEX_SUBINDEX_SIZE,
                 use_gpu=config.INDEX_USE_GPU,
                 # hardcoded PCAR128, SQ8
@@ -97,20 +98,22 @@ class LabeledIndexReducer(Reducer):
         self.index_id = str(uuid.uuid4())
         self.index_dir = self.INDEX_PARENT_DIR / self.index_id
         self.labels = []
-        self.full_index = InteractiveIndex(
-            tempdir=str(self.index_dir / self.FULL_INDEX_FOLDER), **create_index_kwargs(),
-        )
-        self.spatial_index = InteractiveIndex(
-            tempdir=str(self.index_dir / self.SPATIAL_INDEX_FOLDER), **create_index_kwargs(mult=config.SPATIAL_INDEX_MULTIPLE),
-        )
-        self.full_dot_index = InteractiveIndex(
+        self.full_index = InteractiveIndex(**create_index_kwargs(
+            tempdir=str(self.index_dir / self.FULL_INDEX_FOLDER),
+        ))
+        self.spatial_index = InteractiveIndex(**create_index_kwargs(
+            tempdir=str(self.index_dir / self.SPATIAL_INDEX_FOLDER),
+            mult=config.SPATIAL_INDEX_MULTIPLE,
+        ))
+        self.full_dot_index = InteractiveIndex(**create_index_kwargs(
             tempdir=str(self.index_dir / self.FULL_DOT_INDEX_FOLDER),
-            **create_index_kwargs(metric='inner product'),
-        )
-        self.spatial_dot_index = InteractiveIndex(
+            metric='inner product',
+        ))
+        self.spatial_dot_index = InteractiveIndex(**create_index_kwargs(
             tempdir=str(self.index_dir / self.SPATIAL_DOT_INDEX_FOLDER),
-            **create_index_kwargs(mult=config.SPATIAL_INDEX_MULTIPLE, metric='inner product'),
-        )
+            mult=config.SPATIAL_INDEX_MULTIPLE,
+            metric='inner product',
+        ))
 
         self.accumulated_lock = threading.Lock()
         self.accumulated_full = Chest(available_memory=config.EMBEDDING_DICT_MAX_RAM)
