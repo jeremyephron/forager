@@ -309,7 +309,7 @@ class LabeledIndexReducer(Reducer):
                 )
                 
                 for batch in range(n_batches):
-                    start = time.time() # TODO: delete
+                    start = time.perf_counter() # TODO: delete
 
                     n = min(batch_size, n_all - batch * batch_size)
                     full_ids = list(islice(full_ids_all, n))
@@ -318,38 +318,38 @@ class LabeledIndexReducer(Reducer):
                     )
                     np.stack(list(islice(full_embs_all, n)), out=full_embs)
 
-                    end = time.time() # TODO: delete
+                    end = time.perf_counter() # TODO: delete
                     self.logger.debug(
                         f'Read {n} embeddings in {end - start:.3f}s'
                     )
 
                     if not self.full_index.is_trained:
                         self.logger.debug('Training full index')
-                        start = time.time() # TODO: delete
+                        start = time.perf_counter() # TODO: delete
 
                         self.full_index.train(full_embs)
                         
-                        end = time.time() # TODO: delete
+                        end = time.perf_counter() # TODO: delete
                         self.logger.debug(
                             f'Trained full index in {end - start:.3f}s'
                         )
 
                         self.logger.debug('Training full dot index')
-                        start = time.time() # TODO: delete
+                        start = time.perf_counter() # TODO: delete
 
                         self.full_dot_index.train(full_embs)
                         
-                        end = time.time() # TODO: delete
+                        end = time.perf_counter() # TODO: delete
                         self.logger.debug(
                             f'Trained full dot index in {end - start:.3f}s'
                         )
                     
                     self.logger.debug(f'Adding {n} embeddings to full index')
-                    start = time.time() # TODO: delete
+                    start = time.perf_counter() # TODO: delete
 
                     self.full_index.add(full_embs, full_ids)
                     
-                    end = time.time() # TODO: delete
+                    end = time.perf_counter() # TODO: delete
                     self.logger.debug(
                         f'Added {n} embeddings to full index in '
                         f'{end - start:.3f}s'
@@ -358,11 +358,11 @@ class LabeledIndexReducer(Reducer):
                     self.logger.debug(
                         f'Adding {n} embeddings to full dot index'
                     )
-                    start = time.time() # TODO: delete
+                    start = time.perf_counter() # TODO: delete
                     
                     self.full_dot_index.add(full_embs, full_ids)
                     
-                    end = time.time() # TODO: delete
+                    end = time.perf_counter() # TODO: delete
                     self.logger.debug(
                         f'Added {n} embeddings to full dot index in '
                         f'{end - start:.3f}s'
@@ -387,7 +387,7 @@ class LabeledIndexReducer(Reducer):
 
                 n_processed = 0
                 while n_processed < n_all:
-                    start = time.time() # TODO: delete
+                    start = time.perf_counter() # TODO: delete
 
                     spatial_ids = []
                     to_concat = []
@@ -407,38 +407,38 @@ class LabeledIndexReducer(Reducer):
                     del to_concat
                     gc.collect()
                     
-                    end = time.time() # TODO: delete
+                    end = time.perf_counter() # TODO: delete
                     self.logger.debug(
                         f'Read {n} spatial embeddings in {end - start:.3f}s'
                     )
 
                     if not self.spatial_index.is_trained:
                         self.logger.debug('Training spatial index')
-                        start = time.time() # TODO: delete
+                        start = time.perf_counter() # TODO: delete
 
                         self.spatial_index.train(spatial_embs)
                         
-                        end = time.time() # TODO: delete
+                        end = time.perf_counter() # TODO: delete
                         self.logger.debug(
                             f'Trained spatial index in {end - start:.3f}s'
                         )
 
                         self.logger.debug('Training spatial dot index')
-                        start = time.time() # TODO: delete
+                        start = time.perf_counter() # TODO: delete
                         
                         self.spatial_dot_index.train(spatial_embs)
                         
-                        end = time.time() # TODO: delete
+                        end = time.perf_counter() # TODO: delete
                         self.logger.debug(
                             'Trained spatial dot index in {end - start:.3f}s'
                         )
                 
                     self.logger.debug(f'Adding {n} embeddings to spatial index')
-                    start = time.time() # TODO: delete
+                    start = time.perf_counter() # TODO: delete
 
                     self.spatial_index.add(spatial_embs, spatial_ids)
                     
-                    end = time.time() # TODO: delete
+                    end = time.perf_counter() # TODO: delete
                     self.logger.debug(
                         f'Added {n} embeddings to spatial index in '
                         f'{end - start:.3f}s'
@@ -447,11 +447,11 @@ class LabeledIndexReducer(Reducer):
                     self.logger.debug(
                         f'Adding {n} embeddings to spatial dot index'
                     )
-                    start = time.time() # TODO: delete
+                    start = time.perf_counter() # TODO: delete
                     
                     self.spatial_dot_index.add(spatial_embs, spatial_ids)
                     
-                    end = time.time() # TODO: delete
+                    end = time.perf_counter() # TODO: delete
                     self.logger.debug(
                         f'Added {n} embeddings to spatial dot index in '
                         f'{end - start:.3f}s'
@@ -524,13 +524,13 @@ class LabeledIndexReducer(Reducer):
         if use_full_image:
             index = self.full_dot_index if svm else self.full_index
 
-            start = time.time()
+            start = time.perf_counter()
 
             dists, ids = index.query(
                 query_vector, num_results, n_probes=num_probes
             )
             
-            end = time.time()
+            end = time.perf_counter()
             self.logger.debug(
                 f'Query of size {query_vector.shape} with k={num_results}, '
                 f'n_probes={num_probes}, n_centroids={index.n_centroids}, and '
@@ -542,7 +542,7 @@ class LabeledIndexReducer(Reducer):
         else:
             index = self.spatial_dot_index if svm else self.spatial_index
             
-            start = time.time()
+            start = time.perf_counter()
 
             dists, ids = index.query(
                 query_vector,
@@ -550,7 +550,7 @@ class LabeledIndexReducer(Reducer):
                 n_probes=num_probes,
             )
 
-            end = time.time()
+            end = time.perf_counter()
             self.logger.debug(
                 f'Query of size {query_vector.shape} with k={num_results}, '
                 f'n_probes={num_probes}, n_centroids={index.n_centroids}, and '
@@ -560,7 +560,7 @@ class LabeledIndexReducer(Reducer):
             assert len(ids) == 1 and len(dists) == 1
 
             # Gather lowest QUERY_PATCHES_PER_IMAGE distances for each image
-            start = time.time()
+            start = time.perf_counter()
 
             dists_by_id = defaultdict(list)
             for i, d in zip(ids[0], dists[0]):
@@ -577,7 +577,7 @@ class LabeledIndexReducer(Reducer):
                 num_results, id_dist_tuple_gen, operator.itemgetter(1)
             )
 
-            end = time.time()
+            end = time.perf_counter()
             self.logger.debug(
                 f'Processing spatial results took {end - start:.3f}s'
             )
