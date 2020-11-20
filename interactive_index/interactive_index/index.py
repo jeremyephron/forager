@@ -177,6 +177,7 @@ class InteractiveIndex:
             index = to_all_gpus(index, self.co)
 
         index.train(xt)
+        index.reset()
 
         faiss.write_index(
             faiss.index_gpu_to_cpu(index) if self.train_on_gpu else index,
@@ -232,7 +233,7 @@ class InteractiveIndex:
 
         idx = 0
         while idx < len(xb):
-            gc.collect()
+            # gc.collect()
 
             if self.n_vectors % self.vectors_per_index == 0:
                 # Need to create a new index
@@ -261,7 +262,8 @@ class InteractiveIndex:
                 str(self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num))
             )
 
-            del index  # force free memory
+            index.reset()
+            # del index  # force free memory
 
             self._save_metadata()
 

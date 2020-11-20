@@ -9,8 +9,8 @@ python = "^3.8"
 sanic = "^20.9.1"
 scikit-learn = "^0.23.2"
 chest = "^0.2.3"
-interactive-index = {path = "../../../interactive_index"}
-knn = {path = "../.."}
+knn = {path = "../..", develop = true}
+interactive-index = {path = "../../../interactive_index", develop = true}
 
 [tool.poetry.dev-dependencies]
 
