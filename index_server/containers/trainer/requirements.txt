@@ -1,0 +1,7 @@
+backoff
+click
+faiss-gpu
+numpy
+psutil
+PyYAML
+requests
