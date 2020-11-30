@@ -8,6 +8,7 @@ COPY requirements-build.txt ./
 COPY requirements.txt ./
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential python3.7-dev wget \
+    && rm -rf /var/lib/apt/lists/* \
     && pip install -r requirements-build.txt \
     && pip install -r requirements.txt \
     && grep -F -x -v -f requirements.txt requirements-build.txt | pip uninstall -y -r /dev/stdin \
@@ -15,9 +16,7 @@ RUN apt-get update \
 
 # Download external resources.
 COPY resources.txt ./
-RUN apt-get install wget \
-    && rm -rf /var/lib/apt/lists/* \
-    && wget -i resources.txt \
+RUN wget -i resources.txt \
     && apt-get purge -y --auto-remove wget
 
 # Run the web service on container startup.
