@@ -8,5 +8,5 @@ INDEX_SUBINDEX_SIZE = 25_000
 INDEX_USE_GPU = False
 INDEX_TRAIN_ON_GPU = True
 
-INDEX_DIR_PATTERN = "/shared/indexes/{}"
+INDEX_DIR_PATTERN = "/shared/indexes/{}/{}"
 ENVVAR_PREFIX = "FORAGER"

@@ -1,6 +1,3 @@
-import pickle
-import random
-
 import backoff
 import click
 import numpy as np
@@ -20,8 +17,9 @@ def load(paths: List[str], sample_rate: float):
 
     # Each file is a pickled Dict[str, np.ndarray] where each key is N x D
     for path in paths:
-        with open(path, "rb") as f:
-            embedding_dict = pickle.load(f)  # type: Dict[str, np.ndarray]
+        embedding_dict = np.load(
+            path, allow_pickle=True
+        ).item()  # type: Dict[str, np.ndarray]
 
         for embeddings in embedding_dict.values():
             if sample_rate:
@@ -30,7 +28,7 @@ def load(paths: List[str], sample_rate: float):
                 if n_sample == 0:
                     continue
                 elif n_sample < n:
-                    sample_inds = random.sample(range(n), n_sample)
+                    sample_inds = np.random.choice(n, n_sample)
                     embeddings = embeddings[sample_inds]
 
             all_embeddings.append(embeddings)
@@ -92,15 +90,16 @@ def notify(url: str, payload: Dict[str, str]):
     is_flag=True,
     help="Use inner product metric rather than L2 distance.",
 )
-@click.option("--index_id", required=True, help="Unique index identifier.")
+@click.option("--job_id", required=True, help="Index build job identifier.")
+@click.option("--index_id", required=True, help="Unique index identifier within job.")
 @click.option("--url", required=True, help="Webhook to PUT to after completion.")
-def main(paths, sample_rate, n_total, inner_product, index_id, url):
+def main(paths, sample_rate, n_total, inner_product, job_id, index_id, url):
     embeddings = load(paths, sample_rate)
-    index_dir = config.INDEX_DIR_PATTERN.format(index_id)
+    index_dir = config.INDEX_DIR_PATTERN.format(job_id, index_id)
     metric = "inner product" if inner_product else "L2"
 
     train(embeddings, n_total, metric, index_dir)
-    notify(url, {"index_id": index_id, "index_dir": index_dir})
+    notify(url, {"job_id": job_id, "index_id": index_id, "index_dir": index_dir})
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ import functools
 import time
 import uuid
 
-from typing import List, Dict, Any, DefaultDict
+from typing import Any, DefaultDict, Dict, List, Tuple
 
 from sanic import Sanic
 from sanic.response import json
@@ -42,8 +42,8 @@ class Mapper(abc.ABC):
 
     async def process_chunk(
         self, chunk: List[JSONType], job_id: str, job_args: Any, request_id: str
-    ) -> List[JSONType]:
-        return await asyncio.gather(
+    ) -> Tuple[JSONType, List[JSONType]]:
+        return None, await asyncio.gather(
             *[
                 self.process_element(input, job_id, job_args, request_id, i)
                 for i, input in enumerate(chunk)
@@ -128,7 +128,7 @@ class Mapper(abc.ABC):
                 job_args = self._args_by_job.setdefault(
                     job_id, await self.initialize_job(request.json["job_args"])
                 )  # memoized
-                outputs = await self.process_chunk(
+                chunk_output, outputs = await self.process_chunk(
                     request.json["inputs"], job_id, job_args, request_id
                 )
 
@@ -137,6 +137,7 @@ class Mapper(abc.ABC):
                 "worker_id": self.worker_id,
                 "profiling": self._profiling_results_by_request.pop(request_id),
                 "outputs": outputs,
+                "chunk_output": chunk_output,
             }
         )
 
