@@ -4,7 +4,7 @@ import functools
 import numpy as np
 import requests
 
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List
 
 from interactive_index import InteractiveIndex
 from interactive_index.config import auto_config
@@ -14,11 +14,8 @@ from . import config
 
 # Step 1: Load saved embeddings into memory
 def load(
-    paths: List[str],
-    sample_rate: float = 1.0,
-    reduction: Optional[Callable[[np.ndarray], np.ndarray]] = None,
+    paths: List[str], sample_rate: float, reduction: Callable[[np.ndarray], np.ndarray]
 ):
-    reduction = reduction or (lambda x: x)
     all_embeddings = []
 
     # Each file is a np.save'd Dict[int, np.ndarray] where each value is N x D
@@ -104,7 +101,9 @@ def notify(url: str, payload: Dict[str, str]):
 @click.option("--index_id", required=True, help="Unique index identifier within job.")
 @click.option("--url", required=True, help="Webhook to PUT to after completion.")
 def main(paths, sample_rate, average, n_total, inner_product, job_id, index_id, url):
-    reduction = functools.partial(np.mean, axis=1, keepdims=True) if average else None
+    reduction = (
+        functools.partial(np.mean, axis=1, keepdims=True) if average else (lambda x: x)
+    )
     embeddings = load(paths, sample_rate, reduction)
     index_dir = config.INDEX_DIR_TMPL.format(job_id, index_id)
     metric = "inner product" if inner_product else "L2"

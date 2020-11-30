@@ -13,7 +13,7 @@ class IndexBuildingMapper(Mapper):
         if reduction == "average":
             job_args["reduction"] = functools.partial(np.mean, axis=1, keepdims=True)
         elif not reduction:
-            job_args["reduction"] = None
+            job_args["reduction"] = lambda x: x
         else:
             raise ValueError(f"Unknown reduction: {reduction}")
 
@@ -29,7 +29,7 @@ class IndexBuildingMapper(Mapper):
     async def process_element(
         self, input, job_id, job_args, request_id, element_index
     ) -> int:
-        reduction = job_args["reduction"] or (lambda x: x)
+        reduction = job_args["reduction"]
         index = job_args["index"]
 
         # Step 1: Load saved embeddings into memory
