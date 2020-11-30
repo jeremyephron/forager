@@ -4,4 +4,5 @@ WEIGHTS_PATH = "R-50.pkl"  # model will be downloaded here during container buil
 RESNET_CONFIG = get_default_detectron_config()
 RESNET_CONFIG.MODEL.RESNETS.OUT_FEATURES = ["res5"]
 
-EMBEDDINGS_FILE_PATTERN = "/shared/embeddings/{}/{}/{}.npy"
+EMBEDDINGS_FILE_TMPL = "/shared/embeddings/{}/{}/{}.npy"
+GCS_URL_PREFIX = "https://storage.googleapis.com"

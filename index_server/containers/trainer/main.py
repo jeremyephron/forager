@@ -1,9 +1,10 @@
 import backoff
 import click
+import functools
 import numpy as np
 import requests
 
-from typing import Dict, List
+from typing import Callable, Dict, List, Optional
 
 from interactive_index import InteractiveIndex
 from interactive_index.config import auto_config
@@ -11,15 +12,20 @@ from interactive_index.config import auto_config
 from . import config
 
 
-# Step 1: Load picked embeddings into memory
-def load(paths: List[str], sample_rate: float):
+# Step 1: Load saved embeddings into memory
+def load(
+    paths: List[str],
+    sample_rate: float = 1.0,
+    reduction: Optional[Callable[[np.ndarray], np.ndarray]] = None,
+):
+    reduction = reduction or (lambda x: x)
     all_embeddings = []
 
-    # Each file is a pickled Dict[str, np.ndarray] where each key is N x D
+    # Each file is a np.save'd Dict[int, np.ndarray] where each value is N x D
     for path in paths:
         embedding_dict = np.load(
             path, allow_pickle=True
-        ).item()  # type: Dict[str, np.ndarray]
+        ).item()  # type: Dict[int, np.ndarray]
 
         for embeddings in embedding_dict.values():
             if sample_rate:
@@ -30,8 +36,7 @@ def load(paths: List[str], sample_rate: float):
                 elif n_sample < n:
                     sample_inds = np.random.choice(n, n_sample)
                     embeddings = embeddings[sample_inds]
-
-            all_embeddings.append(embeddings)
+            all_embeddings.append(reduction(embeddings))
 
     return np.concatenate(all_embeddings)
 
@@ -71,13 +76,18 @@ def notify(url: str, payload: Dict[str, str]):
     "paths",
     type=click.Path(exists=True, dir_okay=False),
     nargs=-1,
-    help="Paths to pickled embedding dictionaries.",
+    help="Paths to saved embedding dictionaries.",
 )
 @click.option(
     "--sample_rate",
     default=1.0,
     type=click.FloatRange(0.0, 1.0),
     help="Fraction of saved embeddings to randomly sample for training.",
+)
+@click.option(
+    "--average",
+    is_flag=True,
+    help="Average embeddings for each key in saved dictionary.",
 )
 @click.option(
     "--n_total",
@@ -93,9 +103,10 @@ def notify(url: str, payload: Dict[str, str]):
 @click.option("--job_id", required=True, help="Index build job identifier.")
 @click.option("--index_id", required=True, help="Unique index identifier within job.")
 @click.option("--url", required=True, help="Webhook to PUT to after completion.")
-def main(paths, sample_rate, n_total, inner_product, job_id, index_id, url):
-    embeddings = load(paths, sample_rate)
-    index_dir = config.INDEX_DIR_PATTERN.format(job_id, index_id)
+def main(paths, sample_rate, average, n_total, inner_product, job_id, index_id, url):
+    reduction = functools.partial(np.mean, axis=1, keepdims=True) if average else None
+    embeddings = load(paths, sample_rate, reduction)
+    index_dir = config.INDEX_DIR_TMPL.format(job_id, index_id)
     metric = "inner product" if inner_product else "L2"
 
     train(embeddings, n_total, metric, index_dir)
