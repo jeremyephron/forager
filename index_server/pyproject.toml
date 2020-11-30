@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "embedding-server"
+name = "index-server"
 version = "0.1.0"
 description = ""
 authors = ["Your Name <you@example.com>"]
@@ -9,8 +9,8 @@ python = "^3.8"
 sanic = "^20.9.1"
 scikit-learn = "^0.23.2"
 chest = "^0.2.3"
-knn = {path = "../..", develop = true}
-interactive-index = {path = "../../../interactive_index", develop = true}
+knn = {path = "../mihir_run", develop = true}
+interactive-index = {path = "../interactive_index", develop = true}
 
 [tool.poetry.dev-dependencies]
 
