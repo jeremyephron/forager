@@ -126,7 +126,7 @@ class LabeledIndexReducer(Reducer):
         self.index_dir = self.INDEX_PARENT_DIR / self.index_id
         self.labels = []
         
-        self.logger.info('Creating index with id', self.index_id)
+        self.logger.info(f'Creating index with id {self.index_id}')
 
         self.full_index = InteractiveIndex(**create_index_kwargs(
             tempdir=str(self.index_dir / self.FULL_INDEX_FOLDER),
@@ -531,14 +531,16 @@ class LabeledIndexReducer(Reducer):
             )
             
             end = time.perf_counter()
+
+            sorted_id_dist_tuples = [(i, d) for i, d in zip(ids[0], dists[0]) if i >= 0]
             self.logger.debug(
                 f'Query of size {query_vector.shape} with k={num_results}, '
                 f'n_probes={num_probes}, n_centroids={index.n_centroids}, and '
-                f'n_vectors={index.n_vectors} took {end - start:.3f}s'
+                f'n_vectors={index.n_vectors} took {end - start:.3f}s, and '
+                f'got {len(sorted_id_dist_tuples)} results.'
             )
-            
+
             assert len(ids) == 1 and len(dists) == 1
-            sorted_id_dist_tuples = [(i, d) for i, d in zip(ids[0], dists[0]) if i >= 0]
         else:
             index = self.spatial_dot_index if svm else self.spatial_index
             
@@ -551,13 +553,6 @@ class LabeledIndexReducer(Reducer):
             )
 
             end = time.perf_counter()
-            self.logger.debug(
-                f'Query of size {query_vector.shape} with k={num_results}, '
-                f'n_probes={num_probes}, n_centroids={index.n_centroids}, and '
-                f'n_vectors={index.n_vectors} took {end - start:.3f}s'
-            )
-
-            assert len(ids) == 1 and len(dists) == 1
 
             # Gather lowest QUERY_PATCHES_PER_IMAGE distances for each image
             start = time.perf_counter()
@@ -578,6 +573,17 @@ class LabeledIndexReducer(Reducer):
             )
 
             end = time.perf_counter()
+
+            self.logger.debug(
+                f'Query of size {query_vector.shape} with k={num_results}, '
+                f'n_probes={num_probes}, n_centroids={index.n_centroids}, and '
+                f'n_vectors={index.n_vectors} took {end - start:.3f}s, and '
+                f'got {len(sorted_id_dist_tuples)} results.'
+            )
+
+            assert len(ids) == 1 and len(dists) == 1
+
+
             self.logger.debug(
                 f'Processing spatial results took {end - start:.3f}s'
             )
@@ -905,7 +911,7 @@ async def query_index(request):
 
     # Run query and return results
     query_results = current_indexes[index_id].query(
-        query_vector, num_results, 32 if use_full_image else 82, use_full_image, False
+        query_vector, num_results, None, use_full_image, False
     )
     paths = [x[0] for x in query_results]
     return resp.json({'results': paths})

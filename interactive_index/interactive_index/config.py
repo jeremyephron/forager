@@ -157,12 +157,12 @@ def auto_config(d: int, n_vecs: int, max_ram: int, pca_d: int = None, sq: int = 
         # train needs to be [30*n_centroids, 256*n_centroids]
         config['n_centroids'] = n_centroids
         config['recommended_n_train'] = n_centroids * 39
-        config['n_probes'] = n_centroids // 8
+        config['n_probes'] = n_centroids // 16
         return config
     
     config['use_gpu'] = False
-    config['search'] = 'HNSW'
-    config['search_args'] = [32]
+    #config['search'] = 'HNSW'
+    #config['search_args'] = [32]
     
     if n_vecs < 10_000_000:
         # IVF65536_HNSW32
@@ -170,12 +170,12 @@ def auto_config(d: int, n_vecs: int, max_ram: int, pca_d: int = None, sq: int = 
         # can train on GPU though
     
         # Want 2**16, but RAM problem
-        for i in range(16, 3, -1):
+        for i in range(12, 3, -1):
             n_centroids = 2**i
             if max_ram / (FLOAT32_SZ * d) > n_centroids * 39:
                 config['n_centroids'] = n_centroids
                 config['recommended_n_train'] = n_centroids * 39
-                config['n_probes'] = max(n_centroids // 8, 1)
+                config['n_probes'] = max(n_centroids // 16, 1)
                 return config
             
         assert False, 'Too little RAM'
@@ -186,12 +186,12 @@ def auto_config(d: int, n_vecs: int, max_ram: int, pca_d: int = None, sq: int = 
         # can train on GPU though
         
         # Want 2**18, but RAM problem
-        for i in range(18, 5, -1):
+        for i in range(12, 5, -1):
             n_centroids = 2**i
             if max_ram / (FLOAT32_SZ * d) > n_centroids * 39:
                 config['n_centroids'] = n_centroids
                 config['recommended_n_train'] = n_centroids * 39
-                config['n_probes'] = max(n_centroids // 8, 1)
+                config['n_probes'] = max(n_centroids // 16, 1)
                 return config
             
         assert False, 'Too little RAM'
@@ -202,7 +202,7 @@ def auto_config(d: int, n_vecs: int, max_ram: int, pca_d: int = None, sq: int = 
         # can train on GPU though
         
         # Want 2**20, but RAM problem
-        for i in range(20, 5, -1):
+        for i in range(13, 5, -1):
             n_centroids = 2**i
             if max_ram / (FLOAT32_SZ * d) > n_centroids * 39:
                 config['n_centroids'] = n_centroids
