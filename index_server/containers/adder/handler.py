@@ -2,51 +2,63 @@ import functools
 
 import numpy as np
 
+from typing import Dict, List, Tuple
+
 from interactive_index import InteractiveIndex
 from knn.mappers import Mapper
+from knn.utils import JSONType
 import config
 
 
-class IndexBuildingMapper(Mapper):
-    async def initialize_job(self, job_args) -> InteractiveIndex:
-        reduction = job_args.get("reduction")
+class TrainableIndex:
+    def __init__(self, index_dict: Dict[str, str], shard_tmpl: str):
+        reduction = index_dict.get("reduction")
+        index_dir = index_dict["index_dir"]
+
         if reduction == "average":
-            job_args["reduction"] = functools.partial(np.mean, axis=1, keepdims=True)
+            self.reduction = functools.partial(np.mean, axis=1, keepdims=True)
         elif not reduction:
-            job_args["reduction"] = lambda x: x
+            self.reduction = lambda x: x
         else:
             raise ValueError(f"Unknown reduction: {reduction}")
 
-        index = InteractiveIndex.load(job_args["index_dir"])
-        index.SHARD_INDEX_NAME_TMPL = config.SHARD_INDEX_NAME_TMPL.format(
-            self.worker_id
-        )
-        job_args["index"] = index
+        self.index = InteractiveIndex.load(index_dir)
+        self.index.SHARD_INDEX_NAME_TMPL = shard_tmpl
 
-        return job_args
-
-    # input = path to a np.save'd Dict[int, np.ndarray] where each value is N x D
-    async def process_element(
-        self, input, job_id, job_args, request_id, element_index
-    ) -> int:
-        reduction = job_args["reduction"]
-        index = job_args["index"]
-
-        # Step 1: Load saved embeddings into memory
-        embedding_dict = np.load(
-            input, allow_pickle=True
-        ).item()  # type: Dict[int, np.ndarray]
-
-        # Step 2: Add to on-disk index
-        all_embeddings = list(map(reduction, embedding_dict.values()))
+    def add(self, embedding_dict: Dict[int, np.ndarray]):
+        all_embeddings = list(map(self.reduction, embedding_dict.values()))
         all_ids = [
             int(id)
             for id, embeddings in zip(embedding_dict, all_embeddings)
             for _ in range(embeddings.shape[0])
         ]
-        index.add(np.concatenate(all_embeddings), all_ids)
+        self.index.add(np.concatenate(all_embeddings), all_ids)
 
         return len(all_ids)
+
+
+class IndexBuildingMapper(Mapper):
+    def initialize_container(self):
+        self.shard_tmpl = config.SHARD_INDEX_NAME_TMPL.format(self.worker_id)
+
+    async def initialize_job(self, job_args) -> InteractiveIndex:
+        job_args["indexes"] = [
+            TrainableIndex(index_dict, self.shard_tmpl)
+            for index_dict in job_args["indexes"]
+        ]
+        return job_args
+
+    # input = path to a np.save'd Dict[int, np.ndarray] where each value is N x D
+    async def process_element(
+        self, input, job_id, job_args, request_id, element_index
+    ) -> List[int]:
+        # Step 1: Load saved embeddings into memory
+        embedding_dict = np.load(
+            input, allow_pickle=True
+        ).item()  # type: Dict[int, np.ndarray]
+
+        # Step 2: Add to on-disk indexes
+        return [index.add(embedding_dict) for index in job_args["indexes"]]
 
     async def postprocess_chunk(
         self,
@@ -56,7 +68,7 @@ class IndexBuildingMapper(Mapper):
         job_args,
         request_id,
     ) -> Tuple[str, List[JSONType]]:
-        return job_args["index"].SHARD_INDEX_NAME_TMPL, outputs
+        return self.shard_tmpl, outputs
 
 
 mapper = IndexBuildingMapper()

@@ -15,4 +15,5 @@ RUN apt-get update \
 
 # Run script on container startup.
 COPY . ./
-ENTRYPOINT python3.8 main.py
+ENV FLASK_APP=main.py
+CMD exec flask run --host=0.0.0.0 --port=$PORT
