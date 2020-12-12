@@ -1,3 +1,5 @@
+# TODO(mihirg): Deprecate this module in favor of Terraform-based cluster creation
+
 import asyncio
 import uuid
 

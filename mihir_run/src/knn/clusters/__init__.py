@@ -1,2 +1,2 @@
-from .clusters import GKECluster
+from .gke_cluster import GKECluster
 from .terraform import TerraformModule
