@@ -1,3 +1,4 @@
+from dataclasses import dataclass, field
 import functools
 import threading
 
@@ -6,7 +7,7 @@ import numpy as np
 import requests
 from flask import Flask, request, abort
 
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Optional
 
 from interactive_index import InteractiveIndex
 from interactive_index.config import auto_config
@@ -70,88 +71,91 @@ def notify(url: str, payload: Dict[str, str]):
     r.raise_for_status()
 
 
-working_lock = threading.Lock()
+@dataclass
+class TrainingJob:
+    paths: List[str]  # Paths to saved embedding dictionaries
+    n_total: int  # Estimated total number of embeddings that will be added to index
+
+    job_id: str  # Index build job identifier
+    index_id: str  # Unique index identifier within job
+    url: str  # Webhook to PUT to after completion
+
+    sample_rate: float = (
+        1.0  # Fraction of saved embeddings to randomly sample for training
+    )
+    average: bool = (
+        False  # Whether to average embeddings for each key in saved dictionary
+    )
+    inner_product: bool = (
+        False  # Whether to use inner product metric rather than L2 distance
+    )
+
+    _done: bool = False
+    _done_lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def start(self):
+        thread = threading.Thread(target=self.run, daemon=True)
+        thread.start()
+
+    def stop(self):
+        with self._done_lock:
+            if self._done:
+                return
+            self._done = True
+
+        notify(
+            self.url,
+            {"job_id": self.job_id, "index_id": self.index_id, "success": False},
+        )
+
+    @property
+    def done(self):
+        with self._done_lock:
+            return self._done
+
+    def run(self):
+        reduction = (
+            functools.partial(np.mean, axis=1, keepdims=True)
+            if self.average
+            else (lambda x: x)
+        )
+        embeddings = load(self.paths, self.sample_rate, reduction)
+        index_dir = config.INDEX_DIR_TMPL.format(self.job_id, self.index_id)
+        metric = "inner product" if self.inner_product else "L2"
+
+        train(embeddings, self.n_total, metric, index_dir)
+        with self._done_lock:
+            if self._done:
+                return
+            self._done = True
+
+        notify(
+            self.url,
+            {
+                "job_id": self.job_id,
+                "index_id": self.index_id,
+                "success": True,
+                "index_dir": index_dir,
+            },
+        )
+
+
+current_job: Optional[TrainingJob] = None
 app = Flask(__name__)
 
 
 @app.route("/", methods=["POST"])
 def start():
-    try:
-        payload = request.json or {}
-        args = (
-            list(payload["paths"]),
-            float(payload.get("sample_rate", 1.0)),
-            bool(payload.get("average")),
-            int(payload["n_total"]),
-            bool(payload.get("inner_product")),
-            str(payload["job_id"]),
-            str(payload["index_id"]),
-            str(payload["url"]),
-            working_lock,
-        )
-    except Exception as e:
-        abort(400, description=str(e))
-
-    if not working_lock.acquire(blocking=False):
+    global current_job
+    if current_job and not current_job.done:
         abort(503, description="Busy")
 
-    thread = threading.Thread(
-        target=main,
-        args=args,
-    )
-    thread.start()
+    payload = request.json or {}
+    current_job = TrainingJob(**payload)
     return "Started"
 
 
-# TODO(mihirg): Turn these into docstrings
-# @click.command()
-# @click.argument(
-#     "paths",
-#     type=click.Path(exists=True, dir_okay=False),
-#     nargs=-1,
-#     help="Paths to saved embedding dictionaries.",
-# )
-# @click.option(
-#     "--sample_rate",
-#     default=1.0,
-#     type=click.FloatRange(0.0, 1.0),
-#     help="Fraction of saved embeddings to randomly sample for training.",
-# )
-# @click.option(
-#     "--average",
-#     is_flag=True,
-#     help="Average embeddings for each key in saved dictionary.",
-# )
-# @click.option(
-#     "--n_total",
-#     required=True,
-#     type=click.IntRange(1),
-#     help="Estimated total number of embeddings that will be added to index.",
-# )
-# @click.option(
-#     "--inner_product",
-#     is_flag=True,
-#     help="Use inner product metric rather than L2 distance.",
-# )
-# @click.option("--job_id", required=True, help="Index build job identifier.")
-# @click.option("--index_id", required=True, help="Unique index identifier within job.")
-# @click.option("--url", required=True, help="Webhook to PUT to after completion.")
-def main(
-    paths, sample_rate, average, n_total, inner_product, job_id, index_id, url, lock
-):
-    try:
-        reduction = (
-            functools.partial(np.mean, axis=1, keepdims=True)
-            if average
-            else (lambda x: x)
-        )
-        embeddings = load(paths, sample_rate, reduction)
-        index_dir = config.INDEX_DIR_TMPL.format(job_id, index_id)
-        metric = "inner product" if inner_product else "L2"
-
-        train(embeddings, n_total, metric, index_dir)
-        notify(url, {"job_id": job_id, "index_id": index_id, "index_dir": index_dir})
-    except Exception:
-        raise
-    finally:
-        lock.release()
+@app.teardown_appcontext
+def stop(_):
+    if current_job:
+        current_job.stop()
