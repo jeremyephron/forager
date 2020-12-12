@@ -35,31 +35,6 @@ locals {
   mapper_disk_size_gb  = 10
 }
 
-resource "google_container_node_pool" "mapper_np" {
-  name       = "mapper-np"
-  location   = var.zone
-  cluster    = google_container_cluster.cluster.name
-  node_count = var.mapper_num_nodes
-
-  node_config {
-    preemptible  = true
-    machine_type = var.mapper_node_type
-    disk_size_gb = local.trainer_disk_size_gb
-
-    oauth_scopes = [
-      "https://www.googleapis.com/auth/cloud-platform",
-      "https://www.googleapis.com/auth/devstorage.read_only",
-      "https://www.googleapis.com/auth/logging.write",
-      "https://www.googleapis.com/auth/monitoring",
-      "https://www.googleapis.com/auth/servicecontrol",
-      "https://www.googleapis.com/auth/service.management.readonly",  # noqa
-      "https://www.googleapis.com/auth/trace.append",
-    ]
-  }
-
-  depends_on = [kubernetes_persistent_volume_claim.nfs_claim]
-}
-
 resource "kubernetes_deployment" "mapper_dep" {
   metadata {
     name = "mapper-dep"
@@ -120,7 +95,7 @@ resource "kubernetes_deployment" "mapper_dep" {
         }
 
         node_selector = {
-          "cloud.google.com/gke-nodepool" = google_container_node_pool.mapper_np.name
+          "cloud.google.com/gke-nodepool" = google_container_cluster.cluster.node_pool.0.name
         }
       }
     }

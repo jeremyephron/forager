@@ -35,36 +35,6 @@ locals {
   trainer_disk_size_gb  = 20
 }
 
-resource "google_container_node_pool" "trainer_np" {
-  name       = "trainer-np"
-  location   = var.zone
-  cluster    = google_container_cluster.cluster.name
-  node_count = var.trainer_num_nodes
-
-  node_config {
-    preemptible  = true
-    machine_type = var.trainer_node_type
-    disk_size_gb = local.trainer_disk_size_gb
-
-    guest_accelerator {
-      type  = var.trainer_accelerator_type
-      count = var.trainer_accelerator_count
-    }
-
-    oauth_scopes = [
-      "https://www.googleapis.com/auth/cloud-platform",
-      "https://www.googleapis.com/auth/devstorage.read_only",
-      "https://www.googleapis.com/auth/logging.write",
-      "https://www.googleapis.com/auth/monitoring",
-      "https://www.googleapis.com/auth/servicecontrol",
-      "https://www.googleapis.com/auth/service.management.readonly",  # noqa
-      "https://www.googleapis.com/auth/trace.append",
-    ]
-  }
-
-  depends_on = [kubernetes_persistent_volume_claim.nfs_claim]
-}
-
 resource "kubernetes_deployment" "trainer_dep" {
   count = var.trainer_num_nodes
 
@@ -142,7 +112,7 @@ resource "kubernetes_deployment" "trainer_dep" {
         }
 
         node_selector = {
-          "cloud.google.com/gke-nodepool" = google_container_node_pool.trainer_np.name
+          "cloud.google.com/gke-nodepool" = google_container_cluster.cluster.node_pool.2.name
         }
       }
     }

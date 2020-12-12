@@ -37,7 +37,7 @@ resource "kubernetes_persistent_volume" "nfs_volume" {
   }
   spec {
     capacity = {
-      storage = "${var.disk_tb}T"
+      storage = "${var.disk_tb}Ti"
     }
     access_modes = ["ReadWriteMany"]
     persistent_volume_source {
@@ -58,7 +58,7 @@ resource "kubernetes_persistent_volume_claim" "nfs_claim" {
     access_modes = ["ReadWriteMany"]
     resources {
       requests = {
-        storage = "${var.disk_tb}T"
+        storage = kubernetes_persistent_volume.nfs_volume.spec.0.capacity.storage
       }
     }
     volume_name = kubernetes_persistent_volume.nfs_volume.metadata.0.name
