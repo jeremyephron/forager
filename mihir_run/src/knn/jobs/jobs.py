@@ -141,11 +141,11 @@ class MapReduceJob:
                     self.mapper.n_mappers,
                 ):
                     try:
-                        self._handle_chunk_result(*(await response_tuple))
+                        self._reduce_chunk(*(await response_tuple))
                     except asyncio.CancelledError:
                         raise
                     except Exception as e:
-                        print(f"Error in _handle_chunk_result, raising! {type(e)}: {e}")
+                        print(f"Error in _reduce_chunk, raising! {type(e)}: {e}")
                         traceback.print_exc()
                         raise
 
@@ -242,7 +242,7 @@ class MapReduceJob:
 
         return chunk, result, end_time - start_time
 
-    def _handle_chunk_result(
+    def _reduce_chunk(
         self, chunk: List[JSONType], result: Optional[JSONType], elapsed_time: float
     ):
         self._n_requests += 1
@@ -263,6 +263,9 @@ class MapReduceJob:
         self._profiling["total_time"].push(elapsed_time)
         for k, v in result["profiling"].items():
             self._profiling[k].push(v)
+
+        if result["chunk_output"]:
+            self.reducer.handle_chunk_result(chunk, result["chunk_output"])
 
         for input, output in zip(chunk, result["outputs"]):
             if output:
