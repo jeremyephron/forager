@@ -70,17 +70,20 @@ class IndexEmbeddingMapper(ResNetBackboneMapper):
             embeddings_dict = {
                 int(input["id"]): output
                 for input, output in zip(inputs, outputs)
-                if output
+                if output is not None
             }
 
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             np.save(output_path, embeddings_dict)
             job_args["n_chunks_saved"] += 1
 
-            return output_path, [len(output) if output else None for output in outputs]
+            return output_path, [
+                len(output) if output is not None else None for output in outputs
+            ]
         else:
             return None, [
-                utils.numpy_to_base64(output) if output else None for output in outputs
+                utils.numpy_to_base64(output) if output is not None else None
+                for output in outputs
             ]
 
 
