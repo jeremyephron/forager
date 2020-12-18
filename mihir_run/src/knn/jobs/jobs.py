@@ -147,7 +147,7 @@ class MapReduceJob:
 
         chunk_stream = stream.chunks(stream.iterate(iterable), self.chunk_size)
 
-        connector = aiohttp.TCPConnector(limit=0)
+        connector = aiohttp.TCPConnector(limit=0, force_close=True)
         timeout = aiohttp.ClientTimeout(total=self.request_timeout)
         async with self.mapper as mapper_url, chunk_stream.stream() as chunk_gen, aiohttp.ClientSession(
             connector=connector, timeout=timeout
