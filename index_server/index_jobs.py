@@ -12,7 +12,7 @@ import numpy as np
 
 from interactive_index.config import auto_config
 
-from knn.utils import base64_to_numpy, JSONType
+from knn.utils import base64_to_numpy, JSONType, unasync_as_task
 from knn.reducers import Reducer
 
 import config
@@ -38,9 +38,11 @@ class MapperReducer(Reducer):
         self.wake_gen = asyncio.Condition()
         self.finished = False
 
-    def handle_chunk_result(self, chunk, chunk_output):
+    @unasync_as_task
+    async def handle_chunk_result(self, chunk, chunk_output):
         self.output_paths.append(chunk_output)
-        self.wake_gen.notify_all()
+        async with self.wake_gen:
+            self.wake_gen.notify_all()
 
     def handle_result(self, input, output):
         self.num_images += 1
@@ -64,9 +66,11 @@ class MapperReducer(Reducer):
             notif = self.notifications.pop(k)
             notif.callback(output_paths_copy)
 
+    @unasync_as_task
     def finish(self):
         self.finished = True
-        self.wake_gen.notify_all()
+        async with self.wake_gen:
+            self.wake_gen.notify_all()
 
     @property
     def result(self) -> List[str]:
@@ -81,7 +85,8 @@ class MapperReducer(Reducer):
             elif self.finished:
                 break
             else:
-                await self.wake_gen.wait()
+                async with self.wake_gen:
+                    await self.wake_gen.wait()
 
 
 class AdderReducer(Reducer):
@@ -190,11 +195,13 @@ class TrainingJob:
             self._task.cancel()
             await self._task
 
-    def handle_result(self, result: JSONType):
+    async def handle_result(self, result: JSONType):
         if result.get("success"):
             self.index_dir = result["index_dir"]
             self.finished.set()
-        self._failed_or_finished.notify()
+
+        async with self._failed_or_finished:
+            self._failed_or_finished.notify()
 
     @property
     def mounted_index_dir(self) -> Path:

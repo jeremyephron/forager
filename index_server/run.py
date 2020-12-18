@@ -224,14 +224,14 @@ class LabeledIndex:
                 continue
             asyncio.create_task(self.training_jobs[index_type].start(output_paths))
 
-    def handle_training_status_update(self, result: JSONType):
+    async def handle_training_status_update(self, result: JSONType):
         # Because training takes a long time, the trainer sends us back an HTTP request
         # on status changes rather than communicating over a long-standing request.
         # This function is called by the Sanic endpoint and passes the status update
         # along to the relevant training job.
         index_type = IndexType[result["index_name"]]
         if index_type in self.training_jobs:
-            self.training_jobs[index_type].handle_result(result)
+            await self.training_jobs[index_type].handle_result(result)
 
     async def start_adding_eventually(self):
         # Wait until all indexes are trained
@@ -490,7 +490,7 @@ async def start_job(request):
 @app.route(config.TRAINER_STATUS_ENDPOINT, methods=["POST"])
 async def training_status(request):
     index_id = request.json["index_id"]
-    current_indexes[index_id].handle_training_status_update(request.json)
+    await current_indexes[index_id].handle_training_status_update(request.json)
     return resp.text("", status=204)
 
 
@@ -799,8 +799,8 @@ async def query_svm(request):
 @app.listener("after_server_stop")
 async def cleanup(app, loop):
     print("Terminating:")
-    await _cleanup_index_build_jobs()
     await _cleanup_clusters()
+    await _cleanup_index_build_jobs()
 
 
 async def _cleanup_index_build_jobs():
