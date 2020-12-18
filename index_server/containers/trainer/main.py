@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
 import functools
+import signal
 import threading
+import traceback
 
 import backoff
 import numpy as np
@@ -27,7 +29,9 @@ def load(
             embedding_dict = np.load(
                 path, allow_pickle=True
             ).item()  # type: Dict[int, np.ndarray]
-        except Exception:
+        except Exception as e:
+            print(f"Error in load (path = {path}), but ignoring. {type(e)}: {e}")
+            traceback.print_exc()
             continue
         else:
             num_paths_read += 1
@@ -95,7 +99,7 @@ class TrainingJob:
         thread = threading.Thread(target=self.run, daemon=True)
         thread.start()
 
-    def stop(self):
+    def finish(self, success: bool, **kwargs):
         with self._done_lock:
             if self._done:
                 return
@@ -106,7 +110,8 @@ class TrainingJob:
             {
                 "index_id": self.index_id,
                 "index_name": self.index_name,
-                "success": False,
+                "success": success,
+                **kwargs,
             },
         )
 
@@ -117,7 +122,7 @@ class TrainingJob:
 
     def run(self):
         reduction = (
-            functools.partial(np.mean, axis=1, keepdims=True)
+            functools.partial(np.mean, axis=0, keepdims=True)
             if self.average
             else (lambda x: x)
         )
@@ -125,24 +130,15 @@ class TrainingJob:
         index_dir = config.INDEX_DIR_TMPL.format(self.index_name, self.index_id)
         metric = "inner product" if self.inner_product else "L2"
 
-        # TODO(mihirg): Figure out how to handle errors during training, especially OOMs
-        # that we may not easily be able to detect
-        train(embeddings, self.index_kwargs, metric, index_dir)
-        with self._done_lock:
-            if self._done:
-                return
-            self._done = True
-
-        notify(
-            self.url,
-            {
-                "index_id": self.index_id,
-                "index_name": self.index_name,
-                "success": True,
-                "index_dir": index_dir,
-                "num_paths_read": num_paths_read,
-            },
-        )
+        # TODO(mihirg): Figure out how to handle errors like OOMs
+        try:
+            train(embeddings, self.index_kwargs, metric, index_dir)
+        except Exception as e:
+            print(f"Error in train. {type(e)}: {e}")
+            traceback.print_exc()
+            self.finish(False, reason=str(e))
+        else:
+            self.finish(True, index_dir=index_dir, num_paths_read=num_paths_read)
 
 
 current_job: Optional[TrainingJob] = None
@@ -157,10 +153,13 @@ def start():
 
     payload = request.json or {}
     current_job = TrainingJob(**payload)
+    current_job.start()
     return "Started"
 
 
-@app.teardown_appcontext
-def stop(_):
+def gracefully_shutdown(signum, frame):
     if current_job:
-        current_job.stop()
+        current_job.finish(False, reason="Preempted")
+
+
+signal.signal(signal.SIGTERM, gracefully_shutdown)

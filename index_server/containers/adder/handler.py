@@ -16,7 +16,7 @@ class Index:
         index_dir: str = index_dict["index_dir"]
 
         if average:
-            self.reduction = functools.partial(np.mean, axis=1, keepdims=True)
+            self.reduction = functools.partial(np.mean, axis=0, keepdims=True)
         else:
             self.reduction = lambda x: x
 

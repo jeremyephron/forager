@@ -15,6 +15,6 @@ RUN apt-get update \
 
 # Run script on container startup.
 COPY . ./
-STOPSIGNAL SIGINT
+STOPSIGNAL SIGTERM
 ENV FLASK_APP=main.py
 CMD exec flask run --host=0.0.0.0 --port=$PORT
