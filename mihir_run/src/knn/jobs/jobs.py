@@ -160,7 +160,7 @@ class MapReduceJob:
                 self.mapper.n_mappers,
             ):
                 try:
-                    self._reduce_chunk(*(await response_tuple))
+                    self._reduce_chunk(*response_tuple)
                 except asyncio.CancelledError:
                     raise
                 except Exception as e:
