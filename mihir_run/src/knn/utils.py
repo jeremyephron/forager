@@ -2,6 +2,7 @@ import asyncio
 import base64
 import functools
 import io
+import itertools
 
 import numpy as np
 
