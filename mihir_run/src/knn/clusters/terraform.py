@@ -42,7 +42,7 @@ class TerraformModule:
                 stdout=subprocess.PIPE,
                 cwd=self.dir,
             )
-            self._output = json.loads(proc.stdout)
+            self._output = {k: v["value"] for k, v in json.loads(proc.stdout).items()}
         return self._output
 
     async def destroy(self):
