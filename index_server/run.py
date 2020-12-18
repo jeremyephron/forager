@@ -392,8 +392,8 @@ async def _stop_cluster(cluster):
     await proc.wait()
 
     # Destroy cluster
-    await cluster.ready()
-    await cluster.destroy()
+    # await cluster.ready()
+    # await cluster.destroy()
 
 
 # TODO(mihirg): Automatically clean up inactive clusters
@@ -402,7 +402,7 @@ current_clusters: CleanupDict[str, TerraformModule] = CleanupDict(_stop_cluster)
 
 @app.route("/start_cluster", methods=["POST"])
 async def start_cluster(request):
-    cluster = TerraformModule(config.CLUSTER_TERRAFORM_MODULE_PATH)
+    cluster = TerraformModule(config.CLUSTER_TERRAFORM_MODULE_PATH, copy=False)
     app.add_task(_start_cluster(cluster))
     cluster_id = cluster.id
     current_clusters[cluster_id] = cluster
