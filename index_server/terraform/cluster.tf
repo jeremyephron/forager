@@ -93,9 +93,9 @@ provider "kubectl" {
   )
 }
 
-# resource "kubectl_manifest" "gpu_installer" {
-#   yaml_body = file("${path.module}/gpu_installer.yaml")
-# }
+resource "kubectl_manifest" "gpu_installer" {
+  yaml_body = file("${path.module}/gpu_installer.yaml")
+}
 
 provider "kubernetes" {
   load_config_file = false
