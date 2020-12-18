@@ -376,6 +376,7 @@ async def _start_cluster(cluster):
     cluster.mount_dir = (
         config.CLUSTER_MOUNT_DIR / cluster.id / cluster.output["nfs_mount_dir"]
     )
+    cluster.mount_dir.mkdir(parents=True, exist_ok=True)
     proc = await asyncio.create_subprocess_exec(
         "mount",
         cluster.output["nfs_url"],
