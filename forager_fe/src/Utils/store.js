@@ -14,10 +14,8 @@ function reducer(state = initialState, action) {
       let status;
       if (!action.payload.has_cluster) {
         status = 'CLUSTER_NOT_STARTED';
-      } else if (!action.payload.started) {
-        status = 'CLUSTER_STARTING';
       } else if (!action.payload.ready) {
-        status = 'CLUSTER_PREPARING';
+        status = 'CLUSTER_STARTING';
       } else {
         status = 'CLUSTER_STARTED';
       }
