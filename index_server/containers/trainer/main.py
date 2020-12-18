@@ -7,7 +7,7 @@ import numpy as np
 import requests
 from flask import Flask, request, abort
 
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from interactive_index import InteractiveIndex
 
@@ -17,14 +17,20 @@ import config
 # Step 1: Load saved embeddings into memory
 def load(
     paths: List[str], sample_rate: float, reduction: Callable[[np.ndarray], np.ndarray]
-):
+) -> Tuple[np.ndarray, int]:
     all_embeddings = []
 
     # Each file is a np.save'd Dict[int, np.ndarray] where each value is N x D
+    num_paths_read = 0
     for path in paths:
-        embedding_dict = np.load(
-            path, allow_pickle=True
-        ).item()  # type: Dict[int, np.ndarray]
+        try:
+            embedding_dict = np.load(
+                path, allow_pickle=True
+            ).item()  # type: Dict[int, np.ndarray]
+        except Exception:
+            continue
+        else:
+            num_paths_read += 1
 
         for embeddings in embedding_dict.values():
             if sample_rate:
@@ -37,7 +43,7 @@ def load(
                     embeddings = embeddings[sample_inds]
             all_embeddings.append(reduction(embeddings))
 
-    return np.concatenate(all_embeddings)
+    return np.concatenate(all_embeddings), num_paths_read
 
 
 # Step 2: Train index
@@ -115,10 +121,12 @@ class TrainingJob:
             if self.average
             else (lambda x: x)
         )
-        embeddings = load(self.paths, self.sample_rate, reduction)
+        embeddings, num_paths_read = load(self.paths, self.sample_rate, reduction)
         index_dir = config.INDEX_DIR_TMPL.format(self.index_name, self.index_id)
         metric = "inner product" if self.inner_product else "L2"
 
+        # TODO(mihirg): Figure out how to handle errors during training, especially OOMs
+        # that we may not easily be able to detect
         train(embeddings, self.index_kwargs, metric, index_dir)
         with self._done_lock:
             if self._done:
@@ -132,6 +140,7 @@ class TrainingJob:
                 "index_name": self.index_name,
                 "success": True,
                 "index_dir": index_dir,
+                "num_paths_read": num_paths_read,
             },
         )
 
