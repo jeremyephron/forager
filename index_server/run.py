@@ -499,7 +499,7 @@ async def job_status(request):
     if index_id in current_indexes:
         index = current_indexes[index_id]
         status = index.status
-        status["has_index"] = index.ready.set()
+        status["has_index"] = index.ready.is_set()
     else:
         status = {"has_index": False}
     return resp.json(status)

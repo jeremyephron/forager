@@ -145,7 +145,7 @@ class MapReduceJob:
         except Exception:
             pass
 
-        chunk_stream = stream.chunk(stream.iterate(iterable), self.chunk_size)
+        chunk_stream = stream.chunks(stream.iterate(iterable), self.chunk_size)
 
         connector = aiohttp.TCPConnector(limit=0)
         timeout = aiohttp.ClientTimeout(total=self.request_timeout)
