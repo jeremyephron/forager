@@ -118,7 +118,7 @@ resource "kubernetes_service" "mapper_svc" {
 }
 
 output "mapper_url" {
-  value = "https://${kubernetes_service.mapper_svc.load_balancer_ingress.0.ip}:${local.mapper_external_port}"
+  value = "http://${kubernetes_service.mapper_svc.load_balancer_ingress.0.ip}:${local.mapper_external_port}"
 }
 
 output "num_mappers" {

@@ -112,7 +112,7 @@ resource "kubernetes_service" "adder_svc" {
 }
 
 output "adder_url" {
-  value = "https://${kubernetes_service.adder_svc.load_balancer_ingress.0.ip}:${local.adder_external_port}"
+  value = "http://${kubernetes_service.adder_svc.load_balancer_ingress.0.ip}:${local.adder_external_port}"
 }
 
 output "num_adders" {

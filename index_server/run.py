@@ -421,6 +421,7 @@ async def _stop_cluster(cluster):
         "sudo", "umount", str(cluster.mount_dir)
     )
     await proc.wait()
+    shutil.rmtree(config.CLUSTER_MOUNT_DIR / cluster.id)
 
     # Destroy cluster
     # await cluster.ready.wait()
