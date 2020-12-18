@@ -127,7 +127,7 @@ class TrainingJob:
             else (lambda x: x)
         )
         embeddings, num_paths_read = load(self.paths, self.sample_rate, reduction)
-        index_dir = config.INDEX_DIR_TMPL.format(self.index_name, self.index_id)
+        index_dir = config.INDEX_DIR_TMPL.format(self.index_id, self.index_name)
         metric = "inner product" if self.inner_product else "L2"
 
         # TODO(mihirg): Figure out how to handle errors like OOMs and CUDA errors

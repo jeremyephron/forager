@@ -66,11 +66,14 @@ class MapperReducer(Reducer):
             notif = self.notifications.pop(k)
             notif.callback(output_paths_copy)
 
-    @unasync_as_task
-    async def finish(self):
+    def finish(self):
         self.finished.set()
-        async with self.wake_gen:
-            self.wake_gen.notify_all()
+
+    # @unasync_as_task
+    # async def finish(self):
+    #     self.finished.set()
+    #     async with self.wake_gen:
+    #         self.wake_gen.notify_all()
 
     @property
     def result(self) -> List[str]:

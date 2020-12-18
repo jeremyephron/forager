@@ -5,7 +5,7 @@ variable "adder_image_name" {
 
 variable "adder_num_nodes" {
   type    = number
-  default = 50
+  default = 75
 }
 
 variable "adder_node_type" {

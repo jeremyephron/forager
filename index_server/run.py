@@ -243,13 +243,17 @@ class LabeledIndex:
                 "average": job.average,
                 "index_dir": job.index_dir,
             }
+            print(f"Job for index {index_type.name} finished")
 
             # Copy index training results to local disk before anything else gets
             # written into the index directory on the shared disk
             shutil.copytree(job.mounted_index_dir, self.index_dir)
+            print(f"Copied {job.mounted_index_dir} to {self.index_dir}")
 
         # TODO(mihirg): Fix this!
+        print("Before wait")
         await self.mapper_job.reducer.finished.wait()
+        print("After wait")
 
         # Step 3: As the Map step computes and saves embeddings, "Add" them into shards
         # of the newly trained indexes
@@ -291,23 +295,24 @@ class LabeledIndex:
 
     @unasync_as_task
     async def finished_adding(self, shard_tmpls: Iterable[str]):
-        loop = asyncio.get_running_loop()
+        # loop = asyncio.get_running_loop()
 
         # Merge shards from shared disk into local index
         # TODO(mihirg): Consider deleting all unnecessary intermediates from NAS after
         self._load_local_indexes()
-        with concurrent.futures.ProcessPoolExecutor(max_workers=1) as pool:
-            for index_type, index in self.indexes.items():
-                index_dir = self.training_jobs[index_type].mounted_index_dir
-                shard_paths = [
-                    str(p.resolve())
-                    for shard_tmpl in shard_tmpls
-                    for p in index_dir.glob(shard_tmpl.format("*"))
-                ]
+        # with concurrent.futures.ProcessPoolExecutor(max_workers=1) as pool:
+        for index_type, index in self.indexes.items():
+            index_dir = self.training_jobs[index_type].mounted_index_dir
+            shard_paths = [
+                str(p.resolve())
+                for shard_tmpl in shard_tmpls
+                for p in index_dir.glob(shard_tmpl.format("*"))
+            ]
+            index.merge_partial_indexes(shard_paths)
 
-                await loop.run_in_executor(
-                    pool, functools.partial(index.merge_partial_indexes, shard_paths)
-                )
+            # await loop.run_in_executor(
+            #     pool, functools.partial(index.merge_partial_indexes, shard_paths)
+            # )
 
         await self.upload()
         self.ready.set()

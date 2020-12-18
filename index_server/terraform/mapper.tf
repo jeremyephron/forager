@@ -5,17 +5,17 @@ variable "mapper_image_name" {
 
 variable "mapper_num_nodes" {
   type    = number
-  default = 75
+  default = 25
 }
 
 variable "mapper_node_type" {
   type    = string
-  default = "n2-highcpu-4"
+  default = "n2-highcpu-16"
 }
 
 variable "mapper_num_replicas_per_node" {
   type    = number
-  default = 1
+  default = 12
 }
 
 variable "mapper_ram_gb" {
