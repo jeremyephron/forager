@@ -47,9 +47,10 @@ class IndexBuildingMapper(Mapper):
         return job_args
 
     # input = path to a np.save'd Dict[int, np.ndarray] where each value is N x D
+    @Mapper.SkipIfError
     async def process_element(
         self, input, job_id, job_args, request_id, element_index
-    ) -> List[int]:
+    ) -> Dict[str, int]:
         # Step 1: Load saved embeddings into memory
         embedding_dict = np.load(
             input, allow_pickle=True

@@ -3,6 +3,5 @@ click
 faiss-gpu
 flask
 numpy
-psutil
 PyYAML
 requests

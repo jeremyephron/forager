@@ -4,6 +4,7 @@ import collections
 from dataclasses import dataclass
 import functools
 import time
+import traceback
 import uuid
 
 from typing import Any, DefaultDict, Dict, List, Tuple
@@ -85,8 +86,9 @@ class Mapper(abc.ABC):
         async def wrapper(*args, **kwargs):
             try:
                 return await f(*args, **kwargs)
-            except AssertionError:
-                pass
+            except AssertionError as e:
+                print(f"Error in handler, but ignoring. {type(e)}: {e}")
+                traceback.print_exc()
             return None
 
         return wrapper
@@ -97,8 +99,9 @@ class Mapper(abc.ABC):
         async def wrapper(*args, **kwargs):
             try:
                 return await f(*args, **kwargs)
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Error in handler, but ignoring. {type(e)}: {e}")
+                traceback.print_exc()
             return None
 
         return wrapper

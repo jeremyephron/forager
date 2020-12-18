@@ -4,9 +4,10 @@ from pathlib import Path
 
 import numpy as np
 
-from typing import List, Optional, Tuple, Union
+from typing import List, Tuple, Union
 
 from knn import utils
+from knn.mappers import Mapper
 from base import ResNetBackboneMapper
 import config
 
@@ -31,6 +32,7 @@ class IndexEmbeddingMapper(ResNetBackboneMapper):
         job_args["n_chunks_saved"] = 0
         return job_args
 
+    @Mapper.SkipIfError
     async def process_element(
         self, input, job_id, job_args, request_id, element_index
     ) -> np.ndarray:
@@ -59,24 +61,27 @@ class IndexEmbeddingMapper(ResNetBackboneMapper):
         job_id,
         job_args,
         request_id,
-    ) -> Tuple[Optional[str], List[Union[str, int]]]:
+    ) -> Union[Tuple[str, List[int]], Tuple[None, List[str]]]:
         if job_args["return_type"] == IndexEmbeddingMapper.ReturnType.SAVE:
             # Save chunk embeddings dict to disk
             output_path = config.EMBEDDINGS_FILE_TMPL.format(
                 job_id, self.worker_id, job_args["n_chunks_saved"]
             )
             embeddings_dict = {
-                int(input["id"]): embeddings
-                for input, embeddings in zip(inputs, outputs)
+                int(input["id"]): output
+                for input, output in zip(inputs, outputs)
+                if output
             }
 
             Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             np.save(output_path, embeddings_dict)
             job_args["n_chunks_saved"] += 1
 
-            return output_path, list(map(len, outputs))
+            return output_path, [len(output) if output else None for output in outputs]
         else:
-            return None, list(map(utils.numpy_to_base64, outputs))
+            return None, [
+                utils.numpy_to_base64(output) if output else None for output in outputs
+            ]
 
 
 mapper = IndexEmbeddingMapper()
