@@ -171,7 +171,7 @@ class LabeledIndex:
                 len(paths),
                 self.index_id,
                 self.cluster.output["trainer_urls"][index_type.value],
-                self.cluster.mount_dir,
+                self.cluster.mount_parent_dir,
                 self.training_http_session,
             )
         notification_requests_to_start_training = [
@@ -401,17 +401,19 @@ app.update_config({"RESPONSE_TIMEOUT": config.SANIC_RESPONSE_TIMEOUT})
 
 async def _start_cluster(cluster):
     # Create cluster
-    # Hack(mihirg): just attach mounted and mount_dir attributes to the cluster object
+    # Hack(mihirg): just attach mounting-related attributes to the cluster object
     cluster.mounted = asyncio.Event()
     await cluster.apply()
 
     # Mount NFS
-    cluster.mount_dir = (
-        config.CLUSTER_MOUNT_DIR
-        / cluster.id
-        / cluster.output["nfs_mount_dir"].lstrip(os.sep)
-    )
-    cluster.mount_dir.mkdir(parents=True, exist_ok=True)
+    cluster.mount_parent_dir = config.CLUSTER_MOUNT_DIR / cluster.id
+    cluster.mount_parent_dir.mkdir(parents=True, exist_ok=False)
+
+    cluster.mount_dir = cluster.mount_parent_dir / cluster.output[
+        "nfs_mount_dir"
+    ].lstrip(os.sep)
+    cluster.mount_dir.mkdir()
+
     proc = await asyncio.create_subprocess_exec(
         "sudo",
         "mount",
@@ -429,7 +431,7 @@ async def _stop_cluster(cluster):
         "sudo", "umount", str(cluster.mount_dir)
     )
     await proc.wait()
-    shutil.rmtree(config.CLUSTER_MOUNT_DIR / cluster.id)
+    shutil.rmtree(cluster.mount_parent_dir)
 
     # Destroy cluster
     # await cluster.ready.wait()

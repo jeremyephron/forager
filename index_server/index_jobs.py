@@ -127,13 +127,13 @@ class TrainingJob:
         n_images: int,
         index_id: str,
         trainer_url: str,
-        cluster_mount_dir: Path,
+        cluster_mount_parent_dir: Path,
         session: aiohttp.ClientSession,
     ):
         self.index_id = index_id
         self.index_name = index_type.name
         self.trainer_url = trainer_url
-        self.cluster_mount_dir = cluster_mount_dir
+        self.cluster_mount_parent_dir = cluster_mount_parent_dir
         self.session = session
 
         self.average = index_type in (IndexType.FULL, IndexType.FULL_DOT)
@@ -209,7 +209,7 @@ class TrainingJob:
     @property
     def mounted_index_dir(self) -> Path:
         assert self.index_dir is not None
-        return self.cluster_mount_dir / self.index_dir.lstrip(os.sep)
+        return self.cluster_mount_parent_dir / self.index_dir.lstrip(os.sep)
 
     def _construct_request(self, paths: List[str]) -> JSONType:
         return {
