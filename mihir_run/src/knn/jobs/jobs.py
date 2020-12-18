@@ -156,7 +156,6 @@ class MapReduceJob:
             async with aiohttp.ClientSession(
                 connector=connector, timeout=timeout
             ) as session:
-                print("HI")
                 # async for response_tuple in utils.LimitedAsCompletedIterator(
                 for response_tuple in utils.limited_as_completed(
                     (
@@ -251,7 +250,6 @@ class MapReduceJob:
         end_time = 0.0
 
         request = self._construct_request(chunk)
-        print(request)
 
         for i in range(self.n_retries):
             start_time = time.time()
@@ -260,7 +258,6 @@ class MapReduceJob:
             try:
                 async with session.post(mapper_url, json=request) as response:
                     end_time = time.time()
-                    print(response.status)
                     if response.status == 200:
                         result = await response.json()
                         break

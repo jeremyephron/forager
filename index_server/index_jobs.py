@@ -36,7 +36,7 @@ class MapperReducer(Reducer):
         self.output_paths: List[str] = []
 
         self.wake_gen = asyncio.Condition()
-        self.finished = False
+        self.finished = asyncio.Event()
 
     @unasync_as_task
     async def handle_chunk_result(self, chunk, chunk_output):
@@ -68,7 +68,7 @@ class MapperReducer(Reducer):
 
     @unasync_as_task
     async def finish(self):
-        self.finished = True
+        self.finished.set()
         async with self.wake_gen:
             self.wake_gen.notify_all()
 
@@ -82,7 +82,7 @@ class MapperReducer(Reducer):
             if i < len(self.output_paths):
                 yield self.output_paths[i]
                 i += 1
-            elif self.finished:
+            elif self.finished.is_set():
                 break
             else:
                 async with self.wake_gen:
