@@ -40,6 +40,28 @@ from index_jobs import (
 from utils import CleanupDict
 
 
+# Create a logger for the server
+logger = logging.getLogger("index_server")
+logger.setLevel(logging.DEBUG)
+
+# Create a file handler for the log
+log_fh = logging.FileHandler("index_server.log")
+log_fh.setLevel(logging.DEBUG)
+
+# Create a console handler to print errors to console
+log_ch = logging.StreamHandler()
+log_ch.setLevel(logging.ERROR)
+
+# create formatter and add it to the handlers
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+log_fh.setFormatter(formatter)
+log_ch.setFormatter(formatter)
+
+# Attach handlers
+logger.addHandler(log_fh)
+logger.addHandler(log_ch)
+
+
 class LabeledIndex:
     LABEL_FILENAME = "labels.json"
 
