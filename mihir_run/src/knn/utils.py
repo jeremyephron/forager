@@ -73,7 +73,7 @@ class LimitedAsCompletedIterator:
             done = next(iter(done))
             self.pending = list(self.pending)
 
-            if done.is_to_get_next_coro:
+            if getattr(done, "is_to_get_next_coro", False):
                 self.next_coro_is_pending = False
                 if self.hit_stop_iteration:
                     continue
