@@ -7,7 +7,7 @@ CLOUD_RUN_N_MAPPERS = 50
 CLOUD_RUN_N_RETRIES = 1
 
 CLUSTER_TERRAFORM_MODULE_PATH = Path("./terraform").resolve()
-CLUSTER_MOUNT_PATH = Path("~/forager/mount").expanduser().resolve()
+CLUSTER_MOUNT_DIR = Path("~/forager/mount").expanduser().resolve()
 
 MAPPER_NUM_RETRIES = 5
 MAPPER_CHUNK_SIZE = 50
