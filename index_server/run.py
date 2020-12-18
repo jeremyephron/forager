@@ -491,7 +491,8 @@ async def start_job(request):
 @app.route(config.TRAINER_STATUS_ENDPOINT, methods=["PUT"])
 async def training_status(request):
     index_id = request.json["index_id"]
-    await current_indexes[index_id].handle_training_status_update(request.json)
+    if index_id in current_indexes:
+        await current_indexes[index_id].handle_training_status_update(request.json)
     return resp.text("", status=204)
 
 

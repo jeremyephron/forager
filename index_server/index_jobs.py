@@ -182,10 +182,12 @@ class TrainingJob:
         request = self._construct_request(paths)
 
         while not self.finished.is_set():
+            print("About to make request to trainer")
             async with self._failed_or_finished:
                 async with self.session.post(
                     self.trainer_url, json=request
                 ) as response:
+                    print(request, response.status)
                     if response.status != 200:
                         continue
                 await self._failed_or_finished.wait()
