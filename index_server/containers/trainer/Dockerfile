@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.1-base-ubuntu18.04
+FROM nvidia/cuda:10.0-runtime-ubuntu18.04
 
 ENV APP_HOME /app
 WORKDIR $APP_HOME
