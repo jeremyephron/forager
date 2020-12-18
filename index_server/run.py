@@ -410,12 +410,12 @@ async def _start_cluster(cluster):
 
 async def _stop_cluster(cluster):
     # Unmount NFS
-    await cluster.mounted()
+    await cluster.mounted.wait()
     proc = await asyncio.create_subprocess_exec("umount", str(cluster.mount_dir))
     await proc.wait()
 
     # Destroy cluster
-    # await cluster.ready()
+    # await cluster.ready.wait()
     # await cluster.destroy()
 
 
