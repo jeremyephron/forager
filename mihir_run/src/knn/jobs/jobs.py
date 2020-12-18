@@ -251,6 +251,7 @@ class MapReduceJob:
             try:
                 async with session.post(mapper_url, json=request) as response:
                     end_time = time.time()
+                    print(request, response.status, end="\n\n")
                     if response.status == 200:
                         result = await response.json()
                         break
