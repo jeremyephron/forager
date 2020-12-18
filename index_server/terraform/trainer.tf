@@ -35,98 +35,73 @@ locals {
   trainer_disk_size_gb  = 20
 }
 
-resource "kubernetes_deployment" "trainer_dep" {
+resource "kubectl_manifest" "trainer_dep" {
   count = var.trainer_num_nodes
 
-  metadata {
-    name = "trainer-dep-${count.index}"
-    labels = {
-      app = "${local.trainer_app_name}-${count.index}"
-    }
-  }
-
-  spec {
-    replicas = 1
-
-    selector {
-      match_labels = {
-        app = "${local.trainer_app_name}-${count.index}"
-      }
-    }
-
-    template {
-      metadata {
-        labels = {
-          app = "${local.trainer_app_name}-${count.index}"
-        }
-      }
-
-      spec {
-        container {
-          image = var.trainer_image_name
-          name  = local.trainer_app_name
-
-          env {
-            name  = "PORT"
-            value = local.trainer_internal_port
-          }
-
-          port {
-            container_port = local.trainer_internal_port
-          }
-
-          volume_mount {
-            mount_path = local.nfs_mount_dir
-            name       = local.nfs_volume_name
-          }
-        }
-
-        affinity {
-          pod_anti_affinity {
-            required_during_scheduling_ignored_during_execution {
-              label_selector {
-                match_expressions {
-                  key      = "app"
-                  operator = "In"
-                  values   = [local.trainer_app_name]
-                }
-              }
-
-              topology_key = "kubernetes.io/hostname"
-            }
-          }
-        }
-
-        toleration {
-          effect   = "NoSchedule"
-          key      = "nvidia.com/gpu"
-          operator = "Exists"
-        }
-
-        volume {
-          name = local.nfs_volume_name
-
-          persistent_volume_claim {
-            claim_name = kubernetes_persistent_volume_claim.nfs_claim.metadata.0.name
-          }
-        }
-
-        node_selector = {
-          "cloud.google.com/gke-nodepool" = google_container_cluster.cluster.node_pool.2.name
-        }
-      }
-    }
-  }
+  yaml_body = <<YAML
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trainer-dep-${count.index}
+  labels:
+    app: ${local.trainer_app_name}-${count.index}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${local.trainer_app_name}-${count.index}
+  template:
+    metadata:
+      labels:
+        app: ${local.trainer_app_name}-${count.index}
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - ${local.trainer_app_name}
+            topologyKey: kubernetes.io/hostname
+      containers:
+      - image: ${var.trainer_image_name}
+        name: ${local.trainer_app_name}
+        resources:
+          limits:
+            nvidia.com/gpu: ${var.trainer_gpus}
+        env:
+        - name: PORT
+          value: "${local.trainer_internal_port}"
+        ports:
+        - containerPort: ${local.trainer_internal_port}
+        volumeMounts:
+        - mountPath: ${local.nfs_mount_dir}
+          name: ${local.nfs_volume_name}
+      nodeSelector:
+        cloud.google.com/gke-nodepool: ${google_container_cluster.cluster.node_pool.2.name}
+      tolerations:
+      - effect: NoSchedule
+        key: nvidia.com/gpu
+        operator: Exists
+      volumes:
+      - name: ${local.nfs_volume_name}
+        persistentVolumeClaim:
+          claimName: ${kubernetes_persistent_volume_claim.nfs_claim.metadata.0.name}
+YAML
 }
 
 resource "kubernetes_service" "trainer_svc" {
-  for_each = { for i, dep in kubernetes_deployment.trainer_dep : i => dep }
+  count = var.trainer_num_nodes
 
   metadata {
-    name = "${each.value.metadata.0.name}-svc"
+    name = "trainer-dep-${count.index}-svc"
   }
   spec {
-    selector = each.value.metadata.0.labels
+    selector = {
+      app = "${local.trainer_app_name}-${count.index}"
+    }
     port {
       port        = local.trainer_external_port
       target_port = local.trainer_internal_port
