@@ -79,17 +79,17 @@ class MapperReducer(Reducer):
     def result(self) -> List[str]:
         return self.output_paths
 
-    async def output_paths_gen(self):
-        i = 0
-        while True:
-            if i < len(self.output_paths):
-                yield self.output_paths[i]
-                i += 1
-            elif self.finished.is_set():
-                break
-            else:
-                async with self.wake_gen:
-                    await self.wake_gen.wait()
+    # async def output_paths_gen(self):
+    #     i = 0
+    #     while True:
+    #         if i < len(self.output_paths):
+    #             yield self.output_paths[i]
+    #             i += 1
+    #         elif self.finished.is_set():
+    #             break
+    #         else:
+    #             async with self.wake_gen:
+    #                 await self.wake_gen.wait()
 
 
 class AdderReducer(Reducer):
@@ -185,12 +185,10 @@ class TrainingJob:
         request = self._construct_request(paths)
 
         while not self.finished.is_set():
-            print("About to make request to trainer")
             async with self._failed_or_finished:
                 async with self.session.post(
                     self.trainer_url, json=request
                 ) as response:
-                    print(request, response.status)
                     if response.status != 200:
                         continue
                 await self._failed_or_finished.wait()
@@ -201,8 +199,6 @@ class TrainingJob:
             await self._task
 
     async def handle_result(self, result: JSONType):
-        print("B", result)
-
         if result.get("success"):
             self.index_dir = result["index_dir"]
             self.finished.set()

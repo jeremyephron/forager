@@ -229,7 +229,6 @@ class LabeledIndex:
         # on status changes rather than communicating over a long-standing request.
         # This function is called by the Sanic endpoint and passes the status update
         # along to the relevant training job.
-        print("A", result)
         index_type = IndexType[result["index_name"]]
         if index_type in self.training_jobs:
             await self.training_jobs[index_type].handle_result(result)
@@ -247,13 +246,12 @@ class LabeledIndex:
 
             # Copy index training results to local disk before anything else gets
             # written into the index directory on the shared disk
+            print(f"Copying {job.mounted_index_dir} to {self.index_dir}")
             shutil.copytree(job.mounted_index_dir, self.index_dir)
             print(f"Copied {job.mounted_index_dir} to {self.index_dir}")
 
-        # TODO(mihirg): Fix this!
-        print("Before wait")
+        # TODO(mihirg): Allow Add to start even if Map isn't finished yet
         await self.mapper_job.reducer.finished.wait()
-        print("After wait")
 
         # Step 3: As the Map step computes and saves embeddings, "Add" them into shards
         # of the newly trained indexes
