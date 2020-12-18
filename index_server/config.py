@@ -11,10 +11,12 @@ CLUSTER_MOUNT_PATH = Path("~/forager/mount").expanduser().resolve()
 
 MAPPER_NUM_RETRIES = 5
 MAPPER_CHUNK_SIZE = 50
+MAPPER_REQUEST_TIMEOUT = 5 * 60  # seconds
 MAPPER_CLOUD_RUN_URL = "https://forager-index-mapper-g6rwrca4fq-uw.a.run.app"
 
 ADDER_NUM_RETRIES = 5
 ADDER_CHUNK_SIZE = 5
+ADDER_REQUEST_TIMEOUT = 10 * 60  # seconds
 
 NUM_EMBEDDINGS_PER_IMAGE = 400
 EMBEDDING_DIM = 2048

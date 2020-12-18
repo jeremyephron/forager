@@ -197,6 +197,7 @@ class LabeledIndex:
             {"input_bucket": bucket, "return_type": "save"},
             n_retries=config.MAPPER_NUM_RETRIES,
             chunk_size=config.MAPPER_CHUNK_SIZE,
+            request_timeout=config.MAPPER_REQUEST_TIMEOUT,
         )
         await self.mapper_job.start(iterable, self.start_training, len(paths))
 
@@ -256,6 +257,7 @@ class LabeledIndex:
             {"indexes": indexes},
             n_retries=config.ADDER_NUM_RETRIES,
             chunk_size=config.ADDER_CHUNK_SIZE,
+            request_timeout=config.ADDER_REQUEST_TIMEOUT,
         )
         await self.adder_job.start(
             self.mapper_job.reducer.output_paths_gen(), self.finished_adding
