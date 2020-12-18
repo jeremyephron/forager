@@ -67,7 +67,7 @@ class MapperReducer(Reducer):
             notif.callback(output_paths_copy)
 
     @unasync_as_task
-    def finish(self):
+    async def finish(self):
         self.finished = True
         async with self.wake_gen:
             self.wake_gen.notify_all()
