@@ -54,7 +54,10 @@ class CleanupDict(MutableMapping[KT, VT]):
         self.locks.pop(key, None)
 
     def __iter__(self):
-        raise NotImplementedError()
+        # Optimistically mark everything as accessed now
+        for key in self.last_accessed:
+            self.last_accessed[key] = time.time()
+        return iter(self.store)
 
     def __len__(self) -> int:
         return len(self.store)
