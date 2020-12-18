@@ -140,11 +140,12 @@ def get_datasets(request):
 @api_view(['POST'])
 @csrf_exempt
 def start_cluster(request):
+    # TODO(mihirg): Remove this setting from Django; it's now managed by Terraform
+    # (or figure out how to set it from the frontend if we need that)
     params = {"n_nodes": settings.EMBEDDING_CLUSTER_NODES}
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/start_cluster",
-        data=params,
-        headers=POST_HEADERS,
+        json=params,
     )
     response_data = r.json()
     return JsonResponse({
@@ -170,8 +171,7 @@ def stop_cluster(request, cluster_id):
     params = {"cluster_id": cluster_id}
     requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/stop_cluster",
-        data=params,
-        headers=POST_HEADERS,
+        json=params,
     )
     return JsonResponse({
         "status": "success",
@@ -233,8 +233,7 @@ def download_index(request, index_id):
     params = {"index_id": index_id}
     requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/download_index",
-        data=params,
-        headers=POST_HEADERS,
+        json=params,
     )
     return JsonResponse({
         "status": "success",
@@ -247,8 +246,7 @@ def delete_index(request, index_id):
     params = {"index_id": index_id}
     requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/delete_index",
-        data=params,
-        headers=POST_HEADERS,
+        json=params,
     )
     return JsonResponse({
         "status": "success",

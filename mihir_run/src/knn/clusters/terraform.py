@@ -4,12 +4,11 @@ from pathlib import Path
 from shutil import copytree
 import subprocess
 from tempfile import TemporaryDirectory
+import uuid
 
 
 class TerraformModule:
-    def __init__(self, module_path: str, copy: bool = True):
-        module_path = Path(module_path)
-
+    def __init__(self, module_path: Path, copy: bool = True):
         if copy:
             self.parent_dir = TemporaryDirectory()
             copytree(module_path, self.parent_dir)
@@ -17,6 +16,8 @@ class TerraformModule:
         else:
             self.parent_dir = None
             self.dir = module_path
+
+        self.id = str(uuid.uuid4())
 
         self._output = None
         self.ready = asyncio.Event()

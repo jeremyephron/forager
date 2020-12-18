@@ -6,6 +6,7 @@ import traceback
 import uuid
 
 import aiohttp
+from aiostream import stream
 from runstats import Statistics
 
 from knn import utils
@@ -15,13 +16,25 @@ from knn.reducers import Reducer
 
 from . import defaults
 
-from typing import Optional, Callable, Tuple, List, Dict, Any, Iterable, Awaitable
+from typing import (
+    Any,
+    AsyncIterable,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
 
 
 # Increase maximum number of open sockets if necessary
 soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
 new_soft = max(min(defaults.DESIRED_ULIMIT, hard), soft)
 resource.setrlimit(resource.RLIMIT_NOFILE, (new_soft, hard))
+
+InputSequenceType = Union[Iterable[JSONType], AsyncIterable[JSONType]]
 
 
 class MapperSpec:
@@ -103,8 +116,9 @@ class MapReduceJob:
 
     async def start(
         self,
-        iterable: Iterable[JSONType],
-        callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
+        iterable: InputSequenceType,
+        callback: Optional[Callable[[Any], None]] = None,
+        n_total: Optional[int] = None,
     ) -> None:
         async def task():
             try:
@@ -112,54 +126,60 @@ class MapReduceJob:
             except asyncio.CancelledError:
                 pass
             else:
-                if callback is not None:
-                    await callback(result)
+                if callback:
+                    callback(result)
 
-        self.task = asyncio.create_task(task())
+        self._task = asyncio.create_task(task())
 
-    async def run_until_complete(self, iterable: Iterable[JSONType]) -> Dict[str, Any]:
+    async def run_until_complete(
+        self,
+        iterable: InputSequenceType,
+        n_total: Optional[int] = None,
+    ) -> Any:
         assert self._start_time is None  # can't reuse Job instances
         self.start_time = time.time()
 
         # Prepare iterable
         try:
-            self._n_total = len(iterable)  # type: ignore
+            self._n_total = n_total or len(iterable)  # type: ignore
         except Exception:
             pass
 
-        iterable = iter(iterable)
-        chunked = utils.chunk(iterable, self.chunk_size)
+        chunk_stream = stream.chunk(stream.iterate(iterable), self.chunk_size)
 
-        async with self.mapper as mapper_url:
-            connector = aiohttp.TCPConnector(limit=0)
-            timeout = aiohttp.ClientTimeout(total=self.request_timeout)
-            async with aiohttp.ClientSession(
-                connector=connector, timeout=timeout
-            ) as session:
-                for response_tuple in utils.limited_as_completed(
-                    (self._request(session, mapper_url, chunk) for chunk in chunked),
-                    self.mapper.n_mappers,
-                ):
-                    try:
-                        self._reduce_chunk(*(await response_tuple))
-                    except asyncio.CancelledError:
-                        raise
-                    except Exception as e:
-                        print(f"Error in _reduce_chunk, raising! {type(e)}: {e}")
-                        traceback.print_exc()
-                        raise
+        connector = aiohttp.TCPConnector(limit=0)
+        timeout = aiohttp.ClientTimeout(total=self.request_timeout)
+        async with self.mapper as mapper_url, chunk_stream.stream() as chunk_gen, aiohttp.ClientSession(
+            connector=connector, timeout=timeout
+        ) as session:
+            async for response_tuple in utils.LimitedAsCompletedIterator(
+                (
+                    self._request(session, mapper_url, chunk)
+                    async for chunk in chunk_gen
+                ),
+                self.mapper.n_mappers,
+            ):
+                try:
+                    self._reduce_chunk(*(await response_tuple))
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    print(f"Error in _reduce_chunk, raising! {type(e)}: {e}")
+                    traceback.print_exc()
+                    raise
 
         if self._n_total is None:
             self._n_total = self._n_successful + self._n_failed
         else:
             assert self._n_total == self._n_successful + self._n_failed
 
+        self.reducer.finish()
         return self.result
 
     async def stop(self) -> None:
-        if self.task is not None and not self.task.done():
-            self.task.cancel()
-            await self.task
+        if self._task and not self._task.done():
+            self._task.cancel()
+            await self._task
 
     # RESULT GETTERS
 
