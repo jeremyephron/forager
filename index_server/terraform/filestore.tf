@@ -66,6 +66,10 @@ resource "kubernetes_persistent_volume_claim" "nfs_claim" {
   }
 }
 
+output "nfs_mount_dir" {
+  value = local.nfs_mount_dir
+}
+
 output "nfs_url" {
   value = "${google_filestore_instance.nfs.networks.0.ip_addresses.0}:/${google_filestore_instance.nfs.file_shares.0.name}"
 }

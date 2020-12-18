@@ -12,15 +12,13 @@ import config
 
 class Index:
     def __init__(self, index_dict: Dict[str, str], shard_tmpl: str):
-        reduction = index_dict.get("reduction")
-        index_dir = index_dict["index_dir"]
+        average: bool = index_dict.get("average", False)
+        index_dir: str = index_dict["index_dir"]
 
-        if reduction == "average":
+        if average:
             self.reduction = functools.partial(np.mean, axis=1, keepdims=True)
-        elif not reduction:
-            self.reduction = lambda x: x
         else:
-            raise ValueError(f"Unknown reduction: {reduction}")
+            self.reduction = lambda x: x
 
         self.index = InteractiveIndex.load(index_dir)
         self.index.SHARD_INDEX_NAME_TMPL = shard_tmpl

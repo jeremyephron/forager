@@ -7,10 +7,9 @@ import numpy as np
 import requests
 from flask import Flask, request, abort
 
-from typing import Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from interactive_index import InteractiveIndex
-from interactive_index.config import auto_config
 
 import config
 
@@ -42,16 +41,9 @@ def load(
 
 
 # Step 2: Train index
-def train(embeddings: np.ndarray, n_total: int, metric: str, index_dir: str):
-    n, d = embeddings.shape
-
-    index_kwargs = auto_config(
-        d=d,
-        n_vecs=n_total,
-        max_ram=config.INDEX_MAX_RAM_BYTES,
-        pca_d=config.INDEX_PCA_DIM,
-        sq=config.INDEX_SQ_BYTES,
-    )
+def train(
+    embeddings: np.ndarray, index_kwargs: Dict[str, Any], metric: str, index_dir: str
+):
     index_kwargs.update(
         tempdir=index_dir,
         vectors_per_index=config.INDEX_SUBINDEX_SIZE,
@@ -74,10 +66,10 @@ def notify(url: str, payload: Dict[str, str]):
 @dataclass
 class TrainingJob:
     paths: List[str]  # Paths to saved embedding dictionaries
-    n_total: int  # Estimated total number of embeddings that will be added to index
+    index_kwargs: Dict[str, Any]  # Index configuration
 
-    job_id: str  # Index build job identifier
-    index_id: str  # Unique index identifier within job
+    index_id: str  # Index build job identifier
+    index_name: str  # Unique index identifier within job
     url: str  # Webhook to PUT to after completion
 
     sample_rate: float = (
@@ -105,7 +97,11 @@ class TrainingJob:
 
         notify(
             self.url,
-            {"job_id": self.job_id, "index_id": self.index_id, "success": False},
+            {
+                "index_id": self.index_id,
+                "index_name": self.index_name,
+                "success": False,
+            },
         )
 
     @property
@@ -120,10 +116,10 @@ class TrainingJob:
             else (lambda x: x)
         )
         embeddings = load(self.paths, self.sample_rate, reduction)
-        index_dir = config.INDEX_DIR_TMPL.format(self.job_id, self.index_id)
+        index_dir = config.INDEX_DIR_TMPL.format(self.index_name, self.index_id)
         metric = "inner product" if self.inner_product else "L2"
 
-        train(embeddings, self.n_total, metric, index_dir)
+        train(embeddings, self.index_kwargs, metric, index_dir)
         with self._done_lock:
             if self._done:
                 return
@@ -132,8 +128,8 @@ class TrainingJob:
         notify(
             self.url,
             {
-                "job_id": self.job_id,
                 "index_id": self.index_id,
+                "index_name": self.index_name,
                 "success": True,
                 "index_dir": index_dir,
             },
