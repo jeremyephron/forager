@@ -229,6 +229,7 @@ class LabeledIndex:
         # on status changes rather than communicating over a long-standing request.
         # This function is called by the Sanic endpoint and passes the status update
         # along to the relevant training job.
+        print(result)
         index_type = IndexType[result["index_name"]]
         if index_type in self.training_jobs:
             await self.training_jobs[index_type].handle_result(result)
@@ -487,7 +488,7 @@ async def start_job(request):
     return resp.json({"index_id": index_id})
 
 
-@app.route(config.TRAINER_STATUS_ENDPOINT, methods=["POST"])
+@app.route(config.TRAINER_STATUS_ENDPOINT, methods=["PUT"])
 async def training_status(request):
     index_id = request.json["index_id"]
     await current_indexes[index_id].handle_training_status_update(request.json)
