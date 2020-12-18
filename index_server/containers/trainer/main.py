@@ -59,7 +59,7 @@ def train(
 # Step 3: Call webhook to indicate completion
 @backoff.on_exception(backoff.expo, requests.exceptions.RequestException)
 def notify(url: str, payload: Dict[str, str]):
-    r = requests.put(url, data=payload)
+    r = requests.put(url, json=payload)
     r.raise_for_status()
 
 
