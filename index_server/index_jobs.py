@@ -2,6 +2,7 @@ import asyncio
 from collections import defaultdict
 from dataclasses import dataclass
 from enum import IntEnum
+import os
 from pathlib import Path
 
 from typing import Callable, List, Optional, Set
@@ -198,7 +199,7 @@ class TrainingJob:
     @property
     def mounted_index_dir(self) -> Path:
         assert self.index_dir is not None
-        return self.cluster_mount_dir / self.index_dir
+        return self.cluster_mount_dir / self.index_dir.lstrip(os.sep)
 
     def _construct_request(self, paths: List[str]) -> JSONType:
         return {

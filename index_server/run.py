@@ -7,6 +7,7 @@ import heapq
 import json
 import logging
 import operator
+import os
 from pathlib import Path
 import shutil
 import random
@@ -398,10 +399,13 @@ async def _start_cluster(cluster):
 
     # Mount NFS
     cluster.mount_dir = (
-        config.CLUSTER_MOUNT_DIR / cluster.id / cluster.output["nfs_mount_dir"]
+        config.CLUSTER_MOUNT_DIR
+        / cluster.id
+        / cluster.output["nfs_mount_dir"].lstrip(os.sep)
     )
     cluster.mount_dir.mkdir(parents=True, exist_ok=True)
     proc = await asyncio.create_subprocess_exec(
+        "sudo",
         "mount",
         cluster.output["nfs_url"],
         str(cluster.mount_dir),
@@ -413,7 +417,9 @@ async def _start_cluster(cluster):
 async def _stop_cluster(cluster):
     # Unmount NFS
     await cluster.mounted.wait()
-    proc = await asyncio.create_subprocess_exec("umount", str(cluster.mount_dir))
+    proc = await asyncio.create_subprocess_exec(
+        "sudo", "umount", str(cluster.mount_dir)
+    )
     await proc.wait()
 
     # Destroy cluster
