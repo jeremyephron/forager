@@ -201,6 +201,8 @@ class TrainingJob:
             await self._task
 
     async def handle_result(self, result: JSONType):
+        print("B", result)
+
         if result.get("success"):
             self.index_dir = result["index_dir"]
             self.finished.set()
