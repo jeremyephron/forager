@@ -269,7 +269,10 @@ class InteractiveIndex:
 
             idx = end_idx
 
-    def merge_partial_indexes(self) -> None:
+    def merge_partial_indexes(
+        self,
+        shard_index_names: Optional[List[str]] = None
+    ) -> None:
         """
         TODO: docstring
 
@@ -277,7 +280,7 @@ class InteractiveIndex:
 
         index = faiss.read_index(str(self.tempdir/self.TRAINED_INDEX_NAME))
 
-        shard_index_names = [
+        shard_index_names = shard_index_names or [
             str(self.tempdir/self.SHARD_INDEX_NAME_TMPL.format(shard_num))
             for shard_num in range(self.n_indexes)
         ]
@@ -306,7 +309,8 @@ class InteractiveIndex:
 #         if self.use_gpu:
 #             # TODO: perhaps add memory check for training on GPU?
 #             index = to_all_gpus(index, self.co)
-        index.nprobe = n_probes if n_probes else self.n_probes
+        index_ivf = faiss.extract_index_ivf(index)
+        index_ivf.nprobe = n_probes if n_probes else self.n_probes
         dists, inds = index.search(xq, k)
 
         if self.multi_id:
@@ -391,7 +395,7 @@ class InteractiveIndex:
         TODO: docstring
 
         """
-        
+
         # Search
         search_str_parts = [f'IVF{n_centroids}'] if n_centroids else []
         if search:
@@ -399,9 +403,9 @@ class InteractiveIndex:
                 assert all(isinstance(arg, int) for arg in search_args)
                 search += 'x'.join(str(arg) for arg in search_args)
             search_str_parts.append(search)
-            
+
         search_str = '_'.join(search_str_parts)
-        
+
         # Transformation
         transform_str = transform if transform else ''
         if transform_args:
