@@ -156,6 +156,7 @@ class MapReduceJob:
             async with aiohttp.ClientSession(
                 connector=connector, timeout=timeout
             ) as session:
+                print("HI")
                 # async for response_tuple in utils.LimitedAsCompletedIterator(
                 for response_tuple in utils.limited_as_completed(
                     (
