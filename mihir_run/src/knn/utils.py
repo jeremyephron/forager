@@ -59,8 +59,8 @@ class LimitedAsCompletedIterator:
         self.pending.append(task)
         self.next_coro_is_pending = True
 
-    async def __aiter__(self):
-        self.coros = await self.coros.__aiter__()
+    def __aiter__(self):
+        self.coros = self.coros.__aiter__()
         self._schedule_getting_next_coro()
         return self
 
