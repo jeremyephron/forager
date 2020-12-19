@@ -333,7 +333,7 @@ class InteractiveIndex:
 
         return x
 
-    def get_invlist_ids(self, list_num: int) -> np.ndarray:
+    def get_cluster_ids(self, list_num: int) -> np.ndarray:
         """
         TODO: docstring
 

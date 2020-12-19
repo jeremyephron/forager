@@ -169,7 +169,7 @@ def sample_farthest_vectors(
 
     samples = []
     for i in range(n_clusters):
-        vec_ids = index.get_invlist_ids(farthest_centroid_inds[i])
+        vec_ids = index.get_cluster_ids(farthest_centroid_inds[i])
         if len(vec_ids) <= n_sample:
             samples.append(vec_ids)
         else:
