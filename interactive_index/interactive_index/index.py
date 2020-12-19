@@ -191,7 +191,8 @@ class InteractiveIndex:
         self,
         xb_src: Union[str, np.ndarray, List[float]],
         ids: Optional[Sequence[int]] = None,
-        ids_extra: Optional[Union[Sequence[int], int]] = 0
+        ids_extra: Optional[Union[Sequence[int], int]] = 0,
+        update_metadata: bool = True
     ) -> None:
         """
         Adds the given vectors to the index.
@@ -209,7 +210,9 @@ class InteractiveIndex:
                 E.g., you might have two embeddings for each image, so you
                 could make the ID the image number, and the ID extra a 0 or 1
                 for each embedding.
-
+            update_metadata: Whether to update the metadata JSON file after
+                adding with the new number of vectors and shards this index
+                contains.
         """
 
         if not self.is_trained:
@@ -265,7 +268,8 @@ class InteractiveIndex:
             index.reset()
             # del index  # force free memory
 
-            self._save_metadata()
+            if update_metadata:
+                self._save_metadata()
 
             idx = end_idx
 

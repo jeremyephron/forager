@@ -246,12 +246,7 @@ class LabeledIndex:
 
             # Copy index training results to local disk before anything else gets
             # written into the index directory on the shared disk
-            try:
-                shutil.copytree(
-                    job.mounted_index_dir, self.index_dir, dirs_exist_ok=True
-                )
-            except Exception as e:
-                print(type(e), e)
+            shutil.copytree(job.mounted_index_dir, self.index_dir / index_type.name)
             print(f"Copied {job.mounted_index_dir} to {self.index_dir}")
 
         # TODO(mihirg): Allow Add to start even if Map isn't finished yet

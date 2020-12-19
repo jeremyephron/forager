@@ -30,7 +30,7 @@ class Index:
             for id, embeddings in zip(embedding_dict, all_embeddings)
             for _ in range(embeddings.shape[0])
         ]
-        self.index.add(np.concatenate(all_embeddings), all_ids)
+        self.index.add(np.concatenate(all_embeddings), all_ids, update_metadata=False)
 
         return len(all_ids)
 
