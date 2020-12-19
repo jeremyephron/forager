@@ -246,8 +246,10 @@ class LabeledIndex:
 
             # Copy index training results to local disk before anything else gets
             # written into the index directory on the shared disk
-            print(f"Copying {job.mounted_index_dir} to {self.index_dir}")
-            shutil.copytree(job.mounted_index_dir, self.index_dir)
+            try:
+                shutil.copytree(job.mounted_index_dir, self.index_dir)
+            except Exception as e:
+                print(type(e), e)
             print(f"Copied {job.mounted_index_dir} to {self.index_dir}")
 
         # TODO(mihirg): Allow Add to start even if Map isn't finished yet
@@ -298,19 +300,18 @@ class LabeledIndex:
         # Merge shards from shared disk into local index
         # TODO(mihirg): Consider deleting all unnecessary intermediates from NAS after
         self._load_local_indexes()
-        # with concurrent.futures.ProcessPoolExecutor(max_workers=1) as pool:
-        for index_type, index in self.indexes.items():
-            index_dir = self.training_jobs[index_type].mounted_index_dir
-            shard_paths = [
-                str(p.resolve())
-                for shard_tmpl in shard_tmpls
-                for p in index_dir.glob(shard_tmpl.format("*"))
-            ]
-            index.merge_partial_indexes(shard_paths)
+        with concurrent.futures.ProcessPoolExecutor(max_workers=1) as pool:
+            for index_type, index in self.indexes.items():
+                index_dir = self.training_jobs[index_type].mounted_index_dir
+                shard_paths = [
+                    str(p.resolve())
+                    for shard_tmpl in shard_tmpls
+                    for p in index_dir.glob(shard_tmpl.format("*"))
+                ]
 
-            # await loop.run_in_executor(
-            #     pool, functools.partial(index.merge_partial_indexes, shard_paths)
-            # )
+                await loop.run_in_executor(
+                    pool, functools.partial(index.merge_partial_indexes, shard_paths)
+                )
 
         await self.upload()
         self.ready.set()
