@@ -15,6 +15,9 @@ from knn.mappers import Mapper
 
 class ResNetBackboneMapper(Mapper):
     def initialize_container(self, cfg, weights_path):
+        torch.set_grad_enabled(False)
+        torch.set_num_threads(1)
+
         # Create model
         shape = ShapeSpec(channels=3)
         self.model = torch.nn.Sequential(build_resnet_backbone(cfg, shape))
@@ -23,7 +26,6 @@ class ResNetBackboneMapper(Mapper):
         checkpointer = DetectionCheckpointer(self.model, save_to_disk=False)
         checkpointer.load(weights_path)
         self.model.eval()
-        torch.set_grad_enabled(False)
 
         # Store relevant attributes of config
         pixel_mean = torch.Tensor(cfg.MODEL.PIXEL_MEAN).view(-1, 1, 1)
