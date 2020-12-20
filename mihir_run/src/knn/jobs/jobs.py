@@ -138,7 +138,7 @@ class MapReduceJob:
         n_total: Optional[int] = None,
     ) -> Any:
         assert self._start_time is None  # can't reuse Job instances
-        self.start_time = time.time()
+        self._start_time = time.time()
 
         # Prepare iterable
         try:
@@ -184,7 +184,7 @@ class MapReduceJob:
 
     @property
     def progress(self) -> Any:
-        elapsed_time = (time.time() - self.start_time) if self.start_time else 0.0
+        elapsed_time = (time.time() - self._start_time) if self._start_time else 0.0
 
         progress = {
             "cost": self.cost,
