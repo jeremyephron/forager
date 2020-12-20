@@ -11,7 +11,7 @@ CLUSTER_REUSE_EXISTING = True
 CLUSTER_MOUNT_DIR = Path("~/forager/mount").expanduser().resolve()
 
 MAPPER_NUM_RETRIES = 5
-MAPPER_CHUNK_SIZE = 20  # increase when we have a better load balancer
+MAPPER_CHUNK_SIZE = 5  # increase when we have a better load balancer
 MAPPER_REQUEST_TIMEOUT = 5 * 60  # seconds
 MAPPER_CLOUD_RUN_URL = "https://forager-index-mapper-g6rwrca4fq-uw.a.run.app"
 
