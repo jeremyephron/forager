@@ -158,7 +158,7 @@ def log_exception_from_coro_but_return_none(coro):
         try:
             return await coro(*args, **kwargs)
         except Exception as e:
-            print(f"{type(e)__name__}: {e}")
+            print(f"{type(e).__name__}: {e}")
             print(traceback.format_exc())
             print(f"(from {coro.__name__})")
         return None

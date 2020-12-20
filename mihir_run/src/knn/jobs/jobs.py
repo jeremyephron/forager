@@ -253,7 +253,7 @@ class MapReduceJob:
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                print(f"{type(e)__name__}: {e}")
+                print(f"{type(e).__name__}: {e}")
                 print(traceback.format_exc())
                 print(f"(from _request; ignoring)")
 

@@ -4,7 +4,6 @@ import collections
 from dataclasses import dataclass
 import functools
 import time
-import traceback
 import uuid
 
 from typing import Any, DefaultDict, Dict, List, Tuple
