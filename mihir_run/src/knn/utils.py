@@ -41,6 +41,19 @@ class FileListIterator:
         return self.map_fn(elem)
 
 
+def log_exception_from_coro_but_return_none(coro):
+    @functools.wraps(coro)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await coro(*args, **kwargs)
+        except Exception:
+            print(f"Error from {coro.__name__}")
+            print(textwrap.indent(traceback.format_exc(), "  "))
+        return None
+
+    return wrapper
+
+
 # TODO(mihirg): Fix this!
 class LimitedAsCompletedIterator:
     def __init__(self, coros: AsyncIterable[Awaitable[Any]], limit: int):
@@ -68,10 +81,9 @@ class LimitedAsCompletedIterator:
         self._schedule_getting_next_coro()
         return self
 
+    @log_exception_from_coro_but_return_none
     async def __anext__(self):
         while self.pending:
-            print(len(self.pending))
-
             done, self.pending = await asyncio.wait(
                 self.pending, return_when=asyncio.FIRST_COMPLETED
             )
@@ -151,19 +163,6 @@ def unasync_as_task(coro):
     @functools.wraps(coro)
     def wrapper(*args, **kwargs):
         return asyncio.create_task(coro(*args, **kwargs))
-
-    return wrapper
-
-
-def log_exception_from_coro_but_return_none(coro):
-    @functools.wraps(coro)
-    async def wrapper(*args, **kwargs):
-        try:
-            return await coro(*args, **kwargs)
-        except Exception:
-            print(f"Error from {coro.__name__}")
-            print(textwrap.indent(traceback.format_exc(), "  "))
-        return None
 
     return wrapper
 
