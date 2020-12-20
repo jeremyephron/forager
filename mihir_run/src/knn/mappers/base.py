@@ -43,14 +43,11 @@ class Mapper(abc.ABC):
     async def process_chunk(
         self, chunk: List[JSONType], job_id: str, job_args: Any, request_id: str
     ) -> Tuple[JSONType, List[JSONType]]:
-        raw_outputs = await asyncio.gather(
+        return await asyncio.gather(
             *[
                 self.process_element(input, job_id, job_args, request_id, i)
                 for i, input in enumerate(chunk)
             ]
-        )
-        return await self.postprocess_chunk(
-            chunk, raw_outputs, job_id, job_args, request_id
         )
 
     async def postprocess_chunk(
@@ -118,15 +115,20 @@ class Mapper(abc.ABC):
                 job_args = self._args_by_job.setdefault(
                     job_id, await self.initialize_job(request.json["job_args"])
                 )  # memoized
-                chunk_output, outputs = await self.process_chunk(
-                    request.json["inputs"], job_id, job_args, request_id
+
+                chunk = request.json["inputs"]
+                raw_outputs = await self.process_chunk(
+                    chunk, job_id, job_args, request_id
+                )
+                chunk_output, final_outputs = await self.postprocess_chunk(
+                    chunk, raw_outputs, job_id, job_args, request_id
                 )
 
         return json(
             {
                 "worker_id": self.worker_id,
                 "profiling": self._profiling_results_by_request.pop(request_id),
-                "outputs": outputs,
+                "outputs": final_outputs,
                 "chunk_output": chunk_output,
             }
         )

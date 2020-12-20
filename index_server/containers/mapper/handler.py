@@ -1,8 +1,11 @@
+import contextlib
 from enum import Enum
+import functools
 import os
 from pathlib import Path
 
 import numpy as np
+from torch import multiprocessing
 
 from typing import List, Tuple, Union
 
@@ -31,6 +34,24 @@ class IndexEmbeddingMapper(ResNetBackboneMapper):
 
         job_args["n_chunks_saved"] = 0
         return job_args
+
+    async def process_chunk(
+        self, chunk: List[JSONType], job_id: str, job_args: Any, request_id: str
+    ):
+        if config.NUM_CPUS == 1:
+            return await super().process_chunk(chunk, job_id, job_args, request_id)
+
+        with contextlib.ExitStack() as stack:
+            with self.profiler(request_id, "spawn_time"):
+                pool = stack.enter_context(multiprocessing.Pool(config.NUM_CPUS))
+
+            func = functools.partial(
+                utils.unasync(self.process_element),
+                job_id=job_id,
+                job_args=job_args,
+                request_id=request_id,
+            )
+            return pool.starmap(func, [input, i for i, input in enumerate(chunk)])
 
     @utils.log_exception_from_coro_but_return_none
     async def process_element(
