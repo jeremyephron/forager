@@ -84,7 +84,6 @@ class InteractiveIndex:
         self.vectors_per_index = self.cfg['vectors_per_index']
 
         self.tempdir = Path(self.cfg['tempdir'])
-        print("INTERACTIVE INDEX TEMPDIR IS ", self.tempdir)
         self.tempdir.mkdir(parents=True, exist_ok=True)
 
         self.use_gpu = self.cfg['use_gpu']
@@ -466,7 +465,6 @@ class InteractiveIndex:
 
         payload = json.load((Path(tempdir)/cls.META_FILE_NAME).open())
         index = InteractiveIndex(
-            **payload['cfg'], _extra=payload['extra'], _exists=True
-        )
+            **payload['cfg'], _extra=payload['extra'], _exists=True, tempdir=tempdir
+        )  # override tempdir in case index was copied
         return index
-
