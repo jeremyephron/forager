@@ -48,11 +48,10 @@ class IndexEmbeddingMapper(ResNetBackboneMapper):
             image_path, [x1f, y1f, x2f, y2f], augmentations, request_id
         )
 
-        with self.profiler(request_id, "compute_time"):
-            spatial_embeddings = next(iter(model_output_dict.values())).numpy()
-            n, c, h, w = spatial_embeddings.shape
-            assert n == 1
-            return spatial_embeddings.reshape((c, h * w)).T
+        spatial_embeddings = next(iter(model_output_dict.values())).numpy()
+        n, c, h, w = spatial_embeddings.shape
+        assert n == 1
+        return spatial_embeddings.reshape((c, h * w)).T
 
     async def postprocess_chunk(
         self,
@@ -63,23 +62,24 @@ class IndexEmbeddingMapper(ResNetBackboneMapper):
         request_id,
     ) -> Union[Tuple[str, List[int]], Tuple[None, List[str]]]:
         if job_args["return_type"] == IndexEmbeddingMapper.ReturnType.SAVE:
-            # Save chunk embeddings dict to disk
-            output_path = config.EMBEDDINGS_FILE_TMPL.format(
-                job_id, self.worker_id, job_args["n_chunks_saved"]
-            )
-            embeddings_dict = {
-                int(input["id"]): output
-                for input, output in zip(inputs, outputs)
-                if output is not None
-            }
+            with self.profiler(request_id, "save_time"):
+                # Save chunk embeddings dict to disk
+                output_path = config.EMBEDDINGS_FILE_TMPL.format(
+                    job_id, self.worker_id, job_args["n_chunks_saved"]
+                )
+                embeddings_dict = {
+                    int(input["id"]): output
+                    for input, output in zip(inputs, outputs)
+                    if output is not None
+                }
 
-            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-            np.save(output_path, embeddings_dict)
-            job_args["n_chunks_saved"] += 1
+                Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+                np.save(output_path, embeddings_dict)
+                job_args["n_chunks_saved"] += 1
 
-            return output_path, [
-                len(output) if output is not None else None for output in outputs
-            ]
+                return output_path, [
+                    len(output) if output is not None else None for output in outputs
+                ]
         else:
             return None, [
                 utils.numpy_to_base64(output) if output is not None else None

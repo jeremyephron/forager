@@ -111,8 +111,6 @@ class ResNetBackboneMapper(Mapper):
                 image = image.contiguous()
                 image = self.normalize(image)
 
-        # Perform inference
-        with self.profiler(request_id, "compute_time"):
             # Input: NCHW
             # Output: {'res4': NCHW, 'res5': NCHW} where N = 1
             return self.model(image.unsqueeze(dim=0))

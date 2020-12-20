@@ -54,16 +54,18 @@ class IndexBuildingMapper(Mapper):
     async def process_element(
         self, input, job_id, job_args, request_id, element_index
     ) -> Dict[str, int]:
-        # Step 1: Load saved embeddings into memory
-        embedding_dict = np.load(
-            input, allow_pickle=True
-        ).item()  # type: Dict[int, np.ndarray]
+        with self.profiler(request_id, "load_time"):
+            # Step 1: Load saved embeddings into memory
+            embedding_dict = np.load(
+                input, allow_pickle=True
+            ).item()  # type: Dict[int, np.ndarray]
 
-        # Step 2: Add to on-disk indexes
-        return {
-            index_type: index.add(embedding_dict)
-            for index_type, index in job_args["indexes"].items()
-        }
+        with self.profiler(request_id, "add_time"):
+            # Step 2: Add to on-disk indexes
+            return {
+                index_type: index.add(embedding_dict)
+                for index_type, index in job_args["indexes"].items()
+            }
 
     async def postprocess_chunk(
         self,
