@@ -168,7 +168,7 @@ def log_exception(exc, func=None):
     print(f"{type(exc)}: {exc}")
     traceback.print_exc()
     if func:
-        print(f"(from {func.func_name})")
+        print(f"(from {func.__name__})")
 
 
 def numpy_to_base64(nda):

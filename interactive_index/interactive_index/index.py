@@ -84,6 +84,7 @@ class InteractiveIndex:
         self.vectors_per_index = self.cfg['vectors_per_index']
 
         self.tempdir = Path(self.cfg['tempdir'])
+        print("INTERACTIVE INDEX TEMPDIR IS ", self.tempdir)
         self.tempdir.mkdir(parents=True, exist_ok=True)
 
         self.use_gpu = self.cfg['use_gpu']
