@@ -40,20 +40,6 @@ class FileListIterator:
         return self.map_fn(elem)
 
 
-def log_exception_from_coro_but_return_none(coro):
-    @functools.wraps(coro)
-    async def wrapper(*args, **kwargs):
-        try:
-            return await coro(*args, **kwargs)
-        except Exception:
-            print(f"Error from {coro.__name__}")
-            print(textwrap.indent(traceback.format_exc(), "  "))
-        return None
-
-    return wrapper
-
-
-@log_exception_from_coro_but_return_none
 async def limited_as_completed(coros: AsyncIterable[Awaitable[Any]], limit: int):
     pending: List[asyncio.Future] = []
     hit_stop_iteration = False
@@ -76,30 +62,34 @@ async def limited_as_completed(coros: AsyncIterable[Awaitable[Any]], limit: int)
     schedule_getting_next_coro()
 
     while pending:
-        done_set, pending_set = await asyncio.wait(
-            pending, return_when=asyncio.FIRST_COMPLETED
-        )
-        pending = list(pending_set)
+        try:
+            done_set, pending_set = await asyncio.wait(
+                pending, return_when=asyncio.FIRST_COMPLETED
+            )
+            pending = list(pending_set)
 
-        for done in done_set:
-            if getattr(done, "is_to_get_next_coro", False):
-                next_coro_is_pending = False
-                if hit_stop_iteration:
-                    continue
+            for done in done_set:
+                if getattr(done, "is_to_get_next_coro", False):
+                    next_coro_is_pending = False
+                    if hit_stop_iteration:
+                        continue
 
-                # Schedule the new coroutine
-                pending.append(asyncio.create_task(done.result()))
+                    # Schedule the new coroutine
+                    pending.append(asyncio.create_task(done.result()))
 
-                # If we have capacity, also ask for the next coroutine
-                if len(pending) < limit:
-                    schedule_getting_next_coro()
-            else:
-                # We definitely have capacity now, so ask for the next coroutine if we
-                # haven't already
-                if not next_coro_is_pending and not hit_stop_iteration:
-                    schedule_getting_next_coro()
+                    # If we have capacity, also ask for the next coroutine
+                    if len(pending) < limit:
+                        schedule_getting_next_coro()
+                else:
+                    # We definitely have capacity now, so ask for the next coroutine if we
+                    # haven't already
+                    if not next_coro_is_pending and not hit_stop_iteration:
+                        schedule_getting_next_coro()
 
-                yield done.result()
+                    yield done.result()
+        except Exception:
+            print(textwrap.indent(traceback.format_exc(), "  "))
+            break
 
 
 def unasync(coro):
@@ -114,6 +104,19 @@ def unasync_as_task(coro):
     @functools.wraps(coro)
     def wrapper(*args, **kwargs):
         return asyncio.create_task(coro(*args, **kwargs))
+
+    return wrapper
+
+
+def log_exception_from_coro_but_return_none(coro):
+    @functools.wraps(coro)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await coro(*args, **kwargs)
+        except Exception:
+            print(f"Error from {coro.__name__}")
+            print(textwrap.indent(traceback.format_exc(), "  "))
+        return None
 
     return wrapper
 
