@@ -1,5 +1,6 @@
 import asyncio
 import base64
+from dataclasses import dataclass
 import functools
 import io
 import textwrap
@@ -41,53 +42,55 @@ class FileListIterator:
 
 
 async def limited_as_completed(coros: AsyncIterable[Awaitable[Any]], limit: int):
-    pending: List[asyncio.Future] = []
-    hit_stop_iteration = False
-    next_coro_is_pending = False
+    @dataclass
+    class State:
+        pending: List[asyncio.Future] = []
+        hit_stop_iteration = False
+        next_coro_is_pending = False
+
+    state = State()
 
     async def get_next_coro():
-        global hit_stop_iteration
         try:
             coro = await coros.__anext__()
             return coro
         except StopAsyncIteration:
-            hit_stop_iteration = True
+            state.hit_stop_iteration = True
 
     def schedule_getting_next_coro():
-        global next_coro_is_pending
-        print(next_coro_is_pending)
+        print(state.next_coro_is_pending)
         task = asyncio.create_task(get_next_coro())
         task.is_to_get_next_coro = True
-        pending.append(task)
-        next_coro_is_pending = True
+        state.pending.append(task)
+        state.next_coro_is_pending = True
 
     schedule_getting_next_coro()
 
-    while pending:
-        print(len(pending))
+    while state.pending:
+        print(len(state.pending))
 
         try:
             done_set, pending_set = await asyncio.wait(
-                pending, return_when=asyncio.FIRST_COMPLETED
+                state.pending, return_when=asyncio.FIRST_COMPLETED
             )
-            pending = list(pending_set)
+            state.pending = list(pending_set)
 
             for done in done_set:
                 if getattr(done, "is_to_get_next_coro", False):
-                    next_coro_is_pending = False
-                    if hit_stop_iteration:
+                    state.next_coro_is_pending = False
+                    if state.hit_stop_iteration:
                         continue
 
                     # Schedule the new coroutine
-                    pending.append(asyncio.create_task(done.result()))
+                    state.pending.append(asyncio.create_task(done.result()))
 
                     # If we have capacity, also ask for the next coroutine
-                    if len(pending) < limit:
+                    if len(state.pending) < limit:
                         schedule_getting_next_coro()
                 else:
                     # We definitely have capacity now, so ask for the next coroutine if
                     # we haven't already
-                    if not next_coro_is_pending and not hit_stop_iteration:
+                    if not state.next_coro_is_pending and not state.hit_stop_iteration:
                         schedule_getting_next_coro()
 
                     yield done.result()
