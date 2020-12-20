@@ -2,6 +2,7 @@ import asyncio
 import collections
 import resource
 import time
+import textwrap
 import traceback
 import uuid
 
@@ -254,8 +255,9 @@ class MapReduceJob:
             except asyncio.CancelledError:
                 raise
             except Exception:
-                print("Error from _request (ignoring)")
-                print(traceback.format_exc())
+                action = "skipping" if i == self.n_retries - 1 else "ignoring"
+                print(f"Error from _request ({action})")
+                print(textwrap.indent(traceback.format_exc(), "  "))
 
         return chunk, result, end_time - start_time
 

@@ -3,6 +3,7 @@ import base64
 import functools
 import io
 import itertools
+import textwrap
 import traceback
 
 import numpy as np
@@ -161,7 +162,7 @@ def log_exception_from_coro_but_return_none(coro):
             return await coro(*args, **kwargs)
         except Exception:
             print(f"Error from {coro.__name__}")
-            print(traceback.format_exc())
+            print(textwrap.indent(traceback.format_exc(), "  "))
         return None
 
     return wrapper
