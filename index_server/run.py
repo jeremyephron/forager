@@ -28,7 +28,7 @@ from interactive_index import InteractiveIndex
 from knn.clusters import TerraformModule
 from knn.jobs import MapReduceJob, MapperSpec
 from knn.reducers import PoolingReducer, TrivialReducer
-from knn.utils import JSONType, unasync_as_task, log_exception_from_coro_but_return_none
+from knn.utils import JSONType
 
 import config
 from index_jobs import (
@@ -163,14 +163,20 @@ class LabeledIndex:
             and not self.start_adding_eventually_task.done()
         ):
             self.start_adding_eventually_task.cancel()
-            await self.start_adding_eventually_task
+            try:
+                await self.start_adding_eventually_task
+            except asyncio.CancelledError:
+                pass
         if self.adder_job:
             await self.adder_job.stop()
 
         # Merge
         if self.merge_task:
             self.merge_task.cancel()
-            await self.merge_task
+            try:
+                await self.merge_task
+            except asyncio.CancelledError:
+                pass
 
         # Delete unnecessary intermediates from disk
         if not self.ready.is_set():
@@ -268,7 +274,6 @@ class LabeledIndex:
         if index_type in self.training_jobs:
             await self.training_jobs[index_type].handle_result(result)
 
-    @log_exception_from_coro_but_return_none
     async def start_adding_eventually(self):
         # Wait until all indexes are trained
         indexes = {}
@@ -305,7 +310,6 @@ class LabeledIndex:
     def start_merging(self, shard_tmpls: Iterable[str]):
         self.merge_task = asyncio.create_task(self.merge_indexes(shard_tmpls))
 
-    @log_exception_from_coro_but_return_none
     async def merge_indexes(self, shard_tmpls: Iterable[str]):
         loop = asyncio.get_running_loop()
 

@@ -104,7 +104,8 @@ def unasync(coro):
 def unasync_as_task(coro):
     @functools.wraps(coro)
     def wrapper(*args, **kwargs):
-        return asyncio.create_task(coro(*args, **kwargs))
+        new_coro = log_exception_from_coro_but_return_none(coro)
+        return asyncio.create_task(new_coro(*args, **kwargs))
 
     return wrapper
 

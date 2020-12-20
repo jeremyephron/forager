@@ -12,7 +12,8 @@ import numpy as np
 
 from interactive_index.config import auto_config
 
-from knn.utils import base64_to_numpy, JSONType, unasync_as_task
+from knn import utils
+from knn.utils import JSONType
 from knn.reducers import Reducer
 
 import config
@@ -38,12 +39,10 @@ class MapperReducer(Reducer):
         self.wake_gen = asyncio.Condition()
         self.finished = asyncio.Event()
 
-    @unasync_as_task
+    @utils.unasync_as_task
     async def handle_chunk_result(self, chunk, chunk_output):
         self.output_paths.append(chunk_output)
-        print("before 1")
         async with self.wake_gen:
-            print("after 1")
             self.wake_gen.notify_all()
 
     def handle_result(self, input, output):
@@ -68,12 +67,10 @@ class MapperReducer(Reducer):
             notif = self.notifications.pop(k)
             notif.callback(output_paths_copy)
 
-    @unasync_as_task
+    @utils.unasync_as_task
     async def finish(self):
         self.finished.set()
-        print("before 2")
         async with self.wake_gen:
-            print("after 2")
             self.wake_gen.notify_all()
 
     @property
@@ -111,7 +108,7 @@ class AdderReducer(Reducer):
 
 
 def extract_pooled_embedding_from_mapper_output(output):
-    return base64_to_numpy(output).mean(axis=0).astype(np.float32)
+    return utils.base64_to_numpy(output).mean(axis=0).astype(np.float32)
 
 
 class IndexType(IntEnum):
