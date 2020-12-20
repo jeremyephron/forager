@@ -253,9 +253,6 @@ class LabeledIndex:
             shutil.copytree(job.mounted_index_dir, self.index_dir / index_type.name)
             print(f"Copied {job.mounted_index_dir} to {self.index_dir}")
 
-        # TODO(mihirg): Allow Add to start even if Map isn't finished yet
-        await self.mapper_job.reducer.finished.wait()
-
         # Step 3: As the Map step computes and saves embeddings, "Add" them into shards
         # of the newly trained indexes
         self.adder_job = MapReduceJob(
@@ -269,10 +266,9 @@ class LabeledIndex:
             chunk_size=config.ADDER_CHUNK_SIZE,
             request_timeout=config.ADDER_REQUEST_TIMEOUT,
         )
-        await self.adder_job.start(self.mapper_job.reducer.result, self.finished_adding)
-        # await self.adder_job.start(
-        #     self.mapper_job.reducer.output_paths_gen(), self.finished_adding
-        # )  # iterable is an async generator that yields as the Map step produces outputs
+        await self.adder_job.start(
+            self.mapper_job.reducer.output_paths_gen(), self.finished_adding
+        )  # iterable is an async generator that yields as the Map step produces outputs
 
     async def stop_building(self):
         # Map
