@@ -451,7 +451,7 @@ current_clusters: CleanupDict[str, TerraformModule] = CleanupDict(_stop_cluster)
 @app.route("/start_cluster", methods=["POST"])
 async def start_cluster(request):
     cluster = TerraformModule(
-        config.CLUSTER_TERRAFORM_MODULE_PATH, copy=config.CLUSTER_REUSE_EXISTING
+        config.CLUSTER_TERRAFORM_MODULE_PATH, copy=not config.CLUSTER_REUSE_EXISTING
     )
     app.add_task(_start_cluster(cluster))
     cluster_id = cluster.id
