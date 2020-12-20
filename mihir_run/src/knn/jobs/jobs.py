@@ -2,6 +2,7 @@ import asyncio
 import collections
 import resource
 import time
+import traceback
 import uuid
 
 import aiohttp
@@ -252,7 +253,9 @@ class MapReduceJob:
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                utils.log_exception(e, self._request)
+                print(f"{type(e)__name__}: {e}")
+                print(traceback.format_exc())
+                print(f"(from _request; ignoring)")
 
         return chunk, result, end_time - start_time
 

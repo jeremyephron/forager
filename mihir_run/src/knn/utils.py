@@ -158,17 +158,12 @@ def log_exception_from_coro_but_return_none(coro):
         try:
             return await coro(*args, **kwargs)
         except Exception as e:
-            log_exception(e, coro)
+            print(f"{type(e)__name__}: {e}")
+            print(traceback.format_exc())
+            print(f"(from {coro.__name__})")
         return None
 
     return wrapper
-
-
-def log_exception(exc, func=None):
-    print(f"{type(exc)}: {exc}")
-    traceback.print_exc()
-    if func:
-        print(f"(from {func.__name__})")
 
 
 def numpy_to_base64(nda):
