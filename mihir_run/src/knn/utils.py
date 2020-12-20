@@ -64,6 +64,8 @@ async def limited_as_completed(coros: AsyncIterable[Awaitable[Any]], limit: int)
     schedule_getting_next_coro()
 
     while pending:
+        print(len(pending))
+
         try:
             done_set, pending_set = await asyncio.wait(
                 pending, return_when=asyncio.FIRST_COMPLETED
@@ -83,13 +85,14 @@ async def limited_as_completed(coros: AsyncIterable[Awaitable[Any]], limit: int)
                     if len(pending) < limit:
                         schedule_getting_next_coro()
                 else:
-                    # We definitely have capacity now, so ask for the next coroutine if we
-                    # haven't already
+                    # We definitely have capacity now, so ask for the next coroutine if
+                    # we haven't already
                     if not next_coro_is_pending and not hit_stop_iteration:
                         schedule_getting_next_coro()
 
                     yield done.result()
-        except Exception:
+        except Exception as e:
+            print(e)
             print(textwrap.indent(traceback.format_exc(), "  "))
             break
 
