@@ -48,13 +48,14 @@ async def limited_as_completed(coros: AsyncIterable[Awaitable[Any]], limit: int)
     async def get_next_coro():
         global hit_stop_iteration
         try:
-            return await coros.__anext__()
+            coro = await coros.__anext__()
+            return coro
         except StopAsyncIteration:
             hit_stop_iteration = True
 
     def schedule_getting_next_coro():
         global next_coro_is_pending
-        assert not next_coro_is_pending
+        print(next_coro_is_pending)
         task = asyncio.create_task(get_next_coro())
         task.is_to_get_next_coro = True
         pending.append(task)
