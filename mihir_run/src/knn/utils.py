@@ -40,6 +40,20 @@ class FileListIterator:
         return self.map_fn(elem)
 
 
+def log_exception_from_coro_but_return_none(coro):
+    @functools.wraps(coro)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await coro(*args, **kwargs)
+        except Exception:
+            print(f"Error from {coro.__name__}")
+            print(textwrap.indent(traceback.format_exc(), "  "))
+        return None
+
+    return wrapper
+
+
+@log_exception_from_coro_but_return_none
 async def limited_as_completed(coros: AsyncIterable[Awaitable[Any]], limit: int):
     pending: List[asyncio.Future] = []
     hit_stop_iteration = False
@@ -100,19 +114,6 @@ def unasync_as_task(coro):
     @functools.wraps(coro)
     def wrapper(*args, **kwargs):
         return asyncio.create_task(coro(*args, **kwargs))
-
-    return wrapper
-
-
-def log_exception_from_coro_but_return_none(coro):
-    @functools.wraps(coro)
-    async def wrapper(*args, **kwargs):
-        try:
-            return await coro(*args, **kwargs)
-        except Exception:
-            print(f"Error from {coro.__name__}")
-            print(textwrap.indent(traceback.format_exc(), "  "))
-        return None
 
     return wrapper
 
