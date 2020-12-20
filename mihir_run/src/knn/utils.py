@@ -69,6 +69,8 @@ class LimitedAsCompletedIterator:
 
     async def __anext__(self):
         while self.pending:
+            print(self.pending)
+
             done, self.pending = await asyncio.wait(
                 self.pending, return_when=asyncio.FIRST_COMPLETED
             )
