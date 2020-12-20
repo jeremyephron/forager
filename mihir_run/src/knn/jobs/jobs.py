@@ -252,7 +252,7 @@ class MapReduceJob:
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                utils.log_exception(self._request, e)
+                utils.log_exception(e, self._request)
 
         return chunk, result, end_time - start_time
 

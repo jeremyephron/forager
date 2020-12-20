@@ -390,6 +390,7 @@ class LabeledIndex:
         return self
 
     def _load_local_indexes(self):
+        print("INDEX DIR", self.index_dir)
         self.indexes = {
             index_type: InteractiveIndex.load(str(self.index_dir / index_type.name))
             for index_type in IndexType

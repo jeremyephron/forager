@@ -158,7 +158,7 @@ def log_exception_from_coro_but_return_none(coro):
         try:
             return await coro(*args, **kwargs)
         except Exception as e:
-            log_exception(coro, e)
+            log_exception(e, coro)
         return None
 
     return wrapper
