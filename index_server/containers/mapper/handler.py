@@ -7,9 +7,10 @@ from pathlib import Path
 import numpy as np
 from torch import multiprocessing
 
-from typing import List, Tuple, Union
+from typing import Any, List, Tuple, Union
 
 from knn import utils
+from knn.utils import JSONType
 
 from base import ResNetBackboneMapper
 import config
@@ -51,7 +52,12 @@ class IndexEmbeddingMapper(ResNetBackboneMapper):
                 job_args=job_args,
                 request_id=request_id,
             )
-            return pool.starmap(func, [input, i for i, input in enumerate(chunk)])
+            result = pool.starmap(func, [(input, i) for i, input in enumerate(chunk)])
+
+            with self.profiler(request_id, "join_time"):
+                stack.close()
+
+        return result
 
     @utils.log_exception_from_coro_but_return_none
     async def process_element(
