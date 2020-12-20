@@ -18,11 +18,6 @@ variable "mapper_num_replicas_per_node" {
   default = 1
 }
 
-variable "mapper_ram_gb" {
-  type    = number
-  default = 14
-}
-
 variable "mapper_cpus" {
   type    = number
   default = 14
@@ -77,7 +72,6 @@ resource "kubernetes_deployment" "mapper_dep" {
           resources {
             limits {
               cpu    = var.mapper_cpus
-              memory = "${floor(var.mapper_ram_gb * 1024)}Mi"
             }
           }
 
