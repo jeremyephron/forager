@@ -464,7 +464,8 @@ class InteractiveIndex:
         """
 
         payload = json.load((Path(tempdir)/cls.META_FILE_NAME).open())
+        payload['cfg']['tempdir'] = tempdir  # override tempdir in case index was copied
         index = InteractiveIndex(
-            **payload['cfg'], _extra=payload['extra'], _exists=True, tempdir=tempdir
-        )  # override tempdir in case index was copied
+            **payload['cfg'], _extra=payload['extra'], _exists=True
+        )
         return index
