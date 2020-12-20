@@ -41,7 +41,9 @@ class MapperReducer(Reducer):
     @unasync_as_task
     async def handle_chunk_result(self, chunk, chunk_output):
         self.output_paths.append(chunk_output)
+        print("before 1")
         async with self.wake_gen:
+            print("after 1")
             self.wake_gen.notify_all()
 
     def handle_result(self, input, output):
@@ -69,7 +71,9 @@ class MapperReducer(Reducer):
     @unasync_as_task
     async def finish(self):
         self.finished.set()
+        print("before 2")
         async with self.wake_gen:
+            print("after 2")
             self.wake_gen.notify_all()
 
     @property

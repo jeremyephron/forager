@@ -79,17 +79,14 @@ class LabeledIndex:
 
         # Will only be used by the start_building() pathway
         self.cluster: Optional[TerraformModule] = None
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.training_http_session: Optional[aiohttp.ClientSession] = None
         self.mapper_job: Optional[MapReduceJob] = None
         self.training_jobs: CleanupDict[IndexType, TrainingJob] = CleanupDict(
             lambda job: job.stop()
         )
         self.start_adding_eventually_task: Optional[asyncio.Task] = None
         self.adder_job: Optional[MapReduceJob] = None
-
-    def delete(self):
-        assert self.ready.is_set()
-        shutil.rmtree(self.index_dir)
+        self.merge_task: Optional[asyncio.Task] = None
 
     def query(
         self,
@@ -143,6 +140,41 @@ class LabeledIndex:
         )
 
         return [(self.labels[i], d) for i, d in sorted_id_dist_tuples]
+
+    # CLEANUP
+
+    def delete(self):
+        assert self.ready.is_set()
+        shutil.rmtree(self.index_dir)
+
+    async def stop_building(self):
+        # Map
+        if self.mapper_job:
+            await self.mapper_job.stop()
+
+        # Train
+        await self.training_jobs.clear_async()
+        if self.training_http_session:
+            await self.training_http_session.close()
+
+        # Add
+        if (
+            self.start_adding_eventually_task
+            and not self.start_adding_eventually_task.done()
+        ):
+            self.start_adding_eventually_task.cancel()
+            await self.start_adding_eventually_task
+        if self.adder_job:
+            await self.adder_job.stop()
+
+        # Merge
+        if self.merge_task:
+            self.merge_task.cancel()
+            await self.merge_task
+
+        # Delete unnecessary intermediates from disk
+        if not self.ready.is_set():
+            shutil.rmtree(self.index_dir)
 
     # INDEX CREATION
 
@@ -270,38 +302,15 @@ class LabeledIndex:
             self.mapper_job.reducer.output_paths_gen(), self.finished_adding
         )  # iterable is an async generator that yields as the Map step produces outputs
 
-    async def stop_building(self):
-        # Map
-        if self.mapper_job:
-            await self.mapper_job.stop()
+    def start_merging(self, shard_tmpls: Iterable[str]):
+        self.merge_task = asyncio.create_task(self.merge_indexes(shard_tmpls))
 
-        # Train
-        await self.training_jobs.clear_async()
-        if self.training_http_session:
-            await self.training_http_session.close()
-
-        # Add
-        # TODO(mihirg): Also stop the task from finished_adding()?
-        if (
-            self.start_adding_eventually_task
-            and not self.start_adding_eventually_task.done()
-        ):
-            self.start_adding_eventually_task.cancel()
-            await self.start_adding_eventually_task
-        if self.adder_job:
-            await self.adder_job.stop()
-
-        # Delete unnecessary intermediates from disk
-        if not self.ready.is_set():
-            shutil.rmtree(self.index_dir)
-
-    @unasync_as_task
     @log_exception_from_coro_but_return_none
-    async def finished_adding(self, shard_tmpls: Iterable[str]):
+    async def merge_indexes(self, shard_tmpls: Iterable[str]):
         loop = asyncio.get_running_loop()
 
-        # Merge shards from shared disk into local index in a process pool to avoid
-        # blocking the event loop
+        # Step 4: Merge shards from shared disk into final local index (in a process
+        # pool to avoid blocking the event loop)
         # TODO(mihirg): Consider deleting all unnecessary intermediates from NAS after
         self._load_local_indexes()
         with concurrent.futures.ProcessPoolExecutor(max_workers=1) as pool:
@@ -317,6 +326,7 @@ class LabeledIndex:
                     pool, functools.partial(index.merge_partial_indexes, shard_paths)
                 )
 
+        # Upload final index to Cloud Storage
         await self.upload()
         self.ready.set()
 
