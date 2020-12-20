@@ -157,7 +157,8 @@ class MapReduceJob:
             connector=connector,
             timeout=timeout,
         ) as session:
-            async for response_tuple in utils.LimitedAsCompletedIterator(
+            async for response_tuple in utils.limited_as_completed(
+                # async for response_tuple in utils.LimitedAsCompletedIterator(
                 (
                     self._request(session, mapper_url, chunk)
                     # async for chunk in chunk_gen
