@@ -8,4 +8,4 @@ RESNET_CONFIG.MODEL.RESNETS.OUT_FEATURES = ["res5"]
 EMBEDDINGS_FILE_TMPL = "/shared/embeddings/{}/{}/{}.npy"
 GCS_URL_PREFIX = "https://storage.googleapis.com"
 
-NUM_CPUS = os.getenv("CPUS", 1)
+NUM_CPUS = int(os.getenv("CPUS", "1"))
