@@ -54,6 +54,7 @@ async def limited_as_completed(coros: AsyncIterable[Awaitable[Any]], limit: int)
 
     def schedule_getting_next_coro():
         global next_coro_is_pending
+        assert not next_coro_is_pending
         task = asyncio.create_task(get_next_coro())
         task.is_to_get_next_coro = True
         pending.append(task)
