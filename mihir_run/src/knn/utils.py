@@ -1,6 +1,6 @@
 import asyncio
 import base64
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import functools
 import io
 import textwrap
@@ -44,7 +44,7 @@ class FileListIterator:
 async def limited_as_completed(coros: AsyncIterable[Awaitable[Any]], limit: int):
     @dataclass
     class State:
-        pending: List[asyncio.Future] = []
+        pending: List[asyncio.Future] = field(default_factory=list)
         hit_stop_iteration = False
         next_coro_is_pending = False
 
