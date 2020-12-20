@@ -88,7 +88,7 @@ class LabeledIndex:
         self.adder_job: Optional[MapReduceJob] = None
 
     def delete(self):
-        # TODO(mihirg): More checks here?
+        assert self.ready.is_set()
         shutil.rmtree(self.index_dir)
 
     def query(
@@ -157,12 +157,22 @@ class LabeledIndex:
     ):
         self = cls(*args, **kwargs)
 
-        await asyncio.gather(cluster.ready.wait(), cluster.mounted.wait())
-        self.cluster = cluster
-
         self.index_id = str(uuid.uuid4())
         self.index_dir = config.INDEX_PARENT_DIR / self.index_id
         self.index_dir.mkdir(parents=True, exist_ok=False)
+
+        # Randomly shuffle input images
+        self.labels = random.sample(paths, k=len(paths))
+        iterable = (
+            {"id": i, "image": path, "augmentations": {}}
+            for i, path in enumerate(self.labels)
+        )
+
+        # Wait for the cluster to start, then do some configuration for the Train
+        # step so that it can start automatically as soon as the Map step (below)
+        # has made sufficient progress
+        await asyncio.gather(cluster.ready.wait(), cluster.mounted.wait())
+        self.cluster = cluster
 
         self.training_http_session = aiohttp.ClientSession()
         for index_type in IndexType:
@@ -181,13 +191,6 @@ class LabeledIndex:
             for index_type, job in self.training_jobs.items()
         ]
 
-        # Randomly shuffle input images
-        self.labels = random.sample(paths, k=len(paths))
-        iterable = (
-            {"id": i, "image": path, "augmentations": {}}
-            for i, path in enumerate(self.labels)
-        )
-
         # Step 1: "Map" input images to embedding files saved to shared disk
         self.mapper_job = MapReduceJob(
             MapperSpec(
@@ -202,8 +205,8 @@ class LabeledIndex:
         )
         await self.mapper_job.start(iterable, self.start_training, len(paths))
 
-        # Start a background task that waits until the Train step is done and then
-        # kicks off the Add step
+        # Start a background task that waits until the Train step (started automatically
+        # per above) is done and then kicks off the Add step
         self.start_adding_eventually_task = asyncio.create_task(
             self.start_adding_eventually()
         )  # background task
@@ -226,7 +229,7 @@ class LabeledIndex:
 
     async def handle_training_status_update(self, result: JSONType):
         # Because training takes a long time, the trainer sends us back an HTTP request
-        # on status changes rather than communicating over a long-standing request.
+        # on status changes rather than communicating over a single request/response.
         # This function is called by the Sanic endpoint and passes the status update
         # along to the relevant training job.
         index_type = IndexType[result["index_name"]]
@@ -277,7 +280,8 @@ class LabeledIndex:
 
         # Train
         await self.training_jobs.clear_async()
-        await self.training_http_session.close()
+        if self.training_http_session:
+            await self.training_http_session.close()
 
         # Add
         # TODO(mihirg): Also stop the task from finished_adding()?
@@ -290,11 +294,16 @@ class LabeledIndex:
         if self.adder_job:
             await self.adder_job.stop()
 
+        # Delete unnecessary intermedaites from disk
+        if not self.ready.is_set():
+            shutil.rmtree(self.index_dir)
+
     @unasync_as_task
     async def finished_adding(self, shard_tmpls: Iterable[str]):
-        # loop = asyncio.get_running_loop()
+        loop = asyncio.get_running_loop()
 
-        # Merge shards from shared disk into local index
+        # Merge shards from shared disk into local index in a process pool to avoid
+        # blocking the event loop
         # TODO(mihirg): Consider deleting all unnecessary intermediates from NAS after
         self._load_local_indexes()
         with concurrent.futures.ProcessPoolExecutor(max_workers=1) as pool:
@@ -333,17 +342,13 @@ class LabeledIndex:
 
     @property
     def status(self):
-        # TODO(mihirg): Finish filling this in
         return {
-            "map_progress": self.mapper_job.progress if self.mapper_job else {},
-            "train_progress": {
-                index_type.name: {
-                    "started": job.started,
-                    "finished": job.finished.is_set(),
-                }
+            "map": self.mapper_job.status if self.mapper_job else {},
+            "add": self.adder_job.status if self.adder_job else {},
+            "train": {
+                index_type.name: job.status
                 for index_type, job in self.training_jobs.items()
             },
-            "add_progress": self.adder_job.progress if self.adder_job else {},
         }
 
     # INDEX LOADING

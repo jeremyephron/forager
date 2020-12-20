@@ -177,6 +177,10 @@ class TrainingJob:
                 callback, on_num_embeddings=on_num_embeddings
             )
 
+    @property
+    def status(self):
+        return {"started": self.started, "finished": self.finished.is_set()}
+
     async def start(self, paths: List[str]):
         self.started = True
         self._task = asyncio.create_task(self.run_until_complete(paths))

@@ -218,12 +218,8 @@ class MapReduceJob:
         }
 
     @property
-    def job_result(self) -> Dict[str, Any]:
-        return {
-            "performance": self.performance,
-            "progress": self.progress,
-            "result": self.result,
-        }
+    def status(self) -> Dict[str, Any]:
+        return {"performance": self.performance, "progress": self.progress}
 
     @property
     def finished(self) -> bool:

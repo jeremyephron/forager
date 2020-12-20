@@ -120,13 +120,12 @@ class InteractiveIndex:
 
         if not exists:
             self.create(self.index_str)
+            self._save_metadata()
         else:
             self.requires_training = extra['requires_training']
             self.is_trained = extra['is_trained']
             self.n_indexes = extra['n_indexes']
             self.n_vectors = extra['n_vectors']
-
-        self._save_metadata()
 
     def create(self, index_str: str) -> None:
         """
