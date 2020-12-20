@@ -253,10 +253,9 @@ class MapReduceJob:
                         break
             except asyncio.CancelledError:
                 raise
-            except Exception as e:
-                print(f"{type(e).__name__}: {e}")
+            except Exception:
+                print("Error from _request (ignoring)")
                 print(traceback.format_exc())
-                print("(from _request; ignoring)")
 
         return chunk, result, end_time - start_time
 

@@ -69,7 +69,7 @@ class LimitedAsCompletedIterator:
 
     async def __anext__(self):
         while self.pending:
-            print(self.pending)
+            print(len(self.pending))
 
             done, self.pending = await asyncio.wait(
                 self.pending, return_when=asyncio.FIRST_COMPLETED
@@ -159,10 +159,9 @@ def log_exception_from_coro_but_return_none(coro):
     async def wrapper(*args, **kwargs):
         try:
             return await coro(*args, **kwargs)
-        except Exception as e:
-            print(f"{type(e).__name__}: {e}")
+        except Exception:
+            print(f"Error from {coro.__name__}")
             print(traceback.format_exc())
-            print(f"(from {coro.__name__})")
         return None
 
     return wrapper
