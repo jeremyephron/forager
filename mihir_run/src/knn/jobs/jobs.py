@@ -146,28 +146,25 @@ class MapReduceJob:
         except Exception:
             pass
 
-        # iterable = iter(iterable)
-        # chunked = utils.chunk(iterable, self.chunk_size)
-        chunk_stream = stream.chunks(stream.iterate(iterable), self.chunk_size)
+        iterable = iter(iterable)
+        chunked = utils.chunk(iterable, self.chunk_size)
+        # chunk_stream = stream.chunks(stream.iterate(iterable), self.chunk_size)
 
         connector = aiohttp.TCPConnector(limit=0, force_close=True)
         timeout = aiohttp.ClientTimeout(total=self.request_timeout)
-        async with self.mapper as mapper_url, chunk_stream.stream() as chunk_gen, aiohttp.ClientSession(
-            # async with self.mapper as mapper_url:
-            #     async with aiohttp.ClientSession(
+        # async with self.mapper as mapper_url, chunk_stream.stream() as chunk_gen, aiohttp.ClientSession(
+        async with self.mapper as mapper_url, aiohttp.ClientSession(
             connector=connector,
             timeout=timeout,
         ) as session:
             async for response_tuple in utils.LimitedAsCompletedIterator(
-                # for response_tuple in utils.limited_as_completed(
                 (
                     self._request(session, mapper_url, chunk)
-                    async for chunk in chunk_gen
-                    # for chunk in chunked
+                    # async for chunk in chunk_gen
+                    for chunk in chunked
                 ),
                 self.mapper.n_mappers,
             ):
-                # self._reduce_chunk(*(await response_tuple))
                 self._reduce_chunk(*response_tuple)
 
         if self._n_total is None:

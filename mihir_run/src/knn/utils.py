@@ -101,7 +101,7 @@ class LimitedAsCompletedIterator:
         raise StopAsyncIteration
 
 
-def limited_as_completed(coros, limit):
+async def limited_as_completed(coros, limit):
     # Based on https://github.com/andybalaam/asyncioplus/blob/master/asyncioplus/limited_as_completed.py  # noqa
     futures = [asyncio.create_task(c) for c in itertools.islice(coros, 0, limit)]
     pending = [len(futures)]  # list so that we can modify from first_to_finish
@@ -120,7 +120,7 @@ def limited_as_completed(coros, limit):
                     return f.result()
 
     while pending[0] > 0:
-        yield first_to_finish()
+        yield (await first_to_finish())
 
 
 def chunk(it, chunk_size, until=None):
