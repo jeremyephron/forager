@@ -78,34 +78,6 @@ class Mapper(abc.ABC):
     ) -> Any:
         pass
 
-    # DECORATORS
-
-    @staticmethod
-    def SkipIfAssertionError(f):
-        @functools.wraps(f)
-        async def wrapper(*args, **kwargs):
-            try:
-                return await f(*args, **kwargs)
-            except AssertionError as e:
-                print(f"Error in handler, but ignoring. {type(e)}: {e}")
-                traceback.print_exc()
-            return None
-
-        return wrapper
-
-    @staticmethod
-    def SkipIfError(f):
-        @functools.wraps(f)
-        async def wrapper(*args, **kwargs):
-            try:
-                return await f(*args, **kwargs)
-            except Exception as e:
-                print(f"Error in handler, but ignoring. {type(e)}: {e}")
-                traceback.print_exc()
-            return None
-
-        return wrapper
-
     # INTERNAL
 
     def __init__(self, *args, start_server=True, **kwargs):

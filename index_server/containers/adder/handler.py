@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 
 from interactive_index import InteractiveIndex
 from knn.mappers import Mapper
-from knn.utils import JSONType
+from knn.utils import JSONType, log_exception_from_coro_but_return_none
 import config
 
 
@@ -47,7 +47,7 @@ class IndexBuildingMapper(Mapper):
         return job_args
 
     # input = path to a np.save'd Dict[int, np.ndarray] where each value is N x D
-    @Mapper.SkipIfError
+    @log_exception_from_coro_but_return_none
     async def process_element(
         self, input, job_id, job_args, request_id, element_index
     ) -> Dict[str, int]:

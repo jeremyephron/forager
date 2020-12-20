@@ -6,8 +6,7 @@ import numpy as np
 
 from typing import List, Tuple, Union
 
-from knn import utils
-from knn.mappers import Mapper
+from knn.utils import numpy_to_base64, log_exception_from_coro_but_return_none
 from base import ResNetBackboneMapper
 import config
 
@@ -32,7 +31,7 @@ class IndexEmbeddingMapper(ResNetBackboneMapper):
         job_args["n_chunks_saved"] = 0
         return job_args
 
-    @Mapper.SkipIfError
+    @log_exception_from_coro_but_return_none
     async def process_element(
         self, input, job_id, job_args, request_id, element_index
     ) -> np.ndarray:
@@ -82,7 +81,7 @@ class IndexEmbeddingMapper(ResNetBackboneMapper):
             ]
         else:
             return None, [
-                utils.numpy_to_base64(output) if output is not None else None
+                numpy_to_base64(output) if output is not None else None
                 for output in outputs
             ]
 

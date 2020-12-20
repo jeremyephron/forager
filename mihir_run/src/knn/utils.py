@@ -3,6 +3,7 @@ import base64
 import functools
 import io
 import itertools
+import traceback
 
 import numpy as np
 
@@ -39,6 +40,7 @@ class FileListIterator:
         return self.map_fn(elem)
 
 
+# TODO(mihirg): Fix this!
 class LimitedAsCompletedIterator:
     def __init__(self, coros: AsyncIterable[Awaitable[Any]], limit: int):
         self.coros = coros
@@ -134,20 +136,39 @@ def chunk(it, chunk_size, until=None):
         yield chunk
 
 
-def unasync(f):
-    @functools.wraps(f)
+def unasync(coro):
+    @functools.wraps(coro)
     def wrapper(*args, **kwargs):
-        return asyncio.run(f(*args, **kwargs))
+        return asyncio.run(coro(*args, **kwargs))
 
     return wrapper
 
 
-def unasync_as_task(f):
-    @functools.wraps(f)
+def unasync_as_task(coro):
+    @functools.wraps(coro)
     def wrapper(*args, **kwargs):
-        return asyncio.create_task(f(*args, **kwargs))
+        return asyncio.create_task(coro(*args, **kwargs))
 
     return wrapper
+
+
+def log_exception_from_coro_but_return_none(coro):
+    @functools.wraps(coro)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await coro(*args, **kwargs)
+        except Exception as e:
+            log_exception(coro, e)
+        return None
+
+    return wrapper
+
+
+def log_exception(exc, func=None):
+    print(f"{type(exc)}: {exc}")
+    traceback.print_exc()
+    if func:
+        print(f"(from {func.func_name})")
 
 
 def numpy_to_base64(nda):

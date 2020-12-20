@@ -2,7 +2,6 @@ import asyncio
 import collections
 import resource
 import time
-import traceback
 import uuid
 
 import aiohttp
@@ -165,15 +164,8 @@ class MapReduceJob:
                     ),
                     self.mapper.n_mappers,
                 ):
-                    try:
-                        self._reduce_chunk(*(await response_tuple))
-                        # self._reduce_chunk(*response_tuple)
-                    except asyncio.CancelledError:
-                        raise
-                    except Exception as e:
-                        print(f"Error in _reduce_chunk, raising! {type(e)}: {e}")
-                        traceback.print_exc()
-                        raise
+                    self._reduce_chunk(*(await response_tuple))
+                    # self._reduce_chunk(*response_tuple)
 
         if self._n_total is None:
             self._n_total = self._n_successful + self._n_failed
@@ -260,8 +252,7 @@ class MapReduceJob:
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                print(f"Error in _request, but ignoring. {type(e)}: {e}")
-                traceback.print_exc()
+                utils.log_exception(self._request, e)
 
         return chunk, result, end_time - start_time
 

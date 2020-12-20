@@ -28,7 +28,7 @@ from interactive_index import InteractiveIndex
 from knn.clusters import TerraformModule
 from knn.jobs import MapReduceJob, MapperSpec
 from knn.reducers import PoolingReducer, TrivialReducer
-from knn.utils import JSONType, unasync_as_task
+from knn.utils import JSONType, unasync_as_task, log_exception_from_coro_but_return_none
 
 import config
 from index_jobs import (
@@ -209,7 +209,7 @@ class LabeledIndex:
         # per above) is done and then kicks off the Add step
         self.start_adding_eventually_task = asyncio.create_task(
             self.start_adding_eventually()
-        )  # background task
+        )
 
         return self
 
@@ -236,6 +236,7 @@ class LabeledIndex:
         if index_type in self.training_jobs:
             await self.training_jobs[index_type].handle_result(result)
 
+    @log_exception_from_coro_but_return_none
     async def start_adding_eventually(self):
         # Wait until all indexes are trained
         indexes = {}
@@ -294,11 +295,12 @@ class LabeledIndex:
         if self.adder_job:
             await self.adder_job.stop()
 
-        # Delete unnecessary intermedaites from disk
+        # Delete unnecessary intermediates from disk
         if not self.ready.is_set():
             shutil.rmtree(self.index_dir)
 
     @unasync_as_task
+    @log_exception_from_coro_but_return_none
     async def finished_adding(self, shard_tmpls: Iterable[str]):
         loop = asyncio.get_running_loop()
 
