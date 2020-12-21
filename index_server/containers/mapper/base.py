@@ -16,7 +16,7 @@ from knn.mappers import Mapper
 class ResNetBackboneMapper(Mapper):
     def initialize_container(self, cfg, weights_path):
         torch.set_grad_enabled(False)
-        torch.set_num_threads(1)
+        # torch.set_num_threads(1)
 
         # Create model
         shape = ShapeSpec(channels=3)

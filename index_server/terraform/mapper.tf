@@ -10,7 +10,7 @@ variable "mapper_num_nodes" {
 
 variable "mapper_node_type" {
   type    = string
-  default = "n2-highcpu-2"
+  default = "n2-highcpu-4"
 }
 
 variable "mapper_num_replicas_per_node" {
@@ -20,7 +20,7 @@ variable "mapper_num_replicas_per_node" {
 
 variable "mapper_cpus" {
   type    = number
-  default = 1
+  default = 2
 }
 
 locals {
