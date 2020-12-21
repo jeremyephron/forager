@@ -111,6 +111,7 @@ class MapReduceJob:
         # Will be initialized later
         self._n_total: Optional[int] = None
         self._start_time: Optional[float] = None
+        self._end_time: Optional[float] = None
         self._task: Optional[asyncio.Task] = None
 
     # REQUEST LIFECYCLE
@@ -137,39 +138,41 @@ class MapReduceJob:
         iterable: InputSequenceType,
         n_total: Optional[int] = None,
     ) -> Any:
-        assert self._start_time is None  # can't reuse Job instances
-        self._start_time = time.time()
-
-        # Prepare iterable
         try:
             self._n_total = n_total or len(iterable)  # type: ignore
         except Exception:
             pass
 
-        chunk_stream = stream.chunks(stream.iterate(iterable), self.chunk_size)
+        assert self._start_time is None  # can't reuse Job instances
+        self._start_time = time.time()
 
-        connector = aiohttp.TCPConnector(limit=0, force_close=True)
-        timeout = aiohttp.ClientTimeout(total=self.request_timeout)
-        async with self.mapper as mapper_url, chunk_stream.stream() as chunk_gen, aiohttp.ClientSession(
-            connector=connector,
-            timeout=timeout,
-        ) as session:
-            async for response_tuple in utils.limited_as_completed(
-                (
-                    self._request(session, mapper_url, chunk)
-                    async for chunk in chunk_gen
-                ),
-                self.mapper.n_mappers,
-            ):
-                self._reduce_chunk(*response_tuple)
+        try:
+            chunk_stream = stream.chunks(stream.iterate(iterable), self.chunk_size)
 
-        if self._n_total is None:
-            self._n_total = self._n_successful + self._n_failed
-        else:
-            assert self._n_total == self._n_successful + self._n_failed
+            connector = aiohttp.TCPConnector(limit=0, force_close=True)
+            timeout = aiohttp.ClientTimeout(total=self.request_timeout)
+            async with self.mapper as mapper_url, chunk_stream.stream() as chunk_gen, aiohttp.ClientSession(
+                connector=connector,
+                timeout=timeout,
+            ) as session:
+                async for response_tuple in utils.limited_as_completed(
+                    (
+                        self._request(session, mapper_url, chunk)
+                        async for chunk in chunk_gen
+                    ),
+                    self.mapper.n_mappers,
+                ):
+                    self._reduce_chunk(*response_tuple)
 
-        self.reducer.finish()
-        return self.result
+            if self._n_total is None:
+                self._n_total = self._n_successful + self._n_failed
+            else:
+                assert self._n_total == self._n_successful + self._n_failed
+
+            self.reducer.finish()
+            return self.result
+        finally:
+            self._end_time = time.time()
 
     async def stop(self) -> None:
         if self._task and not self._task.done():
@@ -184,14 +187,15 @@ class MapReduceJob:
 
     @property
     def progress(self) -> Any:
-        elapsed_time = (time.time() - self._start_time) if self._start_time else 0.0
+        end_time = self._end_time or time.time()
+        start_time = self._start_time or end_time
 
         progress = {
             "cost": self.cost,
             "finished": self.finished,
             "n_processed": self._n_successful,
             "n_skipped": self._n_failed,
-            "elapsed_time": elapsed_time,
+            "elapsed_time": end_time - start_time,
         }
         if self._n_total is not None:
             progress["n_total"] = self._n_total

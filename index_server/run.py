@@ -304,7 +304,7 @@ class LabeledIndex:
             request_timeout=config.ADDER_REQUEST_TIMEOUT,
         )
         await self.adder_job.start(
-            self.mapper_job.reducer.output_paths_gen(), self.finished_adding
+            self.mapper_job.reducer.output_paths_gen(), self.start_merging
         )  # iterable is an async generator that yields as the Map step produces outputs
 
     def start_merging(self, shard_tmpls: Iterable[str]):
