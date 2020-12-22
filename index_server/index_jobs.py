@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 import os
 from pathlib import Path
+import time
 
 from typing import Callable, List, Optional, Set
 
@@ -153,6 +154,8 @@ class TrainingJob:
         self._failed_or_finished = asyncio.Condition()
 
         # Will be initialized later
+        self._start_time: Optional[float] = None
+        self._end_time: Optional[float]
         self._task: Optional[asyncio.Task] = None
 
     def make_notification_request_to_start_training(
@@ -177,23 +180,35 @@ class TrainingJob:
 
     @property
     def status(self):
-        return {"started": self.started, "finished": self.finished.is_set()}
+        end_time = self._end_time or time.time()
+        start_time = self._start_time or end_time
+        return {
+            "started": self.started,
+            "finished": self.finished.is_set(),
+            "config": self.index_kwargs,
+            "elapsed_time": end_time - start_time,
+        }
 
     async def start(self, paths: List[str]):
         self.started = True
         self._task = asyncio.create_task(self.run_until_complete(paths))
 
     async def run_until_complete(self, paths: List[str]):
-        request = self._construct_request(paths)
+        self._start_time = time.time()
 
-        while not self.finished.is_set():
-            async with self._failed_or_finished:
-                async with self.session.post(
-                    self.trainer_url, json=request
-                ) as response:
-                    if response.status != 200:
-                        continue
-                await self._failed_or_finished.wait()
+        try:
+            request = self._construct_request(paths)
+
+            while not self.finished.is_set():
+                async with self._failed_or_finished:
+                    async with self.session.post(
+                        self.trainer_url, json=request
+                    ) as response:
+                        if response.status != 200:
+                            continue
+                    await self._failed_or_finished.wait()
+        finally:
+            self._end_time = time.time()
 
     async def stop(self):
         if self._task is not None and not self._task.done():
