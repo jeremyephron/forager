@@ -155,7 +155,7 @@ class TrainingJob:
 
         # Will be initialized later
         self._start_time: Optional[float] = None
-        self._end_time: Optional[float]
+        self._end_time: Optional[float] = None
         self._task: Optional[asyncio.Task] = None
 
     def make_notification_request_to_start_training(
