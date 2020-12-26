@@ -263,7 +263,7 @@ class LabeledIndex:
         for index_type in index_types:
             if self.training_jobs[index_type].started:
                 continue
-            asyncio.create_task(self.training_jobs[index_type].start(output_paths))
+            new_request = self.training_jobs[index_type].start(output_paths)
 
     async def handle_training_status_update(self, result: JSONType):
         # Because training takes a long time, the trainer sends us back an HTTP request
@@ -317,7 +317,8 @@ class LabeledIndex:
         # pool to avoid blocking the event loop)
         # TODO(mihirg): Consider deleting all unnecessary intermediates from NAS after
         self._load_local_indexes()
-        with concurrent.futures.ProcessPoolExecutor(max_workers=1) as pool:
+        with concurrent.futures.ProcessPoolExecutor() as pool:
+            tasks = []
             for index_type, index in self.indexes.items():
                 index_dir = self.training_jobs[index_type].mounted_index_dir
                 shard_paths = [
@@ -326,9 +327,15 @@ class LabeledIndex:
                     for p in index_dir.glob(shard_tmpl.format("*"))
                 ]
 
-                await loop.run_in_executor(
-                    pool, functools.partial(index.merge_partial_indexes, shard_paths)
+                task = asyncio.create_task(
+                    loop.run_in_executor(
+                        pool,
+                        functools.partial(index.merge_partial_indexes, shard_paths),
+                    )
                 )
+                tasks.append(task)
+
+            await asyncio.gather(*tasks)
 
         # Upload final index to Cloud Storage
         await self.upload()
@@ -828,8 +835,8 @@ async def query_svm(request):
 @app.listener("after_server_stop")
 async def cleanup(app, loop):
     print("Terminating:")
-    await _cleanup_clusters()
     await _cleanup_index_build_jobs()
+    await _cleanup_clusters()
 
 
 async def _cleanup_index_build_jobs():

@@ -189,7 +189,7 @@ class TrainingJob:
             "elapsed_time": end_time - start_time,
         }
 
-    async def start(self, paths: List[str]):
+    def start(self, paths: List[str]):
         self.started = True
         self._task = asyncio.create_task(self.run_until_complete(paths))
 
