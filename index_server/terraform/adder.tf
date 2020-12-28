@@ -1,6 +1,6 @@
 variable "adder_image_name" {
   type    = string
-  default = "gcr.io/visualdb-1046/forager-index-adder"
+  default = "gcr.io/visualdb-1046/forager-index-adder:latest"
 }
 
 variable "adder_node_pool_name" {
