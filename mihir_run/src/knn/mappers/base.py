@@ -130,7 +130,11 @@ class Mapper(abc.ABC):
             {
                 "worker_id": self.worker_id,
                 "profiling": {
-                    k: {"mean": v.mean(), "std": v.stddev(), "n": len(v)}
+                    k: {
+                        "mean": v.mean(),
+                        "std": v.stddev() if len(v) else 0,
+                        "n": len(v),
+                    }
                     for k, v in profiling_results.items()
                 },
                 "outputs": final_outputs,

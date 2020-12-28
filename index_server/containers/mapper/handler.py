@@ -27,9 +27,6 @@ class IndexEmbeddingMapper(Mapper):
         SERIALIZE = 1
 
     def initialize_container(self):
-        torch.set_grad_enabled(False)
-        torch.set_num_threads(1)
-
         # Create model
         shape = ShapeSpec(channels=3)
         self.model = torch.nn.Sequential(
@@ -42,10 +39,10 @@ class IndexEmbeddingMapper(Mapper):
         self.model.eval()
 
         # Store relevant attributes of config
-        self.pixel_mean = torch.Tensor(config.RESNET_CONFIG.MODEL.PIXEL_MEAN).view(
+        self.pixel_mean = torch.tensor(config.RESNET_CONFIG.MODEL.PIXEL_MEAN).view(
             -1, 1, 1
         )
-        self.pixel_std = torch.Tensor(config.RESNET_CONFIG.MODEL.PIXEL_STD).view(
+        self.pixel_std = torch.tensor(config.RESNET_CONFIG.MODEL.PIXEL_STD).view(
             -1, 1, 1
         )
         self.input_format = config.RESNET_CONFIG.INPUT.FORMAT

@@ -7,6 +7,10 @@ import torch
 from typing import Any, Dict, List
 
 
+torch.set_grad_enabled(False)
+torch.set_num_threads(1)
+
+
 # AUGMENTATIONS
 
 
@@ -86,4 +90,5 @@ def run(
 
     # Input: NCHW
     # Output: {'res4': NCHW, 'res5': NCHW} where N = 1
-    return model(image.unsqueeze(dim=0))
+    output_dict = model(image.unsqueeze(dim=0))
+    return {k: v.detach() for k, v in output_dict.items()}
