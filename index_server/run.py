@@ -299,7 +299,6 @@ class LabeledIndex:
         if index_type in self.training_jobs:
             await self.training_jobs[index_type].handle_result(result)
 
-    @utils.log_exception_from_coro_but_return_none
     async def start_adding_eventually(self):
         self.index_dir.mkdir(parents=True, exist_ok=False)
         indexes = {}
@@ -353,7 +352,6 @@ class LabeledIndex:
         self.logger.info(f"Add: finished with {len(shard_tmpls)} shard templates")
         self.merge_task = asyncio.create_task(self.merge_indexes(shard_tmpls))
 
-    @utils.log_exception_from_coro_but_return_none
     async def merge_indexes(self, shard_tmpls: Set[str]):
         loop = asyncio.get_running_loop()
 
