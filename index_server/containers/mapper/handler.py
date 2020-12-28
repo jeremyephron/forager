@@ -1,24 +1,62 @@
+import asyncio
+import concurrent
 from enum import Enum
 import os
 from pathlib import Path
 
+import aiohttp
 import numpy as np
+import torch
 
-from typing import List, Tuple, Union
+from detectron2.layers import ShapeSpec
+from detectron2.checkpoint.detection_checkpoint import DetectionCheckpointer
+from detectron2.modeling.backbone.resnet import build_resnet_backbone
+
+from typing import List, Optional, Tuple, Union
 
 from knn import utils
+from knn.mappers import Mapper
 
-from base import ResNetBackboneMapper
 import config
+import inference
 
 
-class IndexEmbeddingMapper(ResNetBackboneMapper):
+class IndexEmbeddingMapper(Mapper):
     class ReturnType(Enum):
         SAVE = 0
         SERIALIZE = 1
 
-    def initialize_container(self):
-        super().initialize_container(config.RESNET_CONFIG, config.WEIGHTS_PATH)
+    def initialize_container(self, cfg, weights_path):
+        torch.set_grad_enabled(False)
+        torch.set_num_threads(1)
+
+        # Create model
+        shape = ShapeSpec(channels=3)
+        self.model = torch.nn.Sequential(build_resnet_backbone(cfg, shape))
+
+        # Load model weights
+        checkpointer = DetectionCheckpointer(self.model, save_to_disk=False)
+        checkpointer.load(weights_path)
+        self.model.eval()
+
+        # Store relevant attributes of config
+        self.pixel_mean = torch.Tensor(cfg.MODEL.PIXEL_MEAN).view(-1, 1, 1)
+        self.pixel_std = torch.Tensor(cfg.MODEL.PIXEL_STD).view(-1, 1, 1)
+        self.input_format = cfg.INPUT.FORMAT
+
+        # Create connection pool
+        self.session = aiohttp.ClientSession()
+
+        # Create inference pool
+        if config.NUM_CPUS > 1:
+            self.model.share_memory()
+            self.pixel_mean.share_memory()
+            self.pixel_std.share_memory()
+            self.pool_executor = concurrent.futures.ProcessPoolExecutor(
+                config.NUM_CPUS, mp_context=torch.multiprocessing.get_context("spawn")
+            )
+        else:
+            self.pool_executor = None
 
     async def initialize_job(self, job_args):
         return_type = job_args.get("return_type", "serialize")
@@ -37,16 +75,34 @@ class IndexEmbeddingMapper(ResNetBackboneMapper):
         self, input, job_id, job_args, request_id, element_index
     ) -> np.ndarray:
         image_path = input["image"]
+        image_patch = input.get("patch", (0, 0, 1, 1))
+        augmentations = input.get("augmentations", {})
+
+        # Download image
         if "http" not in image_path:
             image_bucket = job_args["input_bucket"]
             image_path = os.path.join(config.GCS_URL_PREFIX, image_bucket, image_path)
+        image_bytes = await self.download_image(image_path)
 
-        augmentations = input.get("augmentations", {})
-        x1f, y1f, x2f, y2f = input.get("patch", (0, 0, 1, 1))
-
-        model_output_dict = await self.download_and_process_image(
-            image_path, [x1f, y1f, x2f, y2f], augmentations, request_id
+        # Run inference
+        inference_args = (
+            image_bytes,
+            image_patch,
+            augmentations,
+            self.input_format,
+            self.pixel_mean,
+            self.pixel_std,
+            self.model,
         )
+        if self.pool_executor:
+            loop = asyncio.get_running_loop()
+            model_output_dict = await loop.run_in_executor(
+                self.pool_executor,
+                inference.run,
+                *inference_args,
+            )
+        else:
+            model_output_dict = inference.run(*inference_args)
 
         spatial_embeddings = next(iter(model_output_dict.values())).numpy()
         n, c, h, w = spatial_embeddings.shape
@@ -56,11 +112,11 @@ class IndexEmbeddingMapper(ResNetBackboneMapper):
     async def postprocess_chunk(
         self,
         inputs,
-        outputs: List[np.ndarray],
+        outputs: List[Optional[np.ndarray]],
         job_id,
         job_args,
         request_id,
-    ) -> Union[Tuple[str, List[int]], Tuple[None, List[str]]]:
+    ) -> Union[Tuple[str, List[Optional[int]]], Tuple[None, List[Optional[str]]]]:
         if job_args["return_type"] == IndexEmbeddingMapper.ReturnType.SAVE:
             with self.profiler(request_id, "save_time"):
                 # Save chunk embeddings dict to disk

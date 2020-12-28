@@ -22,6 +22,6 @@ RUN wget -i resources.txt \
 # Run the web service on container startup.
 COPY . ./
 ENV LRU_CACHE_CAPACITY=1
-# ENV OMP_NUM_THREADS=1
-# ENV MKL_NUM_THREADS=1
+ENV OMP_NUM_THREADS=1
+ENV MKL_NUM_THREADS=1
 CMD exec uvicorn --host "0.0.0.0" --port $PORT --workers 1 --log-level warning handler:mapper

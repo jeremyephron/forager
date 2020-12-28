@@ -374,7 +374,8 @@ class LabeledIndex:
                 task = asyncio.create_task(
                     loop.run_in_executor(
                         pool,
-                        functools.partial(index.merge_partial_indexes, shard_paths),
+                        index.merge_partial_indexes,
+                        shard_paths,
                     ),
                     name=index_type.name,
                 )
