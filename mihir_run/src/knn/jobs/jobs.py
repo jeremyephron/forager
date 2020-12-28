@@ -133,7 +133,6 @@ class MapReduceJob:
 
         self._task = asyncio.create_task(task())
 
-    @utils.log_exception_from_coro_but_return_none
     async def run_until_complete(
         self,
         iterable: InputSequenceType,
@@ -163,7 +162,10 @@ class MapReduceJob:
                     ),
                     self.mapper.n_mappers,
                 ):
-                    self._reduce_chunk(*(await response_tuple))
+                    try:
+                        self._reduce_chunk(*(await response_tuple))
+                    except Exception as e:
+                        print(e)
 
             if self._n_total is None:
                 self._n_total = self._n_successful + self._n_failed
