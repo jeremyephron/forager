@@ -270,6 +270,7 @@ class LabeledIndex:
         index_type: Optional[IndexType] = None,
     ):
         if mapper_result.finished:
+            # TODO(mihirg): Debug why this isn't printing out
             self.logger.info(
                 f"Map: processed {mapper_result.num_images} images, finished"
             )
@@ -357,6 +358,7 @@ class LabeledIndex:
 
         # Step 4: "Merge" shards from shared disk into final local index (in a process
         # pool to avoid blocking the event loop)
+        # TODO(mihirg): Debug why this is slow/hanging
         # TODO(mihirg): Consider deleting all unnecessary intermediates from NAS after
         self._load_local_indexes()
         with concurrent.futures.ProcessPoolExecutor() as pool:
@@ -378,7 +380,7 @@ class LabeledIndex:
                     name=index_type.name,
                 )
                 tasks.append(task)
-                self.logger.debug(
+                self.logger.info(
                     f"Merge ({index_type.name}): started with {len(shard_paths)} shards"
                 )
 
@@ -386,7 +388,7 @@ class LabeledIndex:
                 assert isinstance(done, asyncio.Task)
                 await done  # raise if exception
                 index_name = done.get_name()
-                self.logger.debug(f"Merge ({index_name}): finished")
+                self.logger.info(f"Merge ({index_name}): finished")
 
         # Upload final index to Cloud Storage
         await self.upload()
