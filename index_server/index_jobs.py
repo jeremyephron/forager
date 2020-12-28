@@ -46,17 +46,15 @@ class MapperReducer(Reducer):
         self.num_embeddings = 0
         self.output_paths: List[str] = []
 
-        self.wake_gen = asyncio.Condition()
+        self.state_changed = asyncio.Condition()
         self.finished = asyncio.Event()
 
     def add_notification_request(self, notif: NotificationRequest):
         self.notifications[uuid.uuid4()] = notif
 
-    @utils.unasync_as_task
-    async def handle_chunk_result(self, chunk, chunk_output):
+    def handle_chunk_result(self, chunk, chunk_output):
         self.output_paths.append(chunk_output)
-        async with self.wake_gen:
-            self.wake_gen.notify_all()
+        self.wake_gen()
 
     def handle_result(self, input, output):
         self.num_images += 1
@@ -80,12 +78,9 @@ class MapperReducer(Reducer):
             notif = self.notifications.pop(k)
             notif.callback(callback_data)
 
-    @utils.unasync_as_task
-    async def finish(self):
-        print("Mapper finished")
+    def finish(self):
         self.finished.set()
-        async with self.wake_gen:
-            self.wake_gen.notify_all()
+        self.wake_gen()
 
     @property
     def result(self) -> Result:
@@ -99,6 +94,11 @@ class MapperReducer(Reducer):
             self.finished.is_set(),
         )
 
+    @utils.unasync_as_task
+    async def wake_gen(self):
+        async with self.state_changed:
+            self.state_changed.notify_all()
+
     async def output_paths_gen(self):
         i = 0
         while True:
@@ -108,8 +108,8 @@ class MapperReducer(Reducer):
             elif self.finished.is_set():
                 break
             else:
-                async with self.wake_gen:
-                    await self.wake_gen.wait()
+                async with self.state_changed:
+                    await self.state_changed.wait()
 
 
 class AdderReducer(Reducer):
