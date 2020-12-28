@@ -2,6 +2,7 @@ aiohttp[speedups]
 faiss-cpu
 numpy
 PyYAML
+runstats
 sanic
 uvicorn
 sanic_compress

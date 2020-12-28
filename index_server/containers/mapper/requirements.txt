@@ -7,6 +7,7 @@ detectron2==0.1.1+cpu
 Pillow
 aiohttp[speedups]
 numpy
+runstats
 sanic
 uvicorn
 sanic_compress
