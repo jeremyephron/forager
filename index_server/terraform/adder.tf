@@ -116,6 +116,8 @@ resource "kubernetes_deployment" "adder_dep" {
       }
     }
   }
+
+  depends_on = [google_container_cluster.cluster, google_container_node_pool.adder_np]
 }
 
 resource "kubernetes_service" "adder_svc" {

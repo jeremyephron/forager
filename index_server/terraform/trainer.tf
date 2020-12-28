@@ -117,6 +117,8 @@ spec:
         persistentVolumeClaim:
           claimName: ${kubernetes_persistent_volume_claim.nfs_claim.metadata.0.name}
 YAML
+
+  depends_on = [google_container_cluster.cluster, google_container_node_pool.trainer_np]
 }
 
 resource "kubernetes_service" "trainer_svc" {

@@ -121,6 +121,8 @@ resource "kubernetes_deployment" "mapper_dep" {
       }
     }
   }
+
+  depends_on = [google_container_cluster.cluster, google_container_node_pool.mapper_np]
 }
 
 resource "kubernetes_service" "mapper_svc" {
