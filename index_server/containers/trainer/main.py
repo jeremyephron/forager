@@ -130,7 +130,8 @@ class TrainingJob:
         index_dir = config.INDEX_DIR_TMPL.format(self.index_id, self.index_name)
         metric = "inner product" if self.inner_product else "L2"
 
-        # TODO(mihirg): Figure out how to handle errors like OOMs and CUDA errors
+        # TODO(mihirg): Figure out how to handle errors like OOMs and CUDA errors,
+        # maybe start a subprocess?
         try:
             train(embeddings, self.index_kwargs, metric, index_dir)
         except Exception as e:
