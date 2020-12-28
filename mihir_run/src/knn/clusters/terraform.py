@@ -11,7 +11,7 @@ class TerraformModule:
     def __init__(self, module_path: Path, copy: bool = True):
         if copy:
             self.parent_dir = TemporaryDirectory()
-            self.dir = Path(self.parent_dir) / module_path.name
+            self.dir = Path(self.parent_dir.name) / module_path.name
             copytree(module_path, self.dir)
         else:
             self.parent_dir = None
