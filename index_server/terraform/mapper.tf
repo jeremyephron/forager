@@ -105,6 +105,11 @@ resource "kubernetes_deployment" "mapper_dep" {
             mount_path = local.nfs_mount_dir
             name       = local.nfs_volume_name
           }
+
+          volume_mount {
+            mount_path = "/dev/shm"
+            name       = "dshm"
+          }
         }
 
         volume {
@@ -112,6 +117,14 @@ resource "kubernetes_deployment" "mapper_dep" {
 
           persistent_volume_claim {
             claim_name = kubernetes_persistent_volume_claim.nfs_claim.metadata.0.name
+          }
+        }
+
+        volume {
+          name = "dshm"
+
+          empty_dir {
+            medium = "Memory"
           }
         }
 
