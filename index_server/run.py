@@ -269,6 +269,8 @@ class LabeledIndex:
         mapper_result: MapperReducer.Result,
         index_type: Optional[IndexType] = None,
     ):
+        print(f"start_training({index_type})")
+
         if mapper_result.finished:
             self.logger.info(
                 f"Map: processed {mapper_result.num_images} images, finished"
