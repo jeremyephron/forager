@@ -56,8 +56,8 @@ class IndexEmbeddingMapper(Mapper):
         # Create inference pool
         if config.NUM_CPUS > 1:
             self.model.share_memory()
-            self.pixel_mean.share_memory()
-            self.pixel_std.share_memory()
+            self.pixel_mean.share_memory_()
+            self.pixel_std.share_memory_()
             self.pool_executor = concurrent.futures.ProcessPoolExecutor(
                 config.NUM_CPUS, mp_context=torch.multiprocessing.get_context("spawn")
             )
