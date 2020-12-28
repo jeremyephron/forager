@@ -162,10 +162,7 @@ class MapReduceJob:
                     ),
                     self.mapper.n_mappers,
                 ):
-                    try:
-                        self._reduce_chunk(*(await response_tuple))
-                    except Exception as e:
-                        print(e)
+                    self._reduce_chunk(*response_tuple)
 
             if self._n_total is None:
                 self._n_total = self._n_successful + self._n_failed
