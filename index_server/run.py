@@ -270,7 +270,6 @@ class LabeledIndex:
         index_type: Optional[IndexType] = None,
     ):
         if mapper_result.finished:
-            # TODO(mihirg): Debug why this isn't printing out
             self.logger.info(
                 f"Map: processed {mapper_result.num_images} images, finished"
             )

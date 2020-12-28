@@ -82,6 +82,7 @@ class MapperReducer(Reducer):
 
     @utils.unasync_as_task
     async def finish(self):
+        print("Mapper finished")
         self.finished.set()
         async with self.wake_gen:
             self.wake_gen.notify_all()
