@@ -132,7 +132,7 @@ class Mapper(abc.ABC):
                 "profiling": {
                     k: {
                         "mean": v.mean(),
-                        "std": v.stddev() if len(v) else 0,
+                        "std": v.stddev() if len(v) > 1 else 0,
                         "n": len(v),
                     }
                     for k, v in profiling_results.items()
