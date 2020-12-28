@@ -1,6 +1,6 @@
 variable "mapper_image_name" {
   type    = string
-  default = "gcr.io/visualdb-1046/forager-index-mapper"
+  default = "gcr.io/visualdb-1046/forager-index-mapper:latest"
 }
 
 variable "mapper_node_pool_name" {
