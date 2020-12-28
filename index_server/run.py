@@ -8,7 +8,6 @@ import json
 import logging
 import operator
 import os
-from pathlib import Path
 import shutil
 import random
 import time
@@ -21,10 +20,11 @@ import sanic.response as resp
 from sklearn import svm
 from sklearn.metrics import accuracy_score
 
-from typing import DefaultDict, Dict, List, Optional, Iterable
+from typing import DefaultDict, Dict, List, Optional, Set
 
 from interactive_index import InteractiveIndex
 
+from knn import utils
 from knn.clusters import TerraformModule
 from knn.jobs import MapReduceJob, MapperSpec
 from knn.reducers import PoolingReducer, TrivialReducer
@@ -51,7 +51,7 @@ log_fh.setLevel(logging.DEBUG)
 
 # Create a console handler to print errors to console
 log_ch = logging.StreamHandler()
-log_ch.setLevel(logging.ERROR)
+log_ch.setLevel(logging.INFO)
 
 # create formatter and add it to the handlers
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -67,13 +67,15 @@ class LabeledIndex:
     LABEL_FILENAME = "labels.json"
 
     # Don't use this directly - use a @classmethod constructor
-    def __init__(self, *args, **kwargs):
-        self.logger = logging.getLogger("index_server.LabeledIndex")
+    def __init__(self, index_id: str, *args, **kwargs):
+        self.index_id = index_id
+        self.index_dir = config.INDEX_PARENT_DIR / self.index_id
+        self.logger = logging.getLogger(
+            f"index_server.LabeledIndex({self.index_id[:6]})"
+        )
         self.ready = asyncio.Event()
 
         # Will be filled by each individual constructor
-        self.index_id: Optional[str] = None
-        self.index_dir: Optional[Path] = None
         self.labels: List[str] = []
         self.indexes: Dict[IndexType, InteractiveIndex] = {}
 
@@ -163,20 +165,14 @@ class LabeledIndex:
             and not self.start_adding_eventually_task.done()
         ):
             self.start_adding_eventually_task.cancel()
-            try:
-                await self.start_adding_eventually_task
-            except asyncio.CancelledError:
-                pass
+            await self.start_adding_eventually_task
         if self.adder_job:
             await self.adder_job.stop()
 
         # Merge
         if self.merge_task:
             self.merge_task.cancel()
-            try:
-                await self.merge_task
-            except asyncio.CancelledError:
-                pass
+            await self.merge_task
 
         # Delete unnecessary intermediates from disk
         if not self.ready.is_set():
@@ -193,11 +189,7 @@ class LabeledIndex:
         *args,
         **kwargs,
     ):
-        self = cls(*args, **kwargs)
-
-        self.index_id = str(uuid.uuid4())
-        self.index_dir = config.INDEX_PARENT_DIR / self.index_id
-        self.index_dir.mkdir(parents=True, exist_ok=False)
+        self = cls(str(uuid.uuid4()), *args, **kwargs)
 
         # Randomly shuffle input images
         self.labels = random.sample(paths, k=len(paths))
@@ -240,6 +232,7 @@ class LabeledIndex:
             request_timeout=config.MAPPER_REQUEST_TIMEOUT,
         )
         await self.mapper_job.start(iterable, self.start_training, len(paths))
+        self.logger.info(f"Map: started with {len(paths)} images")
 
         # Start a background task that waits until the Train step (started automatically
         # per above) is done and then kicks off the Add step
@@ -250,6 +243,10 @@ class LabeledIndex:
         return self
 
     def configure_indexes(self, mapper_result: MapperReducer.Result):
+        self.logger.debug(
+            f"Map: processed {mapper_result.num_images} images, now configuring indexes"
+        )
+
         # Once we've successfully computed embeddings for a few images, use the results
         # so far to configure the indexes (number of centroids, etc.), and then use that
         # index configuration to figure out the number of images/embeddings we need to
@@ -272,6 +269,11 @@ class LabeledIndex:
         mapper_result: MapperReducer.Result,
         index_type: Optional[IndexType] = None,
     ):
+        if mapper_result.finished:
+            self.logger.info(
+                f"Map: processed {mapper_result.num_images} images, finished"
+            )
+
         # Step 2: "Train" each index once we have enough images/spatial embeddings (or
         # when the Map step finishes, in which case index_type=None indicating that we
         # should train all remaining indexes)
@@ -280,6 +282,11 @@ class LabeledIndex:
             if self.training_jobs[index_type].started:
                 continue
             self.training_jobs[index_type].start(mapper_result)
+            self.logger.info(
+                f"Train ({index_type.name}): started with "
+                f"{mapper_result.num_embeddings} embeddings for "
+                f"{mapper_result.num_images} images"
+            )
 
     async def handle_training_status_update(self, result: JSONType):
         # Because training takes a long time, the trainer sends us back an HTTP request
@@ -287,24 +294,42 @@ class LabeledIndex:
         # This function is called by the Sanic endpoint and passes the status update
         # along to the relevant training job.
         index_type = IndexType[result["index_name"]]
+        self.logger.debug(f"Train ({index_type.name}): recieved status update {result}")
+
         if index_type in self.training_jobs:
             await self.training_jobs[index_type].handle_result(result)
 
+    @utils.log_exception_from_coro_but_return_none
     async def start_adding_eventually(self):
-        # Wait until all indexes are trained
+        self.index_dir.mkdir(parents=True, exist_ok=False)
         indexes = {}
-        for index_type, job in self.training_jobs.items():
-            await job.finished.wait()
+
+        # Wait until all indexes are trained
+        for done in asyncio.as_completed(
+            [
+                asyncio.create_task(job.finished.wait, name=index_type.name)
+                for index_type, job in self.training_jobs.items()
+            ]
+        ):
+            assert isinstance(done, asyncio.Task)
+            await done
+
+            index_type = IndexType[done.get_name()]
+            job = self.training_jobs[index_type]
             indexes[index_type.name] = {
                 "average": job.average,
                 "index_dir": job.index_dir,
             }
-            print(f"Job for index {index_type.name} finished")
+            self.logger.info(f"Train ({index_type.name}): finished")
 
             # Copy index training results to local disk before anything else gets
             # written into the index directory on the shared disk
-            shutil.copytree(job.mounted_index_dir, self.index_dir / index_type.name)
-            print(f"Copied {job.mounted_index_dir} to {self.index_dir}")
+            index_subdir = self.index_dir / index_type.name
+            shutil.copytree(job.mounted_index_dir, index_subdir)
+            self.logger.debug(
+                f"Train ({index_type.name}): copied trained index from shared disk "
+                f"({job.mounted_index_dir}) to local disk ({index_subdir})"
+            )
 
         # Step 3: As the Map step computes and saves embeddings, "Add" them into shards
         # of the newly trained indexes
@@ -322,14 +347,17 @@ class LabeledIndex:
         await self.adder_job.start(
             self.mapper_job.reducer.output_paths_gen(), self.start_merging
         )  # iterable is an async generator that yields as the Map step produces outputs
+        self.logger.info("Add: started")
 
-    def start_merging(self, shard_tmpls: Iterable[str]):
+    def start_merging(self, shard_tmpls: Set[str]):
+        self.logger.info(f"Add: finished with {len(shard_tmpls)} shard templates")
         self.merge_task = asyncio.create_task(self.merge_indexes(shard_tmpls))
 
-    async def merge_indexes(self, shard_tmpls: Iterable[str]):
+    @utils.log_exception_from_coro_but_return_none
+    async def merge_indexes(self, shard_tmpls: Set[str]):
         loop = asyncio.get_running_loop()
 
-        # Step 4: Merge shards from shared disk into final local index (in a process
+        # Step 4: "Merge" shards from shared disk into final local index (in a process
         # pool to avoid blocking the event loop)
         # TODO(mihirg): Consider deleting all unnecessary intermediates from NAS after
         self._load_local_indexes()
@@ -351,20 +379,20 @@ class LabeledIndex:
                     name=index_type.name,
                 )
                 tasks.append(task)
+                self.logger.debug(
+                    f"Merge ({index_type.name}): started with {len(shard_paths)} shards"
+                )
 
             for done in asyncio.as_completed(tasks):
                 assert isinstance(done, asyncio.Task)
-                await done
-
-                # index_name = done.get_name()
-                # e = done.exception()
-                # if e:
-                #     pass
-                # else:
-                #     pass
+                await done.result()  # raise if exception
+                index_name = done.get_name()
+                self.logger.debug(f"Merge ({index_name}): finished")
 
         # Upload final index to Cloud Storage
         await self.upload()
+
+        self.logger.info("Finished building index")
         self.ready.set()
 
     async def upload(self):
@@ -405,7 +433,7 @@ class LabeledIndex:
         *args,
         **kwargs,
     ) -> "LabeledIndex":
-        self = cls(*args, **kwargs)
+        self = cls(index_id, *args, **kwargs)
 
         # Download from Cloud Storage
         config.INDEX_PARENT_DIR.mkdir(parents=True, exist_ok=True)
@@ -417,14 +445,12 @@ class LabeledIndex:
             "cp",
             "-r",
             "-n",
-            f"{config.INDEX_UPLOAD_GCS_PATH}{index_id}",
+            f"{config.INDEX_UPLOAD_GCS_PATH}{self.index_id}",
             str(config.INDEX_PARENT_DIR),
         )
         await proc.wait()
 
         # Initialize indexes
-        self.index_id = index_id
-        self.index_dir = config.INDEX_PARENT_DIR / self.index_id
         self.labels = json.load((self.index_dir / self.LABEL_FILENAME).open())
         self._load_local_indexes()
         self.logger.info(f"Finished loading index from {self.index_dir}")

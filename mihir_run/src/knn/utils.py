@@ -116,6 +116,8 @@ def log_exception_from_coro_but_return_none(coro):
     async def wrapper(*args, **kwargs):
         try:
             return await coro(*args, **kwargs)
+        except asyncio.CancelledError:
+            pass
         except Exception:
             print(f"Error from {coro.__name__}")
             print(textwrap.indent(traceback.format_exc(), "  "))
