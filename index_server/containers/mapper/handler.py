@@ -118,6 +118,21 @@ class IndexEmbeddingMapper(Mapper):
             assert n == 1
             return spatial_embeddings.reshape((c, h * w)).T
 
+    async def download_image(
+        self, image_path: str, num_retries: int = config.DOWNLOAD_NUM_RETRIES
+    ) -> bytes:
+        for i in range(num_retries):
+            try:
+                async with self.session.get(image_path) as response:
+                    assert response.status == 200
+                    return await response.read()
+            except Exception:
+                if i < num_retries - 1:
+                    await asyncio.sleep(2 ** i)
+                else:
+                    raise
+        assert False  # unreachable
+
     async def postprocess_chunk(
         self,
         inputs,
