@@ -385,7 +385,9 @@ class LabeledIndex:
                     f"Merge ({index_type.name}): started with {len(shard_paths)} shards"
                 )
                 future.add_done_callback(
-                    lambda _: self.logger.info(f"Merge ({index_type.name}): finished")
+                    lambda _, index_type=index_type: self.logger.info(
+                        f"Merge ({index_type.name}): finished"
+                    )
                 )
 
             await asyncio.gather(*futures)
