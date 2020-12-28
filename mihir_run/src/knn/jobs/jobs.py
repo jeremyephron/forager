@@ -206,7 +206,14 @@ class MapReduceJob:
     @property
     def performance(self):
         return {
-            "profiling": {k: v.mean() for k, v in self._profiling.items()},
+            "profiling": {
+                k: {
+                    "mean": v.mean(),
+                    "std": v.stddev() if len(v) > 1 else 0,
+                    "n": len(v),
+                }
+                for k, v in self._profiling.items()
+            },
             "mapper_utilization": dict(enumerate(self._n_chunks_per_mapper.values())),
         }
 
@@ -278,8 +285,9 @@ class MapReduceJob:
         self._n_chunks_per_mapper[result["worker_id"]] += 1
 
         self._profiling["total_time"].push(elapsed_time)
-        for k, v in result["profiling"].items():
-            self._profiling[k].push(v)
+        for k, vs in result["profiling"].items():
+            for v in vs:
+                self._profiling[k].push(v)
 
         if result["chunk_output"]:
             self.reducer.handle_chunk_result(chunk, result["chunk_output"])

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import abc
 import asyncio
 import collections
@@ -6,7 +8,6 @@ import functools
 import time
 import uuid
 
-from runstats import Statistics
 from sanic import Sanic
 from sanic.response import json
 from sanic_compress import Compress
@@ -20,14 +21,16 @@ from knn.utils import JSONType
 class RequestProfiler:
     request_id: str
     category: str
-    results_dict: DefaultDict[str, DefaultDict[str, Statistics]]
+    results_dict: RequestProfiler.ProfilingDictType
     additional: float = 0.0
+
+    ProfilingDictType = DefaultDict[str, DefaultDict[str, List[float]]]
 
     def __enter__(self):
         self.start_time = time.perf_counter()
 
     def __exit__(self, type, value, traceback):
-        self.results_dict[self.request_id][self.category].push(
+        self.results_dict[self.request_id][self.category].append(
             time.perf_counter() - self.start_time + self.additional
         )
 
@@ -82,9 +85,9 @@ class Mapper(abc.ABC):
 
         self.worker_id = str(uuid.uuid4())
         self._args_by_job: Dict[str, Any] = {}
-        self._profiling_results_by_request: DefaultDict[
-            str, DefaultDict[str, Statistics]
-        ] = collections.defaultdict(lambda: collections.defaultdict(Statistics))
+        self._profiling_results_by_request: RequestProfiler.ProfilingDictType = (
+            collections.defaultdict(lambda: collections.defaultdict(list))
+        )
         self.profiler = functools.partial(
             RequestProfiler, results_dict=self._profiling_results_by_request
         )
@@ -125,18 +128,10 @@ class Mapper(abc.ABC):
                     chunk, raw_outputs, job_id, job_args, request_id
                 )
 
-        profiling_results = self._profiling_results_by_request.pop(request_id)
         return json(
             {
                 "worker_id": self.worker_id,
-                "profiling": {
-                    k: {
-                        "mean": v.mean(),
-                        "std": v.stddev() if len(v) > 1 else 0,
-                        "n": len(v),
-                    }
-                    for k, v in profiling_results.items()
-                },
+                "profiling": self._profiling_results_by_request.pop(request_id),
                 "outputs": final_outputs,
                 "chunk_output": chunk_output,
             }
