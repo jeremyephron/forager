@@ -1,6 +1,6 @@
 variable "create_node_pools_separately" {
   type    = bool
-  default = true
+  default = false
 }
 
 locals {
