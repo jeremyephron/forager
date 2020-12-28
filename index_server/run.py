@@ -307,7 +307,7 @@ class LabeledIndex:
         # Wait until all indexes are trained
         for done in asyncio.as_completed(
             [
-                asyncio.create_task(job.finished.wait, name=index_type.name)
+                asyncio.create_task(job.finished.wait(), name=index_type.name)
                 for index_type, job in self.training_jobs.items()
             ]
         ):
