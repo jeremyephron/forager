@@ -79,32 +79,36 @@ async def limited_as_completed_from_async_coro_gen(
 
     schedule_getting_next_coro()
 
-    while state.pending:
-        done_set, pending_set = await asyncio.wait(
-            state.pending, return_when=asyncio.FIRST_COMPLETED
-        )
-        state.pending = list(pending_set)
+    try:
+        while state.pending:
+            done_set, pending_set = await asyncio.wait(
+                state.pending, return_when=asyncio.FIRST_COMPLETED
+            )
+            state.pending = list(pending_set)
 
-        for done in done_set:
-            assert isinstance(done, asyncio.Task)
-            if done.get_name() == NEXT_CORO_TASK_NAME:
-                state.next_coro_is_pending = False
-                if state.hit_stop_iteration:
-                    continue
+            for done in done_set:
+                assert isinstance(done, asyncio.Task)
+                if done.get_name() == NEXT_CORO_TASK_NAME:
+                    state.next_coro_is_pending = False
+                    if state.hit_stop_iteration:
+                        continue
 
-                # Schedule the new coroutine
-                state.pending.append(asyncio.create_task(done.result()))
+                    # Schedule the new coroutine
+                    state.pending.append(asyncio.create_task(done.result()))
 
-                # If we have capacity, also ask for the next coroutine
-                if len(state.pending) < limit:
-                    schedule_getting_next_coro()
-            else:
-                # We definitely have capacity now, so ask for the next coroutine if
-                # we haven't already
-                if not state.next_coro_is_pending and not state.hit_stop_iteration:
-                    schedule_getting_next_coro()
+                    # If we have capacity, also ask for the next coroutine
+                    if len(state.pending) < limit:
+                        schedule_getting_next_coro()
+                else:
+                    # We definitely have capacity now, so ask for the next coroutine if
+                    # we haven't already
+                    if not state.next_coro_is_pending and not state.hit_stop_iteration:
+                        schedule_getting_next_coro()
 
-                yield done
+                    yield done
+    except Exception:
+        print("Error from limited_as_completed_from_async_coro_gen:")
+        print(textwrap.indent(traceback.format_exc(), "  "))
 
 
 # https://stackoverflow.com/a/50029150
