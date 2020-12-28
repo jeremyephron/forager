@@ -231,16 +231,17 @@ class TrainingJob:
         self._start_time = time.time()
         self.configure_index(mapper_result)
 
+        # TODO(mihirg): Add exponential backoff/better error handling
         try:
             request = self._construct_request(mapper_result.output_paths)
 
             while not self.finished.is_set():
+                print("try")
                 async with self._failed_or_finished:
                     async with self.session.post(
                         self.trainer_url, json=request
                     ) as response:
                         if response.status != 200:
-                            print(response)
                             continue
                     await self._failed_or_finished.wait()
         finally:
