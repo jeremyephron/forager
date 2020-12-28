@@ -133,6 +133,7 @@ class MapReduceJob:
 
         self._task = asyncio.create_task(task())
 
+    @utils.log_exception_from_coro_but_return_none
     async def run_until_complete(
         self,
         iterable: InputSequenceType,
