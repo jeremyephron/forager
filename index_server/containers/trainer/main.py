@@ -121,21 +121,19 @@ class TrainingJob:
             return self._done
 
     def run(self):
-        reduction = (
-            functools.partial(np.mean, axis=0, keepdims=True)
-            if self.average
-            else (lambda x: x)
-        )
-        embeddings, num_paths_read = load(self.paths, self.sample_rate, reduction)
-        index_dir = config.INDEX_DIR_TMPL.format(self.index_id, self.index_name)
-        metric = "inner product" if self.inner_product else "L2"
-
         # TODO(mihirg): Figure out how to handle errors like OOMs and CUDA errors,
         # maybe start a subprocess?
         try:
+            reduction = (
+                functools.partial(np.mean, axis=0, keepdims=True)
+                if self.average
+                else (lambda x: x)
+            )
+            embeddings, num_paths_read = load(self.paths, self.sample_rate, reduction)
+            index_dir = config.INDEX_DIR_TMPL.format(self.index_id, self.index_name)
+            metric = "inner product" if self.inner_product else "L2"
             train(embeddings, self.index_kwargs, metric, index_dir)
         except Exception as e:
-            print(f"Error in train. {type(e)}: {e}")
             traceback.print_exc()
             self.finish(False, reason=str(e))
         else:
