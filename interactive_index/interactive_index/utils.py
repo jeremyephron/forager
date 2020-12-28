@@ -10,6 +10,8 @@ import math
 from typing import List, Optional, Tuple
 
 import faiss
+import numpy as np
+from sklearn.metrics import pairwise_distances
 
 
 # Units in bytes
@@ -130,3 +132,50 @@ def invert_cantor_pairing(z: int) -> Tuple[int, int]:
     y = int(z - t)
     x = int(w - y)
     return x, y
+
+
+def sample_farthest_vectors(
+    index: 'InteractiveIndex',
+    xq: np.ndarray,
+    n_clusters: int,
+    n_sample: int
+) -> np.ndarray:
+    """
+    Samples `n_samples` vectors from each of the farthest `n_clusters` 
+    clusters within the provided index.
+
+    Args:
+        index: The index to search within.
+        xq: The query vector.
+        n_clusters: The number of clusters to sample from.
+        n_sample: The number of vectors to sample from each cluster.
+    
+    Returns:
+        The IDs of the vectors.
+
+    """
+
+    centroids = index.get_centroids()
+    xq = index.apply_transform(xq)
+
+    if index.metric == 'inner product':
+        farthest_centroid_inds = np.argsort(
+            [-xq.dot(centroids[i]) for i in range(len(centroids))]
+        )[:n_clusters]
+    else:
+        farthest_centroid_inds = np.argsort(
+            [-np.linalg.norm(xq - centroids[i]) for i in range(len(centroids))]
+        )[:n_clusters]
+
+    samples = []
+    for i in range(n_clusters):
+        vec_ids = index.get_cluster_ids(farthest_centroid_inds[i])
+        if len(vec_ids) <= n_sample:
+            samples.append(vec_ids)
+        else:
+            samples.append(
+                np.random.choice(vec_ids, size=n_sample, replace=False)
+            )
+
+    return np.concatenate(samples)
+

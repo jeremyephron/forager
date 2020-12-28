@@ -10,6 +10,7 @@ from typing import List, Optional, Tuple, Union, Sequence
 import warnings
 
 import faiss
+from faiss import ParameterSpace
 import numpy as np
 
 from interactive_index.config import read_config, CONFIG_DEFAULTS
@@ -235,7 +236,7 @@ class InteractiveIndex:
 
         idx = 0
         while idx < len(xb):
-            # gc.collect()
+            # gc.collect()  # TODO: does this improve memory performance?
 
             if self.n_vectors % self.vectors_per_index == 0:
                 # Need to create a new index
@@ -265,7 +266,7 @@ class InteractiveIndex:
             )
 
             index.reset()
-            # del index  # force free memory
+            # del index  # TODO: does this improve memory performance?
 
             if update_metadata:
                 self._save_metadata()
@@ -312,14 +313,81 @@ class InteractiveIndex:
 #         if self.use_gpu:
 #             # TODO: perhaps add memory check for training on GPU?
 #             index = to_all_gpus(index, self.co)
-        index_ivf = faiss.extract_index_ivf(index)
-        index_ivf.nprobe = n_probes if n_probes else self.n_probes
+        ParameterSpace().set_index_parameter(
+            index, 'nprobe', n_probes if n_probes else self.n_probes
+        )
         dists, inds = index.search(xq, k)
 
         if self.multi_id:
             inds = self._invert_cantor_pairing_vec(inds)
 
         return dists, inds
+
+    def apply_transform(self, x: np.ndarray) -> np.ndarray:
+        """
+        TODO: docstring
+
+        """
+
+        x = self._convert_src_to_numpy(x)
+        index = faiss.read_index(str(self.tempdir/self.MERGED_INDEX_NAME))
+        for i in range(index.chain.size()):
+            x = index.chain.at(i).apply_py(x)
+
+        return x
+
+    def get_cluster_ids(self, list_num: int) -> np.ndarray:
+        """
+        TODO: docstring
+
+        """
+
+        # TODO: assert IVF
+        assert self.is_trained
+        
+        # This fixes problem with SWIG and numpy int
+        list_num = int(list_num)
+
+        index = faiss.read_index(str(self.tempdir/self.MERGED_INDEX_NAME))
+
+        # Get the IVF from potentially opaque index
+        invlists = faiss.extract_index_ivf(index).invlists
+        list_size = invlists.list_size(list_num)
+        list_ids = np.zeros(list_size, dtype=np.int64)
+        temp_ids = invlists.get_ids(list_num)
+
+        # Need to copy since memory will be deallocated along with the invlist.
+        faiss.memcpy(faiss.swig_ptr(list_ids), temp_ids, list_ids.nbytes)
+        invlists.release_ids(list_num, temp_ids)
+
+        return list_ids
+
+    def get_centroids(self) -> np.ndarray:
+        """Returns the IVF centroids."""
+
+        # TODO: assert IVF
+        assert self.is_trained
+        
+        index = faiss.read_index(str(self.tempdir/self.MERGED_INDEX_NAME))
+
+        # Get the IVF from potentially opaque index
+        index_ivf = faiss.extract_index_ivf(index)
+
+        centroids = index_ivf.quantizer.reconstruct_n(0, index_ivf.nlist)
+        return centroids
+    
+    def get_cluster_sizes(self) -> np.ndarray:
+        """Returns the number of vectors assigned to each cluster."""
+
+        # TODO: assert IVF
+        assert self.is_trained
+        
+        index = faiss.read_index(str(self.tempdir/self.MERGED_INDEX_NAME))
+
+        # Get the IVF from potentially opaque index
+        invlists = faiss.extract_index_ivf(index).invlists
+        list_sizes = [invlists.list_size(i) for i in range(invlists.nlist)]
+        return list_sizes
 
     def cleanup(self) -> None:
         """Deletes all persistent files associated with this index."""
