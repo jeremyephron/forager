@@ -86,9 +86,8 @@ async def limited_as_completed_from_async_coro_gen(
         state.pending = list(pending_set)
 
         for done in done_set:
-            if not isinstance(done, asyncio.Task):
-                print("rip")
             assert isinstance(done, asyncio.Task)
+            print(done.get_name())
             if done.get_name() == NEXT_CORO_TASK_NAME:
                 state.next_coro_is_pending = False
                 if state.hit_stop_iteration:
