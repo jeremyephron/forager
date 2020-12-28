@@ -51,15 +51,11 @@ def load(
 
 
 # Step 2: Train index
-def train(
-    embeddings: np.ndarray, index_kwargs: Dict[str, Any], metric: str, index_dir: str
-):
+def train(embeddings: np.ndarray, index_kwargs: Dict[str, Any], index_dir: str):
     index_kwargs.update(
         tempdir=index_dir,
-        vectors_per_index=config.INDEX_SUBINDEX_SIZE,
         use_gpu=config.INDEX_USE_GPU,
         train_on_gpu=config.INDEX_TRAIN_ON_GPU,
-        metric=metric,
     )
 
     index = InteractiveIndex(**index_kwargs)
@@ -87,9 +83,6 @@ class TrainingJob:
     )
     average: bool = (
         False  # Whether to average embeddings for each key in saved dictionary
-    )
-    inner_product: bool = (
-        False  # Whether to use inner product metric rather than L2 distance
     )
 
     _done: bool = False
@@ -131,8 +124,7 @@ class TrainingJob:
             )
             embeddings, num_paths_read = load(self.paths, self.sample_rate, reduction)
             index_dir = config.INDEX_DIR_TMPL.format(self.index_id, self.index_name)
-            metric = "inner product" if self.inner_product else "L2"
-            train(embeddings, self.index_kwargs, metric, index_dir)
+            train(embeddings, self.index_kwargs, index_dir)
         except Exception as e:
             traceback.print_exc()
             self.finish(False, reason=str(e))

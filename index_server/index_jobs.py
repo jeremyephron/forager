@@ -212,6 +212,10 @@ class TrainingJob:
             pca_d=config.INDEX_PCA_DIM,
             sq=config.INDEX_SQ_BYTES,
         )
+        self.index_kwargs.update(
+            vectors_per_index=config.INDEX_SUBINDEX_SIZE,
+            metric="inner product" if self.inner_product else "L2",
+        )
 
     @property
     def status(self):
@@ -276,5 +280,4 @@ class TrainingJob:
                 1.0 if self.average else config.TRAINER_EMBEDDING_SAMPLE_RATE
             ),
             "average": self.average,
-            "inner_product": self.inner_product,
         }
