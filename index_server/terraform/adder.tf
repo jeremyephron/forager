@@ -3,6 +3,11 @@ variable "adder_image_name" {
   default = "gcr.io/visualdb-1046/forager-index-adder"
 }
 
+variable "adder_node_pool_name" {
+  type    = string
+  default = "adder-np"
+}
+
 variable "adder_num_nodes" {
   type    = number
   default = 75
@@ -18,6 +23,23 @@ locals {
   adder_internal_port = 5000
   adder_app_name      = "adder"
   adder_disk_size_gb  = 10
+}
+
+resource "google_container_node_pool" "adder_np" {
+  count      = var.create_node_pools_separately ? 1 : 0
+  name       = var.adder_node_pool_name
+  location   = var.zone
+  cluster    = google_container_cluster.cluster.name
+  node_count = var.adder_num_nodes
+
+  node_config {
+    preemptible  = true
+    machine_type = var.adder_node_type
+    disk_size_gb = local.adder_disk_size_gb
+    oauth_scopes = local.node_pool_oauth_scopes
+  }
+
+  depends_on = [kubernetes_persistent_volume_claim.nfs_claim]
 }
 
 resource "kubernetes_deployment" "adder_dep" {
@@ -89,7 +111,7 @@ resource "kubernetes_deployment" "adder_dep" {
         }
 
         node_selector = {
-          "cloud.google.com/gke-nodepool" = google_container_cluster.cluster.node_pool.1.name
+          "cloud.google.com/gke-nodepool" = var.adder_node_pool_name
         }
       }
     }

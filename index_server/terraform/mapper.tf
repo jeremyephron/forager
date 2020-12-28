@@ -3,6 +3,11 @@ variable "mapper_image_name" {
   default = "gcr.io/visualdb-1046/forager-index-mapper"
 }
 
+variable "mapper_node_pool_name" {
+  type    = string
+  default = "mapper-np"
+}
+
 variable "mapper_num_nodes" {
   type    = number
   default = 75
@@ -28,6 +33,23 @@ locals {
   mapper_internal_port = 5000
   mapper_app_name      = "mapper"
   mapper_disk_size_gb  = 10
+}
+
+resource "google_container_node_pool" "mapper_np" {
+  count      = var.create_node_pools_separately ? 1 : 0
+  name       = var.mapper_node_pool_name
+  location   = var.zone
+  cluster    = google_container_cluster.cluster.name
+  node_count = var.mapper_num_nodes
+
+  node_config {
+    preemptible  = true
+    machine_type = var.mapper_node_type
+    disk_size_gb = local.trainer_disk_size_gb
+    oauth_scopes = local.node_pool_oauth_scopes
+  }
+
+  depends_on = [kubernetes_persistent_volume_claim.nfs_claim]
 }
 
 resource "kubernetes_deployment" "mapper_dep" {
@@ -94,7 +116,7 @@ resource "kubernetes_deployment" "mapper_dep" {
         }
 
         node_selector = {
-          "cloud.google.com/gke-nodepool" = google_container_cluster.cluster.node_pool.0.name
+          "cloud.google.com/gke-nodepool" = var.mapper_node_pool_name
         }
       }
     }

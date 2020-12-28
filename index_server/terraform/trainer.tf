@@ -3,6 +3,11 @@ variable "trainer_image_name" {
   default = "gcr.io/visualdb-1046/forager-index-trainer"
 }
 
+variable "trainer_node_pool_name" {
+  type    = string
+  default = "trainer-np"
+}
+
 variable "trainer_num_nodes" {
   type    = number
   default = 4
@@ -33,6 +38,28 @@ locals {
   trainer_internal_port = 5000
   trainer_app_name      = "trainer"
   trainer_disk_size_gb  = 20
+}
+
+resource "google_container_node_pool" "trainer_np" {
+  count      = var.create_node_pools_separately ? 1 : 0
+  name       = var.trainer_node_pool_name
+  location   = var.zone
+  cluster    = google_container_cluster.cluster.name
+  node_count = var.trainer_num_nodes
+
+  node_config {
+    preemptible  = true
+    machine_type = var.trainer_node_type
+    disk_size_gb = local.trainer_disk_size_gb
+    oauth_scopes = local.node_pool_oauth_scopes
+
+    guest_accelerator {
+      type  = var.trainer_accelerator_type
+      count = var.trainer_accelerator_count
+    }
+  }
+
+  depends_on = [kubernetes_persistent_volume_claim.nfs_claim]
 }
 
 resource "kubectl_manifest" "trainer_dep" {
@@ -80,7 +107,7 @@ spec:
         - mountPath: ${local.nfs_mount_dir}
           name: ${local.nfs_volume_name}
       nodeSelector:
-        cloud.google.com/gke-nodepool: ${google_container_cluster.cluster.node_pool.2.name}
+        cloud.google.com/gke-nodepool: ${var.trainer_node_pool_name}
       tolerations:
       - effect: NoSchedule
         key: nvidia.com/gpu
