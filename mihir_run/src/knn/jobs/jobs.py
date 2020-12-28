@@ -124,7 +124,7 @@ class MapReduceJob:
     ) -> None:
         async def task():
             try:
-                result = await self.run_until_complete(iterable)
+                result = await self.run_until_complete(iterable, n_total)
             except asyncio.CancelledError:
                 pass
             else:

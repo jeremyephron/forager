@@ -206,9 +206,9 @@ class LabeledIndex:
             for i, path in enumerate(self.labels)
         )
 
-        # Wait for the cluster to start, then do some configuration for the Train
-        # step so that it can start automatically as soon as the Map step (below)
-        # has made sufficient progress
+        # Wait for the cluster to start, then do some configuration for the Train step,
+        # which will start automatically as soon as the Map step (below) has made
+        # sufficient progress
         await asyncio.gather(cluster.ready.wait(), cluster.mounted.wait())
         self.cluster = cluster
 
@@ -222,20 +222,18 @@ class LabeledIndex:
                 self.cluster.mount_parent_dir,
                 self.training_http_session,
             )
-        notification_requests_to_start_training = [
-            job.make_notification_request_to_start_training(
-                functools.partial(self.start_training, index_type=index_type)
-            )
-            for index_type, job in self.training_jobs.items()
-        ]
 
         # Step 1: "Map" input images to embedding files saved to shared disk
+        notification_request_to_configure_indexes = MapperReducer.NotificationRequest(
+            self.configure_indexes,
+            on_num_images=config.NUM_IMAGES_TO_MAP_BEFORE_CONFIGURING_INDEX,
+        )
         self.mapper_job = MapReduceJob(
             MapperSpec(
                 url=self.cluster.output["mapper_url"],
                 n_mappers=self.cluster.output["num_mappers"],
             ),
-            MapperReducer(notification_requests_to_start_training),
+            MapperReducer([notification_request_to_configure_indexes]),
             {"input_bucket": bucket, "return_type": "save"},
             n_retries=config.MAPPER_NUM_RETRIES,
             chunk_size=config.MAPPER_CHUNK_SIZE,
@@ -251,9 +249,27 @@ class LabeledIndex:
 
         return self
 
+    def configure_indexes(self, mapper_result: MapperReducer.Result):
+        # Once we've successfully computed embeddings for a few images, use the results
+        # so far to configure the indexes (number of centroids, etc.), and then use that
+        # index configuration to figure out the number of images/embeddings we need to
+        # start training each index. We can't do this before starting the Map step
+        # because, for the spatial indexes, we need to know how many spatial embeddings
+        # there are per image (dependent on model and image resolution) in order to
+        # estimate the total number of vectors that will be in the index, which informs
+        # the index configuration.
+        assert self.mapper_job
+        for index_type, job in self.training_jobs.items():
+            self.mapper_job.reducer.add_notification_request(
+                job.make_notification_request_to_start_training(
+                    mapper_result,
+                    functools.partial(self.start_training, index_type=index_type),
+                )
+            )
+
     def start_training(
         self,
-        output_paths: List[str],
+        mapper_result: MapperReducer.Result,
         index_type: Optional[IndexType] = None,
     ):
         # Step 2: "Train" each index once we have enough images/spatial embeddings (or
@@ -263,7 +279,7 @@ class LabeledIndex:
         for index_type in index_types:
             if self.training_jobs[index_type].started:
                 continue
-            new_request = self.training_jobs[index_type].start(output_paths)
+            self.training_jobs[index_type].start(mapper_result)
 
     async def handle_training_status_update(self, result: JSONType):
         # Because training takes a long time, the trainer sends us back an HTTP request
@@ -331,11 +347,21 @@ class LabeledIndex:
                     loop.run_in_executor(
                         pool,
                         functools.partial(index.merge_partial_indexes, shard_paths),
-                    )
+                    ),
+                    name=index_type.name,
                 )
                 tasks.append(task)
 
-            await asyncio.gather(*tasks)
+            for done in asyncio.as_completed(tasks):
+                assert isinstance(done, asyncio.Task)
+                await done
+
+                # index_name = done.get_name()
+                # e = done.exception()
+                # if e:
+                #     pass
+                # else:
+                #     pass
 
         # Upload final index to Cloud Storage
         await self.upload()
