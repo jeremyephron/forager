@@ -155,14 +155,14 @@ class MapReduceJob:
                 connector=connector,
                 timeout=timeout,
             ) as session:
-                async for response_tuple in utils.limited_as_completed(
+                async for response_tuple in utils.limited_as_completed_from_async_coro_gen(
                     (
                         self._request(session, mapper_url, chunk)
                         async for chunk in chunk_gen
                     ),
                     self.mapper.n_mappers,
                 ):
-                    self._reduce_chunk(*response_tuple)
+                    self._reduce_chunk(*(await response_tuple))
 
             if self._n_total is None:
                 self._n_total = self._n_successful + self._n_failed

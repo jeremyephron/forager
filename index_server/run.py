@@ -305,7 +305,7 @@ class LabeledIndex:
         indexes = {}
 
         # Wait until all indexes are trained
-        for done in asyncio.as_completed(
+        async for done in utils.as_completed_from_futures(
             [
                 asyncio.create_task(job.finished.wait(), name=index_type.name)
                 for index_type, job in self.training_jobs.items()
@@ -384,9 +384,9 @@ class LabeledIndex:
                     f"Merge ({index_type.name}): started with {len(shard_paths)} shards"
                 )
 
-            for done in asyncio.as_completed(tasks):
+            async for done in utils.as_completed_from_futures(tasks):
                 assert isinstance(done, asyncio.Task)
-                await done.result()  # raise if exception
+                await done  # raise if exception
                 index_name = done.get_name()
                 self.logger.debug(f"Merge ({index_name}): finished")
 
@@ -892,12 +892,14 @@ async def cleanup(app, loop):
     await _cleanup_clusters()
 
 
+@utils.log_exception_from_coro_but_return_none
 async def _cleanup_index_build_jobs():
     n = len(current_indexes)
     await current_indexes.clear_async()
     print(f"- cleaned up {n} index build jobs")
 
 
+@utils.log_exception_from_coro_but_return_none
 async def _cleanup_clusters():
     n = len(current_clusters)
     await current_clusters.clear_async()

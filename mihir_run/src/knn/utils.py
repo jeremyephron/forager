@@ -8,7 +8,18 @@ import traceback
 
 import numpy as np
 
-from typing import Any, Awaitable, AsyncIterable, List, Union, Dict, Iterator
+from typing import (
+    Any,
+    AsyncGenerator,
+    AsyncIterable,
+    Coroutine,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Set,
+    Union,
+)
 
 JSONType = Union[str, int, float, bool, None, Dict[str, Any], List[Any]]
 
@@ -48,7 +59,9 @@ class _LimitedAsCompletedState:
     next_coro_is_pending = False
 
 
-async def limited_as_completed(coros: AsyncIterable[Awaitable[Any]], limit: int):
+async def limited_as_completed_from_async_coro_gen(
+    coros: AsyncIterable[Coroutine[Any, Any, Any]], limit: int
+) -> AsyncGenerator[asyncio.Task, None]:
     state = _LimitedAsCompletedState()
     NEXT_CORO_TASK_NAME = "get_next_coro"
 
@@ -91,7 +104,20 @@ async def limited_as_completed(coros: AsyncIterable[Awaitable[Any]], limit: int)
                 if not state.next_coro_is_pending and not state.hit_stop_iteration:
                     schedule_getting_next_coro()
 
-                yield done.result()
+                yield done
+
+
+# https://stackoverflow.com/a/50029150
+async def as_completed_from_futures(
+    tasks: Iterable[asyncio.Future],
+) -> AsyncGenerator[asyncio.Future, None]:
+    pending_set: Set[asyncio.Future] = set(tasks)
+    while pending_set:
+        done_set, pending_set = await asyncio.wait(
+            pending_set, return_when=asyncio.FIRST_COMPLETED
+        )
+        for done in done_set:
+            yield done
 
 
 def unasync(coro):
