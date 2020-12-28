@@ -91,12 +91,6 @@ resource "kubernetes_deployment" "mapper_dep" {
             value = var.mapper_cpus
           }
 
-          resources {
-            limits {
-              cpu    = var.mapper_cpus
-            }
-          }
-
           port {
             container_port = local.mapper_internal_port
           }
@@ -109,6 +103,22 @@ resource "kubernetes_deployment" "mapper_dep" {
           volume_mount {
             mount_path = "/dev/shm"
             name       = "dshm"
+          }
+        }
+
+        affinity {
+          pod_anti_affinity {
+            required_during_scheduling_ignored_during_execution {
+              label_selector {
+                match_expressions {
+                  key      = "app"
+                  operator = "In"
+                  values   = [local.mapper_app_name]
+                }
+              }
+
+              topology_key = "kubernetes.io/hostname"
+            }
           }
         }
 
