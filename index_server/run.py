@@ -216,6 +216,7 @@ class LabeledIndex:
             )
 
         # Step 1: "Map" input images to embedding files saved to shared disk
+        # TODO(mihirg): Fail gracefully if entire Map, Train, or Add jobs fail
         notification_request_to_configure_indexes = MapperReducer.NotificationRequest(
             self.configure_indexes,
             on_num_images=config.NUM_IMAGES_TO_MAP_BEFORE_CONFIGURING_INDEX,
@@ -244,7 +245,8 @@ class LabeledIndex:
 
     def configure_indexes(self, mapper_result: MapperReducer.Result):
         self.logger.debug(
-            f"Map: processed {mapper_result.num_images} images, now configuring indexes"
+            "Map: configuring indexes after successfully processing "
+            f"{mapper_result.num_images} images"
         )
 
         # Once we've successfully computed embeddings for a few images, use the results
@@ -271,7 +273,8 @@ class LabeledIndex:
     ):
         if mapper_result.finished:
             self.logger.info(
-                f"Map: processed {mapper_result.num_images} images, finished"
+                "Map: finished after successfully processing "
+                f"{mapper_result.num_images} images"
             )
 
         # Step 2: "Train" each index once we have enough images/spatial embeddings (or
