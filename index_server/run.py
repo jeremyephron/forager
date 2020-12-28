@@ -371,27 +371,27 @@ class LabeledIndex:
                     for p in index_dir.glob(shard_tmpl.format("*"))
                 ]
 
-                task = asyncio.create_task(
-                    loop.run_in_executor(
-                        pool,
-                        index.merge_partial_indexes,
-                        shard_paths,
-                    ),
-                    name=index_type.name,
-                )
-                tasks.append(task)
+                # task = asyncio.create_task(
+                #     loop.run_in_executor(
+                #         pool,
+                #         index.merge_partial_indexes,
+                #         shard_paths,
+                #     ),
+                #     name=index_type.name,
+                # )
+                # tasks.append(task)
                 self.logger.info(
                     f"Merge ({index_type.name}): started with {len(shard_paths)} shards"
                 )
 
-            async for done in utils.as_completed_from_futures(tasks):
-                assert isinstance(done, asyncio.Task)
-                await done  # raise if exception
-                index_name = done.get_name()
-                self.logger.info(f"Merge ({index_name}): finished")
+            # async for done in utils.as_completed_from_futures(tasks):
+            #     assert isinstance(done, asyncio.Task)
+            #     await done  # raise if exception
+            #     index_name = done.get_name()
+            #     self.logger.info(f"Merge ({index_name}): finished")
 
         # Upload final index to Cloud Storage
-        await self.upload()
+        # await self.upload()
 
         self.logger.info("Finished building index")
         self.ready.set()
