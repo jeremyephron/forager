@@ -24,11 +24,11 @@ class RequestProfiler:
     additional: float = 0.0
 
     def __enter__(self):
-        self.start_time = time.time()
+        self.start_time = time.perf_counter()
 
     def __exit__(self, type, value, traceback):
         self.results_dict[self.request_id][self.category].push(
-            time.time() - self.start_time + self.additional
+            time.perf_counter() - self.start_time + self.additional
         )
 
 
@@ -78,7 +78,7 @@ class Mapper(abc.ABC):
     # INTERNAL
 
     def __init__(self, *args, start_server=True, **kwargs):
-        self._init_start_time = time.time()
+        self._init_start_time = time.perf_counter()
 
         self.worker_id = str(uuid.uuid4())
         self._args_by_job: Dict[str, Any] = {}
@@ -99,7 +99,7 @@ class Mapper(abc.ABC):
         else:
             self._server = None
 
-        self._init_time = time.time() - self._init_start_time
+        self._init_time = time.perf_counter() - self._init_start_time
 
     async def __call__(self, *args, **kwargs):
         if self._server is not None:

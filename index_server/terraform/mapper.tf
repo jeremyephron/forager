@@ -10,12 +10,12 @@ variable "mapper_node_pool_name" {
 
 variable "mapper_num_nodes" {
   type    = number
-  default = 75
+  default = 50
 }
 
 variable "mapper_node_type" {
   type    = string
-  default = "n2-highcpu-4"
+  default = "n2-highcpu-16"
 }
 
 variable "mapper_num_replicas_per_node" {
@@ -25,7 +25,7 @@ variable "mapper_num_replicas_per_node" {
 
 variable "mapper_cpus" {
   type    = number
-  default = 2
+  default = 14
 }
 
 locals {
