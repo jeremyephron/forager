@@ -26,23 +26,29 @@ class IndexEmbeddingMapper(Mapper):
         SAVE = 0
         SERIALIZE = 1
 
-    def initialize_container(self, cfg, weights_path):
+    def initialize_container(self):
         torch.set_grad_enabled(False)
         torch.set_num_threads(1)
 
         # Create model
         shape = ShapeSpec(channels=3)
-        self.model = torch.nn.Sequential(build_resnet_backbone(cfg, shape))
+        self.model = torch.nn.Sequential(
+            build_resnet_backbone(config.RESNET_CONFIG, shape)
+        )
 
         # Load model weights
         checkpointer = DetectionCheckpointer(self.model, save_to_disk=False)
-        checkpointer.load(weights_path)
+        checkpointer.load(config.WEIGHTS_PATH)
         self.model.eval()
 
         # Store relevant attributes of config
-        self.pixel_mean = torch.Tensor(cfg.MODEL.PIXEL_MEAN).view(-1, 1, 1)
-        self.pixel_std = torch.Tensor(cfg.MODEL.PIXEL_STD).view(-1, 1, 1)
-        self.input_format = cfg.INPUT.FORMAT
+        self.pixel_mean = torch.Tensor(config.RESNET_CONFIG.MODEL.PIXEL_MEAN).view(
+            -1, 1, 1
+        )
+        self.pixel_std = torch.Tensor(config.RESNET_CONFIG.MODEL.PIXEL_STD).view(
+            -1, 1, 1
+        )
+        self.input_format = config.RESNET_CONFIG.INPUT.FORMAT
 
         # Create connection pool
         self.session = aiohttp.ClientSession()
@@ -82,7 +88,8 @@ class IndexEmbeddingMapper(Mapper):
         if "http" not in image_path:
             image_bucket = job_args["input_bucket"]
             image_path = os.path.join(config.GCS_URL_PREFIX, image_bucket, image_path)
-        image_bytes = await self.download_image(image_path)
+        with self.profiler(request_id, "download_time"):
+            image_bytes = await self.download_image(image_path)
 
         # Run inference
         inference_args = (
@@ -94,20 +101,22 @@ class IndexEmbeddingMapper(Mapper):
             self.pixel_std,
             self.model,
         )
-        if self.pool_executor:
-            loop = asyncio.get_running_loop()
-            model_output_dict = await loop.run_in_executor(
-                self.pool_executor,
-                inference.run,
-                *inference_args,
-            )
-        else:
-            model_output_dict = inference.run(*inference_args)
+        with self.profiler(request_id, "inference_time"):
+            if self.pool_executor:
+                loop = asyncio.get_running_loop()
+                model_output_dict = await loop.run_in_executor(
+                    self.pool_executor,
+                    inference.run,
+                    *inference_args,
+                )
+            else:
+                model_output_dict = inference.run(*inference_args)
 
-        spatial_embeddings = next(iter(model_output_dict.values())).numpy()
-        n, c, h, w = spatial_embeddings.shape
-        assert n == 1
-        return spatial_embeddings.reshape((c, h * w)).T
+        with self.profiler(request_id, "flatten_time"):
+            spatial_embeddings = next(iter(model_output_dict.values())).numpy()
+            n, c, h, w = spatial_embeddings.shape
+            assert n == 1
+            return spatial_embeddings.reshape((c, h * w)).T
 
     async def postprocess_chunk(
         self,
