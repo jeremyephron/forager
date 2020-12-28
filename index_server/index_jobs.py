@@ -241,12 +241,8 @@ class TrainingJob:
                         self.trainer_url, json=request
                     ) as response:
                         if response.status != 200:
-                            if response.status != 503:
-                                print(response.status, response.text)
                             continue
                     await self._failed_or_finished.wait()
-                    if not self.finished.is_set():
-                        print("Failed")
         finally:
             self._end_time = time.time()
 
