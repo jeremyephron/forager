@@ -61,7 +61,7 @@ class _LimitedAsCompletedState:
 
 async def limited_as_completed_from_async_coro_gen(
     coros: AsyncIterable[Coroutine[Any, Any, Any]], limit: int
-) -> AsyncGenerator[Any, None]:
+) -> AsyncGenerator[asyncio.Task, None]:
     state = _LimitedAsCompletedState()
     NEXT_CORO_TASK_NAME = "get_next_coro"
 
@@ -87,7 +87,6 @@ async def limited_as_completed_from_async_coro_gen(
 
         for done in done_set:
             assert isinstance(done, asyncio.Task)
-            print(done.get_name())
             if done.get_name() == NEXT_CORO_TASK_NAME:
                 state.next_coro_is_pending = False
                 if state.hit_stop_iteration:
@@ -105,7 +104,7 @@ async def limited_as_completed_from_async_coro_gen(
                 if not state.next_coro_is_pending and not state.hit_stop_iteration:
                     schedule_getting_next_coro()
 
-                yield done.result()
+                yield done
 
 
 # https://stackoverflow.com/a/50029150
