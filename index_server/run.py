@@ -358,11 +358,10 @@ class LabeledIndex:
 
         # Step 4: "Merge" shards from shared disk into final local index (in a process
         # pool to avoid blocking the event loop)
-        # TODO(mihirg): Debug why this is slow/hanging
         # TODO(mihirg): Consider deleting all unnecessary intermediates from NAS after
         self._load_local_indexes()
         with concurrent.futures.ProcessPoolExecutor() as pool:
-            tasks = []
+            futures = []
             for index_type, index in self.indexes.items():
                 index_dir = self.training_jobs[index_type].mounted_index_dir
                 shard_paths = [
@@ -371,29 +370,26 @@ class LabeledIndex:
                     for p in index_dir.glob(shard_tmpl.format("*"))
                 ]
 
-                task = asyncio.create_task(
+                future = asyncio.ensure_future(
                     loop.run_in_executor(
                         pool,
                         index.merge_partial_indexes,
                         shard_paths,
-                    ),
-                    name=index_type.name,
+                    )
                 )
-                # tasks.append(task)
+                futures.append(future)
+
                 self.logger.info(
                     f"Merge ({index_type.name}): started with {len(shard_paths)} shards"
                 )
-                await task
-                self.logger.info(f"Merge ({index_type.name}): finished")
+                future.add_done_callback(
+                    lambda _: self.logger.info(f"Merge ({index_type.name}): finished")
+                )
 
-            # async for done in utils.as_completed_from_futures(tasks):
-            #     assert isinstance(done, asyncio.Task)
-            #     await done  # raise if exception
-            #     index_name = done.get_name()
-            #     self.logger.info(f"Merge ({index_name}): finished")
+            await asyncio.gather(*futures)
 
         # Upload final index to Cloud Storage
-        # await self.upload()
+        await self.upload()
 
         self.logger.info("Finished building index")
         self.ready.set()
