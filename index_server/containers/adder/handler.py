@@ -2,7 +2,7 @@ import functools
 
 import numpy as np
 
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from interactive_index import InteractiveIndex
 
@@ -14,7 +14,7 @@ import config
 
 
 class Index:
-    def __init__(self, index_dict: Dict[str, str], shard_tmpl: str):
+    def __init__(self, index_dict: Dict[str, Any], shard_tmpl: str):
         average: bool = index_dict.get("average", False)
         index_dir: str = index_dict["index_dir"]
 

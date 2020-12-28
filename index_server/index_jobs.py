@@ -240,6 +240,7 @@ class TrainingJob:
                         self.trainer_url, json=request
                     ) as response:
                         if response.status != 200:
+                            print(response)
                             continue
                     await self._failed_or_finished.wait()
         finally:
