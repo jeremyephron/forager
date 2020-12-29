@@ -47,7 +47,7 @@ class TerraformModule:
         self._output = None
         proc = await asyncio.create_subprocess_exec(
             "terraform", "refresh", cwd=self.dir
-        )  # refresh Kubernetes provider credentials
+        )
         await proc.wait()
         proc = await asyncio.create_subprocess_exec(
             "terraform", "destroy", "-auto-approve", cwd=self.dir
