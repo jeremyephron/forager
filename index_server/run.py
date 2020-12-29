@@ -341,7 +341,9 @@ class LabeledIndex:
 
         # Step 3: As the Map step computes and saves embeddings, "Add" them into shards
         # of the newly trained indexes
-        # TODO(mihirg): Add to each index independently as training finishes
+        # TODO(mihirg): Consider adding to each index independently as training
+        # finishes, then merging independently, then making indexes available on the
+        # frontend for queries as they are completed
         nproc = self.cluster.output["adder_nproc"]
         n_mappers = int(
             self.cluster.output["num_adders"] * config.ADDER_REQUEST_MULTIPLE(nproc)
@@ -373,8 +375,6 @@ class LabeledIndex:
         # Step 4: "Merge" shards from shared disk into final local index (in a process
         # pool to avoid blocking the event loop)
         # TODO(mihirg): Consider deleting all unnecessary intermediates from NAS after
-        # TODO(mihirg): Merge each index independently as adding finishes
-        # TODO(mihirg): Make indexes available independently on frontend as merging finishes
         self._load_local_indexes()
         with concurrent.futures.ProcessPoolExecutor() as pool:
             futures = []
