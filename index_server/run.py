@@ -221,15 +221,21 @@ class LabeledIndex:
             self.configure_indexes,
             on_num_images=config.NUM_IMAGES_TO_MAP_BEFORE_CONFIGURING_INDEX,
         )
+
+        nproc = self.cluster.output["mapper_nproc"]
+        n_mappers = int(
+            self.cluster.output["num_mappers"] * config.MAPPER_REQUEST_MULTIPLE(nproc)
+        )
+        chunk_size = config.MAPPER_CHUNK_SIZE(nproc)
         self.mapper_job = MapReduceJob(
             MapperSpec(
                 url=self.cluster.output["mapper_url"],
-                n_mappers=self.cluster.output["num_mappers"],
+                n_mappers=n_mappers,
             ),
             MapperReducer([notification_request_to_configure_indexes]),
             {"input_bucket": bucket, "return_type": "save"},
             n_retries=config.MAPPER_NUM_RETRIES,
-            chunk_size=config.MAPPER_CHUNK_SIZE,
+            chunk_size=chunk_size,
             request_timeout=config.MAPPER_REQUEST_TIMEOUT,
         )
         await self.mapper_job.start(iterable, self.start_training, len(paths))
@@ -335,15 +341,20 @@ class LabeledIndex:
 
         # Step 3: As the Map step computes and saves embeddings, "Add" them into shards
         # of the newly trained indexes
+        nproc = self.cluster.output["adder_nproc"]
+        n_mappers = int(
+            self.cluster.output["num_adders"] * config.ADDER_REQUEST_MULTIPLE(nproc)
+        )
+        chunk_size = config.ADDER_CHUNK_SIZE(nproc)
         self.adder_job = MapReduceJob(
             MapperSpec(
                 url=self.cluster.output["adder_url"],
-                n_mappers=self.cluster.output["num_adders"],
+                n_mappers=n_mappers,
             ),
             AdderReducer(),
             {"indexes": indexes},
             n_retries=config.ADDER_NUM_RETRIES,
-            chunk_size=config.ADDER_CHUNK_SIZE,
+            chunk_size=chunk_size,
             request_timeout=config.ADDER_REQUEST_TIMEOUT,
         )
         await self.adder_job.start(
