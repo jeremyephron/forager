@@ -1,5 +1,13 @@
 from pathlib import Path
 from interactive_index.utils import GIGABYTE
+from urllib.request import Request, urlopen
+
+# Get instance IP (https://stackoverflow.com/q/23362887)
+ip_request = Request(
+    "http://metadata/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip"
+)
+ip_request.add_header("Metadata-Flavor", "Google")
+INSTANCE_IP = urlopen(ip_request).read().decode()
 
 SANIC_RESPONSE_TIMEOUT = 10 * 60  # seconds
 
@@ -27,12 +35,11 @@ INDEX_PCA_DIM = 128
 INDEX_SQ_BYTES = 8
 INDEX_SUBINDEX_SIZE = 1_000_000_000  # basically infinite -> one shard per adder
 
-# TODO(mihirg): Query GCP metadata for IP
 TRAINING_MAX_RAM = 35 * GIGABYTE
 TRAINER_N_CENTROIDS_MULTIPLE = 39
 TRAINER_EMBEDDING_SAMPLE_RATE = 0.1
 TRAINER_STATUS_ENDPOINT = "/trainer_status"
-TRAINER_STATUS_CALLBACK = f"http://35.199.179.109:5000{TRAINER_STATUS_ENDPOINT}"
+TRAINER_STATUS_CALLBACK = f"http://{INSTANCE_IP}:5000{TRAINER_STATUS_ENDPOINT}"
 
 INDEX_PARENT_DIR = Path("~/forager/indexes").expanduser().resolve()
 INDEX_UPLOAD_GCS_PATH = "gs://forager/indexes/"  # trailing slash = directory
