@@ -10,11 +10,9 @@ import uuid
 class TerraformModule:
     def __init__(self, module_path: Path, copy: bool = True):
         if copy:
-            self.parent_dir = TemporaryDirectory()
-            self.dir = Path(self.parent_dir.name) / module_path.name
+            self.dir = Path(TemporaryDirectory().name) / module_path.name
             copytree(module_path, self.dir)
         else:
-            self.parent_dir = None
             self.dir = module_path
 
         self.id = str(uuid.uuid4())
@@ -55,6 +53,3 @@ class TerraformModule:
             "terraform", "destroy", "-auto-approve", cwd=self.dir
         )
         await proc.wait()
-
-        if self.parent_dir:
-            self.parent_dir.cleanup()
