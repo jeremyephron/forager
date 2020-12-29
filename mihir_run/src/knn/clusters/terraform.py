@@ -48,8 +48,8 @@ class TerraformModule:
     async def destroy(self):
         self._output = None
         proc = await asyncio.create_subprocess_exec(
-            "terraform", "apply", "-auto-approve", cwd=self.dir
-        )  # apply before destroy to refresh Kubernetes provider credentials
+            "terraform", "refresh", cwd=self.dir
+        )  # refresh Kubernetes provider credentials
         await proc.wait()
         proc = await asyncio.create_subprocess_exec(
             "terraform", "destroy", "-auto-approve", cwd=self.dir
