@@ -18,14 +18,9 @@ variable "mapper_node_type" {
   default = "n2-highcpu-16"
 }
 
-variable "mapper_num_replicas_per_node" {
+variable "mapper_nproc" {
   type    = number
-  default = 1
-}
-
-variable "mapper_cpus" {
-  type    = number
-  default = 14
+  default = 16
 }
 
 locals {
@@ -61,7 +56,7 @@ resource "kubernetes_deployment" "mapper_dep" {
   }
 
   spec {
-    replicas = var.mapper_num_nodes * var.mapper_num_replicas_per_node
+    replicas = var.mapper_num_nodes
 
     selector {
       match_labels = {
@@ -87,8 +82,8 @@ resource "kubernetes_deployment" "mapper_dep" {
           }
 
           env {
-            name = "CPUS"
-            value = var.mapper_cpus
+            name = "NPROC"
+            value = var.mapper_nproc
           }
 
           port {
@@ -168,5 +163,9 @@ output "mapper_url" {
 }
 
 output "num_mappers" {
-  value = var.mapper_num_nodes * var.mapper_num_replicas_per_node
+  value = var.mapper_num_nodes
+}
+
+output "mapper_nproc" {
+  value = var.mapper_nproc
 }

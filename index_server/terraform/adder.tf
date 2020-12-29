@@ -15,7 +15,12 @@ variable "adder_num_nodes" {
 
 variable "adder_node_type" {
   type    = string
-  default = "n2-highcpu-4"
+  default = "n2-standard-4"
+}
+
+variable "adder_nproc" {
+  type    = number
+  default = 9
 }
 
 locals {
@@ -74,6 +79,11 @@ resource "kubernetes_deployment" "adder_dep" {
           env {
             name  = "PORT"
             value = local.adder_internal_port
+          }
+
+          env {
+            name = "NPROC"
+            value = var.adder_nproc
           }
 
           port {
@@ -141,4 +151,8 @@ output "adder_url" {
 
 output "num_adders" {
   value = var.adder_num_nodes
+}
+
+output "adder_nproc" {
+  value = var.adder_nproc
 }
