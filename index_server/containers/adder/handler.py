@@ -53,7 +53,7 @@ class Index:
 
 class IndexBuildingMapper(Mapper):
     def initialize_container(self):
-        self.shard_tmpl_for_glob = config.SHARD_INDEX_NAME_TMPL.format(
+        self.shard_pattern_for_glob = config.SHARD_INDEX_NAME_TMPL.format(
             self.worker_id, "*"
         ).format("*")
 
@@ -62,8 +62,8 @@ class IndexBuildingMapper(Mapper):
 
     async def initialize_job(self, job_args) -> InteractiveIndex:
         job_args["indexes"] = {
-            index_type: Index(index_dict, self.worker_id)
-            for index_type, index_dict in job_args["indexes"].items()
+            index_name: Index(index_dict, self.worker_id)
+            for index_name, index_dict in job_args["indexes"].items()
         }
         return job_args
 
@@ -76,8 +76,8 @@ class IndexBuildingMapper(Mapper):
         embedding_dict = await self.load(input, request_id)
         num_added = await asyncio.gather(
             *[
-                self.build_index(index_type, index, embedding_dict, request_id)
-                for index_type, index in indexes.items()
+                self.build_index(index_name, index, embedding_dict, request_id)
+                for index_name, index in indexes.items()
             ]
         )
         return dict(zip(indexes.keys(), num_added))
@@ -93,7 +93,7 @@ class IndexBuildingMapper(Mapper):
 
     async def build_index(
         self,
-        index_type: str,
+        index_name: str,
         index: Index,
         embedding_dict: Dict[int, np.ndarray],
         request_id: str,
@@ -103,7 +103,7 @@ class IndexBuildingMapper(Mapper):
             index.transform,
             embedding_dict,
             request_id=request_id,
-            profiler_name=f"{index_type}_transform_time",
+            profiler_name=f"{index_name}_transform_time",
         )
 
         # Step 3: Add to on-disk index
@@ -112,7 +112,7 @@ class IndexBuildingMapper(Mapper):
             all_embeddings,
             all_ids,
             request_id=request_id,
-            profiler_name=f"{index_type}_add_time",
+            profiler_name=f"{index_name}_add_time",
         )
 
         return len(all_ids)  # number of embeddings added to index
@@ -125,7 +125,7 @@ class IndexBuildingMapper(Mapper):
         job_args,
         request_id,
     ) -> Tuple[str, List[JSONType]]:
-        return self.shard_tmpl_for_glob, outputs
+        return self.shard_pattern_for_glob, outputs
 
 
 mapper = IndexBuildingMapper()

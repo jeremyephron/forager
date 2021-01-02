@@ -115,10 +115,10 @@ class MapperReducer(Reducer):
 class AdderReducer(Reducer):
     def __init__(self):
         self.num_added_by_index_type = defaultdict(int)
-        self.shard_tmpls: Set[str] = set()
+        self.shard_patterns: Set[str] = set()
 
     def handle_chunk_result(self, chunk, chunk_output):
-        self.shard_tmpls.add(chunk_output)
+        self.shard_patterns.add(chunk_output)
 
     def handle_result(self, input, output):
         for index_type, num_added in output.items():
@@ -126,7 +126,7 @@ class AdderReducer(Reducer):
 
     @property
     def result(self) -> Set[str]:
-        return self.shard_tmpls
+        return self.shard_patterns
 
 
 def extract_pooled_embedding_from_mapper_output(output):

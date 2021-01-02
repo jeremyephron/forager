@@ -365,11 +365,11 @@ class LabeledIndex:
         )  # iterable is an async generator that yields as the Map step produces outputs
         self.logger.info("Add: started")
 
-    def start_merging(self, shard_tmpls: Set[str]):
-        self.logger.info(f"Add: finished with {len(shard_tmpls)} shard templates")
-        self.merge_task = asyncio.create_task(self.merge_indexes(shard_tmpls))
+    def start_merging(self, shard_patterns: Set[str]):
+        self.logger.info(f"Add: finished with {len(shard_patterns)} shard patterns")
+        self.merge_task = asyncio.create_task(self.merge_indexes(shard_patterns))
 
-    async def merge_indexes(self, shard_tmpls: Set[str]):
+    async def merge_indexes(self, shard_patterns: Set[str]):
         loop = asyncio.get_running_loop()
 
         # Step 4: "Merge" shards from shared disk into final local index (in a thread
@@ -382,8 +382,8 @@ class LabeledIndex:
                 index_dir = self.training_jobs[index_type].mounted_index_dir
                 shard_paths = [
                     str(p.resolve())
-                    for shard_tmpl in shard_tmpls
-                    for p in index_dir.glob(shard_tmpl)
+                    for shard_pattern in shard_patterns
+                    for p in index_dir.glob(shard_pattern)
                 ]
 
                 future = asyncio.ensure_future(
