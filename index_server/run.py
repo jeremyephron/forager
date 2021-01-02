@@ -31,13 +31,7 @@ from knn.reducers import PoolingReducer, TrivialReducer
 from knn.utils import JSONType
 
 import config
-from index_jobs import (
-    AdderReducer,
-    IndexType,
-    MapperReducer,
-    TrainingJob,
-    extract_pooled_embedding_from_mapper_output,
-)
+from index_jobs import AdderReducer, IndexType, MapperReducer, TrainingJob
 from utils import CleanupDict
 
 
@@ -361,7 +355,7 @@ class LabeledIndex:
             request_timeout=config.ADDER_REQUEST_TIMEOUT,
         )
         await self.adder_job.start(
-            self.mapper_job.reducer.output_paths_gen(), self.start_merging
+            self.mapper_job.reducer.output_path_tmpl_gen(), self.start_merging
         )  # iterable is an async generator that yields as the Map step produces outputs
         self.logger.info("Add: started")
 
@@ -677,8 +671,8 @@ async def query_index(request):
     # Generate query vector as average of patch embeddings
     job = MapReduceJob(
         MapperSpec(url=mapper_url, n_mappers=n_mappers),
-        PoolingReducer(extract_func=extract_pooled_embedding_from_mapper_output),
-        {"input_bucket": bucket},
+        PoolingReducer(extract_func=utils.base64_to_numpy),
+        {"input_bucket": bucket, "reduction": "average"},
         n_retries=config.CLOUD_RUN_N_RETRIES,
         chunk_size=1,
     )
@@ -727,8 +721,8 @@ async def active_batch(request):
             url=mapper_url,
             n_mappers=n_mappers,
         ),
-        TrivialReducer(extract_func=extract_pooled_embedding_from_mapper_output),
-        {"input_bucket": bucket},
+        TrivialReducer(extract_func=utils.base64_to_numpy),
+        {"input_bucket": bucket, "reduction": "average"},
         n_retries=config.CLOUD_RUN_N_RETRIES,
         chunk_size=1,
     )
@@ -790,9 +784,9 @@ async def query_svm(request):
             n_mappers=n_mappers,
         ),  # Figure out n_mappers later
         TrivialReducer(
-            extract_func=extract_pooled_embedding_from_mapper_output
+            extract_func=utils.base64_to_numpy
         ),  # Returns all individual inputs back
-        {"input_bucket": bucket},
+        {"input_bucket": bucket, "reduction": "average"},
         n_retries=config.CLOUD_RUN_N_RETRIES,
         chunk_size=1,
     )
@@ -814,9 +808,9 @@ async def query_svm(request):
             n_mappers=n_mappers,
         ),  # Figure out n_mappers later
         TrivialReducer(
-            extract_func=extract_pooled_embedding_from_mapper_output
+            extract_func=utils.base64_to_numpy
         ),  # Returns all individual inputs back
-        {"input_bucket": bucket},
+        {"input_bucket": bucket, "reduction": "average"},
         n_retries=config.CLOUD_RUN_N_RETRIES,
         chunk_size=1,
     )

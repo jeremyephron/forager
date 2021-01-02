@@ -12,7 +12,7 @@ DOWNLOAD_NUM_RETRIES = 4
 
 EMBEDDINGS_FILE_TMPL = "/shared/embeddings/{}/{}/{}-{{}}.npy"
 REDUCTIONS = {
-    "none": lambda x: x,
+    None: lambda x: x,
     "average": functools.partial(np.mean, axis=0, keepdims=True),
 }
 

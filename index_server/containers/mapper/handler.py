@@ -153,14 +153,24 @@ class IndexEmbeddingMapper(Mapper):
                 for name, embeddings_dict in embeddings_dicts.items():
                     np.save(output_path_tmpl.format(name), embeddings_dict)
 
-                return output_path_tmpl, [
-                    len(output) if output is not None else None for output in outputs
-                ]
-        else:
-            return None, [
-                utils.numpy_to_base64(output) if output is not None else None
-                for output in outputs
+            return output_path_tmpl, [
+                len(output) if output is not None else None for output in outputs
             ]
+        else:
+            with self.profiler(request_id, "reduce_time"):
+                reduce_fn = config.REDUCTIONS[job_args.get("reduction")]
+                reduced_outputs = [
+                    reduce_fn(output) if output is not None else None
+                    for output in outputs
+                ]
+
+            with self.profiler(request_id, "serialize_time"):
+                serialized_outputs = [
+                    utils.numpy_to_base64(output) if output is not None else None
+                    for output in reduced_outputs
+                ]
+
+            return None, serialized_outputs
 
 
 mapper = IndexEmbeddingMapper()

@@ -28,7 +28,7 @@ class MapperReducer(Reducer):
     class Result:
         num_images: int
         num_embeddings: int
-        output_paths: List[str]
+        output_path_tmpls: List[str]
         finished: bool
 
     CallbackType = Callable[[Result], None]
@@ -44,7 +44,7 @@ class MapperReducer(Reducer):
 
         self.num_images = 0
         self.num_embeddings = 0
-        self.output_paths: List[str] = []
+        self.output_path_tmpls: List[str] = []
 
         self.state_changed = asyncio.Condition()
         self.finished = asyncio.Event()
@@ -53,7 +53,7 @@ class MapperReducer(Reducer):
         self.notifications[uuid.uuid4()] = notif
 
     def handle_chunk_result(self, chunk, chunk_output):
-        self.output_paths.append(chunk_output)
+        self.output_path_tmpls.append(chunk_output)
         self.wake_gen()
 
     def handle_result(self, input, output):
@@ -90,7 +90,7 @@ class MapperReducer(Reducer):
         return MapperReducer.Result(
             self.num_images,
             self.num_embeddings,
-            list(self.output_paths) if copy else self.output_paths,
+            list(self.output_path_tmpls) if copy else self.output_path_tmpls,
             self.finished.is_set(),
         )
 
@@ -99,11 +99,11 @@ class MapperReducer(Reducer):
         async with self.state_changed:
             self.state_changed.notify_all()
 
-    async def output_paths_gen(self):
+    async def output_path_tmpl_gen(self):
         i = 0
         while True:
-            if i < len(self.output_paths):
-                yield self.output_paths[i]
+            if i < len(self.output_path_tmpls):
+                yield self.output_path_tmpls[i]
                 i += 1
             elif self.finished.is_set():
                 break
@@ -127,10 +127,6 @@ class AdderReducer(Reducer):
     @property
     def result(self) -> Set[str]:
         return self.shard_patterns
-
-
-def extract_pooled_embedding_from_mapper_output(output):
-    return utils.base64_to_numpy(output).mean(axis=0).astype(np.float32)
 
 
 class IndexType(IntEnum):
@@ -240,7 +236,7 @@ class TrainingJob:
 
         # TODO(mihirg): Add exponential backoff/better error handling
         try:
-            request = self._construct_request(mapper_result.output_paths)
+            request = self._construct_request(mapper_result.output_path_tmpls)
 
             while not self.finished.is_set():
                 async with self._failed_or_finished:
