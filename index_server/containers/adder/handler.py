@@ -59,10 +59,7 @@ class IndexBuildingMapper(Mapper):
         ).format("*")
 
     def register_executor(self):
-        if config.NPROC > 1:
-            self.pool_executor = concurrent.futures.ThreadPoolExecutor()
-        else:
-            self.pool_executor = None
+        return concurrent.futures.ThreadPoolExecutor() if config.NPROC > 1 else None
 
     async def initialize_job(self, job_args) -> InteractiveIndex:
         job_args["indexes"] = {
