@@ -12,7 +12,6 @@ import uuid
 from typing import Any, Callable, Dict, List, Optional, Set
 
 import aiohttp
-import numpy as np
 
 from interactive_index.config import auto_config
 
@@ -268,9 +267,9 @@ class TrainingJob:
         assert self.index_dir is not None
         return self.cluster_mount_parent_dir / self.index_dir.lstrip(os.sep)
 
-    def _construct_request(self, paths: List[str]) -> JSONType:
+    def _construct_request(self, path_tmpls: List[str]) -> JSONType:
         return {
-            "paths": paths,
+            "path_tmpls": path_tmpls,
             "index_kwargs": self.index_kwargs,
             "index_id": self.index_id,
             "index_name": self.index_name,
@@ -278,5 +277,5 @@ class TrainingJob:
             "sample_rate": (
                 1.0 if self.average else config.TRAINER_EMBEDDING_SAMPLE_RATE
             ),
-            "average": self.average,
+            "reduction": "average" if self.average else None,
         }

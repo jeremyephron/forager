@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-import functools
 import signal
 import threading
 import time
@@ -10,7 +9,7 @@ import numpy as np
 import requests
 from flask import Flask, request, abort
 
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Iterable, Optional, Tuple
 
 from interactive_index import InteractiveIndex
 
@@ -18,9 +17,7 @@ import config
 
 
 # Step 1: Load saved embeddings into memory
-def load(
-    paths: List[str], sample_rate: float, reduction: Callable[[np.ndarray], np.ndarray]
-) -> Tuple[np.ndarray, int]:
+def load(paths: Iterable[str], sample_rate: float) -> Tuple[np.ndarray, int]:
     all_embeddings = []
 
     # Each file is a np.save'd Dict[int, np.ndarray] where each value is N x D
@@ -46,7 +43,7 @@ def load(
                 elif n_sample < n:
                     sample_inds = np.random.choice(n, n_sample)
                     embeddings = embeddings[sample_inds]
-            all_embeddings.append(reduction(embeddings))
+            all_embeddings.append(embeddings)
 
     return np.concatenate(all_embeddings), num_paths_read
 
@@ -72,19 +69,17 @@ def notify(url: str, payload: Dict[str, str]):
 
 @dataclass
 class TrainingJob:
-    paths: List[str]  # Paths to saved embedding dictionaries
+    path_tmpls: List[
+        str
+    ]  # Format strings (param: reduction) for paths to saved embedding dictionaries
     index_kwargs: Dict[str, Any]  # Index configuration
 
     index_id: str  # Index build job identifier
     index_name: str  # Unique index identifier within job
     url: str  # Webhook to PUT to after completion
 
-    sample_rate: float = (
-        1.0  # Fraction of saved embeddings to randomly sample for training
-    )
-    average: bool = (
-        False  # Whether to average embeddings for each key in saved dictionary
-    )
+    sample_rate: float  # Fraction of saved embeddings to randomly sample for training
+    reduction: Optional[str]  # Type of embeddings we should use (e.g., average pooled)
 
     _done: bool = False
     _done_lock: threading.Lock = field(default_factory=threading.Lock)
@@ -119,12 +114,8 @@ class TrainingJob:
         # maybe start a subprocess?
         try:
             start_time = time.perf_counter()
-            reduction = (
-                functools.partial(np.mean, axis=0, keepdims=True)
-                if self.average
-                else (lambda x: x)
-            )
-            embeddings, num_paths_read = load(self.paths, self.sample_rate, reduction)
+            paths = (path_tmpl.format(self.reduction) for path_tmpl in self.path_tmpls)
+            embeddings, num_paths_read = load(paths, self.sample_rate)
 
             train_start_time = time.perf_counter()
             index_dir = config.INDEX_DIR_TMPL.format(self.index_id, self.index_name)
