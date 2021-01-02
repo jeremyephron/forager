@@ -1,3 +1,4 @@
+import asyncio
 import concurrent
 import functools
 from queue import SimpleQueue
@@ -13,9 +14,6 @@ from knn.mappers import Mapper
 from knn.utils import JSONType
 
 import config
-
-
-TransformResult = Tuple[List[np.ndarray], List[int]]
 
 
 class Index:
@@ -36,7 +34,9 @@ class Index:
             )
             self.indexes.put(index)
 
-    def transform(self, embedding_dict: Dict[int, np.ndarray]) -> TransformResult:
+    def transform(
+        self, embedding_dict: Dict[int, np.ndarray]
+    ) -> Tuple[List[np.ndarray], List[int]]:
         all_embeddings = list(map(self.reduction, embedding_dict.values()))
         all_ids = [
             int(id)
@@ -45,8 +45,7 @@ class Index:
         ]
         return all_embeddings, all_ids
 
-    def add(self, transform_result: TransformResult):
-        all_embeddings, all_ids = transform_result
+    def add(self, all_embeddings: List[np.ndarray], all_ids: List[int]):
         index = self.indexes.get()  # get an index no other thread is adding to
         index.add(np.concatenate(all_embeddings), all_ids, update_metadata=False)
         self.indexes.put(index)
@@ -74,49 +73,49 @@ class IndexBuildingMapper(Mapper):
         self, input, job_id, job_args, request_id, element_index
     ) -> Dict[str, int]:
         indexes = job_args["indexes"]
-
-        embedding_dict = await self.apply_in_executor(
-            self.load, input, request_id=request_id, profiler_name="load_time"
+        embedding_dict = await self.load(input, request_id)
+        num_added = await asyncio.gather(
+            *[
+                self.build_index(index_type, index, embedding_dict, request_id)
+                for index_type, index in indexes.items()
+            ]
         )
-        transform_results = await self.apply_in_executor(
-            self.transform,
-            indexes,
+        return dict(zip(indexes.keys(), num_added))
+
+    async def load(self, path: str, request_id: str) -> Dict[int, np.ndarray]:
+        # Step 1: Load saved embeddings into memory
+        return await self.apply_in_executor(
+            lambda p: np.load(p, allow_pickle=True).item(),
+            path,
+            request_id=request_id,
+            profiler_name="load_time",
+        )
+
+    async def build_index(
+        self,
+        index_type: str,
+        index: Index,
+        embedding_dict: Dict[int, np.ndarray],
+        request_id: str,
+    ) -> int:
+        # Step 2: Transform embeddings (perform any necessary reduction)
+        all_embeddings, all_ids = await self.apply_in_executor(
+            index.transform,
             embedding_dict,
             request_id=request_id,
-            profiler_name="transform_time",
+            profiler_name=f"{index_type}_transform_time",
         )
+
+        # Step 3: Add to on-disk index
         await self.apply_in_executor(
-            self.add,
-            indexes,
-            transform_results,
+            index.add,
+            all_embeddings,
+            all_ids,
             request_id=request_id,
-            profiler_name="add_time",
+            profiler_name=f"{index_type}_add_time",
         )
 
-        return {
-            index_type: len(all_ids)
-            for index_type, (_, all_ids) in transform_results.items()
-        }
-
-    def load(self, path: str) -> Dict[int, np.ndarray]:
-        # Step 1: Load saved embeddings into memory
-        return np.load(input, allow_pickle=True).item()
-
-    def transform(
-        self, indexes: Dict[str, Index], embedding_dict: Dict[int, np.ndarray]
-    ) -> Dict[str, TransformResult]:
-        # Step 2: Transform embeddings (perform any necessary reductions)
-        return {
-            index_type: index.transform(embedding_dict)
-            for index_type, index in indexes.items()
-        }
-
-    def add(
-        self, indexes: Dict[str, Index], transform_results: Dict[str, TransformResult]
-    ):
-        # Step 3: Add to on-disk indexes
-        for index_type, transform_result in transform_results.items():
-            indexes[index_type].add(transform_result)
+        return len(all_ids)  # number of embeddings added to index
 
     async def postprocess_chunk(
         self,
