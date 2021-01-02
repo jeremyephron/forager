@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 import functools
 import signal
 import threading
+import time
 import traceback
 
 import backoff
@@ -117,19 +118,32 @@ class TrainingJob:
         # TODO(mihirg): Figure out how to handle errors like OOMs and CUDA errors,
         # maybe start a subprocess?
         try:
+            start_time = time.perf_counter()
             reduction = (
                 functools.partial(np.mean, axis=0, keepdims=True)
                 if self.average
                 else (lambda x: x)
             )
             embeddings, num_paths_read = load(self.paths, self.sample_rate, reduction)
+
+            train_start_time = time.perf_counter()
             index_dir = config.INDEX_DIR_TMPL.format(self.index_id, self.index_name)
             train(embeddings, self.index_kwargs, index_dir)
+
+            end_time = time.perf_counter()
         except Exception as e:
             traceback.print_exc()
             self.finish(False, reason=str(e))
         else:
-            self.finish(True, index_dir=index_dir, num_paths_read=num_paths_read)
+            self.finish(
+                True,
+                index_dir=index_dir,
+                num_paths_read=num_paths_read,
+                profiling=dict(
+                    load_time=train_start_time - start_time,
+                    train_time=end_time - train_start_time,
+                ),
+            )
 
 
 current_job: Optional[TrainingJob] = None

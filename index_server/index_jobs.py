@@ -163,6 +163,7 @@ class TrainingJob:
         self.started = False
         self.finished = asyncio.Event()
         self.index_dir: Optional[str] = None
+        self.profiling: Dict[str, float] = {}
 
         self._failed_or_finished = asyncio.Condition()
 
@@ -226,6 +227,7 @@ class TrainingJob:
             "finished": self.finished.is_set(),
             "config": self.index_kwargs,
             "elapsed_time": end_time - start_time,
+            "profiling": self.profiling,
         }
 
     def start(self, mapper_result: MapperReducer.Result):
@@ -259,6 +261,7 @@ class TrainingJob:
     async def handle_result(self, result: JSONType):
         if result.get("success"):
             self.index_dir = result["index_dir"]
+            self.profiling = result["profiling"]
             self.finished.set()
 
         async with self._failed_or_finished:

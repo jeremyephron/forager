@@ -372,18 +372,18 @@ class LabeledIndex:
     async def merge_indexes(self, shard_tmpls: Set[str]):
         loop = asyncio.get_running_loop()
 
-        # Step 4: "Merge" shards from shared disk into final local index (in a process
-        # pool to avoid blocking the event loop)
+        # Step 4: "Merge" shards from shared disk into final local index (in a thread
+        # pool; because FAISS releases the GIL, this won't block the event loop)
         # TODO(mihirg): Consider deleting all unnecessary intermediates from NAS after
         self._load_local_indexes()
-        with concurrent.futures.ProcessPoolExecutor() as pool:
+        with concurrent.futures.ThreadPoolExecutor(len(self.indexes)) as pool:
             futures = []
             for index_type, index in self.indexes.items():
                 index_dir = self.training_jobs[index_type].mounted_index_dir
                 shard_paths = [
                     str(p.resolve())
                     for shard_tmpl in shard_tmpls
-                    for p in index_dir.glob(shard_tmpl.format("*"))
+                    for p in index_dir.glob(shard_tmpl)
                 ]
 
                 future = asyncio.ensure_future(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import asyncio
+import concurrent
 import collections
 from dataclasses import dataclass
 import functools
@@ -12,7 +13,7 @@ from sanic import Sanic
 from sanic.response import json
 from sanic_compress import Compress
 
-from typing import Any, DefaultDict, Dict, List, Tuple
+from typing import Any, DefaultDict, Dict, List, Optional, Tuple
 
 from knn.utils import JSONType
 
@@ -40,6 +41,9 @@ class Mapper(abc.ABC):
 
     def initialize_container(self, *args, **kwargs) -> None:
         pass
+
+    def register_executor(self) -> Optional[concurrent.futures.Executor]:
+        return None
 
     async def initialize_job(self, job_args: JSONType) -> Any:
         return job_args
@@ -78,6 +82,30 @@ class Mapper(abc.ABC):
     ) -> Any:
         pass
 
+    # UTILITY FUNCTIONS
+
+    async def apply_in_executor(self, f, *args, request_id, profiler_name, **kwargs):
+        def wrapper():
+            start_time = time.perf_counter()
+            result = f(*args, **kwargs)
+            end_time = time.perf_counter()
+            return result, end_time - start_time
+
+        with self.profiler(request_id, f"{profiler_name}_total"):
+            if self.executor:
+                loop = asyncio.get_running_loop()
+                result, exec_time = await loop.run_in_executor(
+                    self.executor,
+                    wrapper,
+                )
+            else:
+                result, exec_time = wrapper()
+
+        with self.profiler(request_id, profiler_name, additional=exec_time):
+            pass
+
+        return result
+
     # INTERNAL
 
     def __init__(self, *args, start_server=True, **kwargs):
@@ -93,6 +121,7 @@ class Mapper(abc.ABC):
         )
 
         self.initialize_container(*args, **kwargs)
+        self.executor = self.register_executor()
 
         if start_server:
             self._server = Sanic(self.worker_id)

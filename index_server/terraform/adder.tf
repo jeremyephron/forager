@@ -10,7 +10,7 @@ variable "adder_node_pool_name" {
 
 variable "adder_num_nodes" {
   type    = number
-  default = 75
+  default = 100
 }
 
 variable "adder_node_type" {
@@ -20,7 +20,7 @@ variable "adder_node_type" {
 
 variable "adder_nproc" {
   type    = number
-  default = 9
+  default = 4
 }
 
 locals {

@@ -50,16 +50,17 @@ class IndexEmbeddingMapper(Mapper):
         # Create connection pool
         self.session = aiohttp.ClientSession()
 
-        # Create inference pool
+    def register_executor(self):
+        # Create process pool for parallel inference
         if config.NPROC > 1:
             self.model.share_memory()
             self.pixel_mean.share_memory_()
             self.pixel_std.share_memory_()
-            self.pool_executor = concurrent.futures.ProcessPoolExecutor(
+            return concurrent.futures.ProcessPoolExecutor(
                 config.NPROC, mp_context=torch.multiprocessing.get_context("spawn")
             )
         else:
-            self.pool_executor = None
+            return None
 
     async def initialize_job(self, job_args):
         return_type = job_args.get("return_type", "serialize")
@@ -89,7 +90,8 @@ class IndexEmbeddingMapper(Mapper):
             image_bytes = await self.download_image(image_path)
 
         # Run inference
-        inference_args = (
+        model_output_dict = await self.apply_in_executor(
+            inference.run,
             image_bytes,
             image_patch,
             augmentations,
@@ -97,17 +99,9 @@ class IndexEmbeddingMapper(Mapper):
             self.pixel_mean,
             self.pixel_std,
             self.model,
+            request_id=request_id,
+            profiler_name="inference_time",
         )
-        with self.profiler(request_id, "inference_time"):
-            if self.pool_executor:
-                loop = asyncio.get_running_loop()
-                model_output_dict = await loop.run_in_executor(
-                    self.pool_executor,
-                    inference.run,
-                    *inference_args,
-                )
-            else:
-                model_output_dict = inference.run(*inference_args)
 
         with self.profiler(request_id, "flatten_time"):
             spatial_embeddings = next(iter(model_output_dict.values())).numpy()
