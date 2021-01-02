@@ -133,22 +133,27 @@ class IndexEmbeddingMapper(Mapper):
         request_id,
     ) -> Union[Tuple[str, List[Optional[int]]], Tuple[None, List[Optional[str]]]]:
         if job_args["return_type"] == IndexEmbeddingMapper.ReturnType.SAVE:
-            with self.profiler(request_id, "save_time"):
-                # Save chunk embeddings dict to disk
-                output_path = config.EMBEDDINGS_FILE_TMPL.format(
-                    job_id, self.worker_id, job_args["n_chunks_saved"]
-                )
-                embeddings_dict = {
-                    int(input["id"]): output
-                    for input, output in zip(inputs, outputs)
-                    if output is not None
+            with self.profiler(request_id, "reduce_time"):
+                embeddings_dicts = {
+                    reduction_name: {
+                        int(input["id"]): reduce_fn(output)
+                        for input, output in zip(inputs, outputs)
+                        if output is not None
+                    }
+                    for reduction_name, reduce_fn in config.REDUCTIONS.items()
                 }
 
-                Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-                np.save(output_path, embeddings_dict)
+            with self.profiler(request_id, "save_time"):
+                output_path_tmpl = config.EMBEDDINGS_FILE_TMPL.format(
+                    job_id, self.worker_id, job_args["n_chunks_saved"]
+                )
                 job_args["n_chunks_saved"] += 1
+                Path(output_path_tmpl).parent.mkdir(parents=True, exist_ok=True)
 
-                return output_path, [
+                for name, embeddings_dict in embeddings_dicts.items():
+                    np.save(output_path_tmpl.format(name), embeddings_dict)
+
+                return output_path_tmpl, [
                     len(output) if output is not None else None for output in outputs
                 ]
         else:

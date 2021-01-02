@@ -14,7 +14,6 @@ torch.set_num_threads(1)
 # AUGMENTATIONS
 
 
-# Set up possible augmentations
 def brightness(image, factor):
     br_enhancer = ImageEnhance.Brightness(image)
     return br_enhancer.enhance(factor)
@@ -52,7 +51,7 @@ def run(
     pixel_mean: torch.Tensor,
     pixel_std: torch.Tensor,
     model: torch.nn.Module,
-):
+) -> Dict[str, torch.Tensor]:
     with io.BytesIO(image_bytes) as image_buffer:
         image = Image.open(image_buffer)
 
