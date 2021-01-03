@@ -102,10 +102,13 @@ class Mapper(abc.ABC):
             if self.executor:
                 loop = asyncio.get_running_loop()
                 timed_f_with_kwargs = functools.partial(timed_f, **kwargs)
-                result, exec_time = await loop.run_in_executor(
-                    self.executor,
-                    timed_f_with_kwargs,
-                    *args,
+                result, exec_time = (
+                    await loop.run_in_executor(
+                        self.executor,
+                        f,
+                        *args,
+                    ),
+                    None,
                 )
             else:
                 result, exec_time = timed_f(*args, **kwargs)
