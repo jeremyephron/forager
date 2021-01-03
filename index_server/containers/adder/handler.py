@@ -89,10 +89,12 @@ class IndexBuildingMapper(Mapper):
         request_id: str,
     ) -> Dict[str, int]:
         # Step 1: Load saved embeddings into memory
-        with self.profiler(request_id, f"{reduction}_load_time"):
-            embedding_dict = np.load(
-                path_tmpl.format(reduction), allow_pickle=True
-            ).item()  # type: Dict[int, np.ndarray]
+        embedding_dict = await self.apply_in_executor(
+            lambda p: np.load(p, allow_pickle=True).item(),
+            path_tmpl.format(reduction),
+            request_id=request_id,
+            profiler_name=f"{reduction}_load_time",
+        )  # type: Dict[int, np.ndarray]
 
         # Step 2: Add to applicable on-disk indexes
         num_added = await asyncio.gather(
