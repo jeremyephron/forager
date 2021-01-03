@@ -10,17 +10,17 @@ variable "mapper_node_pool_name" {
 
 variable "mapper_num_nodes" {
   type    = number
-  default = 100
+  default = 200
 }
 
 variable "mapper_node_type" {
   type    = string
-  default = "n2-highcpu-8"
+  default = "n2-highcpu-4"
 }
 
 variable "mapper_nproc" {
   type    = number
-  default = 8
+  default = 4
 }
 
 locals {
