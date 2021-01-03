@@ -123,3 +123,4 @@ class IndexBuildingMapper(Mapper):
 
 
 mapper = IndexBuildingMapper()
+server = mapper.server
