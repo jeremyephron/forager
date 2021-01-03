@@ -135,12 +135,12 @@ class IndexEmbeddingMapper(Mapper):
         if job_args["return_type"] == IndexEmbeddingMapper.ReturnType.SAVE:
             with self.profiler(request_id, "reduce_time"):
                 embeddings_dicts = {
-                    reduction_name: {
+                    reduction: {
                         int(input["id"]): reduce_fn(output)
                         for input, output in zip(inputs, outputs)
                         if output is not None
                     }
-                    for reduction_name, reduce_fn in config.REDUCTIONS.items()
+                    for reduction, reduce_fn in config.REDUCTIONS.items()
                 }
 
             with self.profiler(request_id, "save_time"):

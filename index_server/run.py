@@ -319,7 +319,7 @@ class LabeledIndex:
             index_type = IndexType[done.get_name()]
             job = self.training_jobs[index_type]
             indexes[index_type.name] = {
-                "average": job.average,
+                "reduction": "average" if job.average else None,
                 "index_dir": job.index_dir,
             }
             self.logger.info(f"Train ({index_type.name}): finished")
