@@ -16,4 +16,5 @@ REDUCTIONS = {
     "average": functools.partial(np.mean, axis=0, keepdims=True),
 }
 
-NPROC = int(os.getenv("NPROC", "1"))
+# NPROC = int(os.getenv("NPROC", "1"))
+NPROC = 1
