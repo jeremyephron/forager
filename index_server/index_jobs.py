@@ -53,7 +53,7 @@ class MapperReducer(Reducer):
 
     def handle_chunk_result(self, chunk, chunk_output):
         self.output_path_tmpls.append(chunk_output)
-        # self.wake_gen()
+        self.wake_gen()
 
     def handle_result(self, input, output):
         self.num_images += 1
@@ -79,7 +79,7 @@ class MapperReducer(Reducer):
 
     def finish(self):
         self.finished.set()
-        # self.wake_gen()
+        self.wake_gen()
 
     @property
     def result(self) -> Result:
@@ -107,9 +107,8 @@ class MapperReducer(Reducer):
             elif self.finished.is_set():
                 break
             else:
-                await asyncio.sleep(2.0)
-                # async with self.state_changed:
-                #     await self.state_changed.wait()
+                async with self.state_changed:
+                    await self.state_changed.wait()
 
 
 class AdderReducer(Reducer):

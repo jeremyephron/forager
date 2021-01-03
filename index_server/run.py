@@ -333,6 +333,10 @@ class LabeledIndex:
                 f"({job.mounted_index_dir}) to local disk ({index_subdir})"
             )
 
+        # TODO(mihirg): Fix throughput slowdown for Map when Add is started concurrently
+        # and remove this line!
+        await self.mapper_job.reducer.finished().wait()
+
         # Step 3: As the Map step computes and saves embeddings, "Add" them into shards
         # of the newly trained indexes
         # TODO(mihirg): Consider adding to each index independently as training
