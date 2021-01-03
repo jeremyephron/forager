@@ -1,4 +1,6 @@
+import concurrent.futures
 from dataclasses import dataclass, field
+import functools
 import signal
 import threading
 import time
@@ -19,33 +21,42 @@ import config
 # Step 1: Load saved embeddings into memory
 def load(paths: Iterable[str], sample_rate: float) -> Tuple[np.ndarray, int]:
     all_embeddings = []
-
-    # Each file is a np.save'd Dict[int, np.ndarray] where each value is N x D
     num_paths_read = 0
-    for path in paths:
-        try:
-            embedding_dict = np.load(
-                path, allow_pickle=True
-            ).item()  # type: Dict[int, np.ndarray]
-        except Exception as e:
-            print(f"Error in load (path = {path}), but ignoring. {type(e)}: {e}")
-            traceback.print_exc()
-            continue
-        else:
-            num_paths_read += 1
+    load_func = functools.partial(load_one, sample_rate=sample_rate)
 
-        for embeddings in embedding_dict.values():
-            if sample_rate:
-                n = embeddings.shape[0]
-                n_sample = np.random.binomial(n, sample_rate)
-                if n_sample == 0:
-                    continue
-                elif n_sample < n:
-                    sample_inds = np.random.choice(n, n_sample)
-                    embeddings = embeddings[sample_inds]
-            all_embeddings.append(embeddings)
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        for loaded_embeddings in pool.map(load_func, paths):
+            if loaded_embeddings:
+                all_embeddings.extend(loaded_embeddings)
+                num_paths_read += 1
 
     return np.concatenate(all_embeddings), num_paths_read
+
+
+def load_one(path: str, sample_rate: float) -> Optional[List[np.ndarray]]:
+    try:
+        # Each file is a np.save'd Dict[int, np.ndarray] where each value is N x D
+        embedding_dict = np.load(
+            path, allow_pickle=True
+        ).item()  # type: Dict[int, np.ndarray]
+    except Exception as e:
+        print(f"Error in load (path = {path}), but ignoring. {type(e)}: {e}")
+        traceback.print_exc()
+        return None
+
+    loaded_embeddings = []
+    for embeddings in embedding_dict.values():
+        if sample_rate:
+            n = embeddings.shape[0]
+            n_sample = np.random.binomial(n, sample_rate)
+            if n_sample == 0:
+                continue
+            elif n_sample < n:
+                sample_inds = np.random.choice(n, n_sample)
+                embeddings = embeddings[sample_inds]
+        loaded_embeddings.append(embeddings)
+
+    return loaded_embeddings
 
 
 # Step 2: Train index
