@@ -20,7 +20,7 @@ variable "mapper_node_type" {
 
 variable "mapper_nproc" {
   type    = number
-  default = 16
+  default = 32
 }
 
 locals {
