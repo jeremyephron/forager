@@ -15,12 +15,12 @@ variable "adder_num_nodes" {
 
 variable "adder_node_type" {
   type    = string
-  default = "n2-standard-4"
+  default = "n2-standard-8"
 }
 
 variable "adder_nproc" {
   type    = number
-  default = 4
+  default = 8
 }
 
 locals {
