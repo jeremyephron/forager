@@ -36,6 +36,17 @@ class RequestProfiler:
         )
 
 
+def _make_timed_func(f):
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        start_time = time.perf_counter()
+        result = f(*args, **kwargs)
+        end_time = time.perf_counter()
+        return result, end_time - start_time
+
+    return wrapper
+
+
 class Mapper(abc.ABC):
     # BASE CLASS
 
@@ -85,21 +96,19 @@ class Mapper(abc.ABC):
     # UTILITY FUNCTIONS
 
     async def apply_in_executor(self, f, *args, request_id, profiler_name, **kwargs):
-        def wrapper():
-            start_time = time.perf_counter()
-            result = f(*args, **kwargs)
-            end_time = time.perf_counter()
-            return result, end_time - start_time
+        timed_f = _make_timed_func(f)
 
         with self.profiler(request_id, f"{profiler_name}_total"):
             if self.executor:
                 loop = asyncio.get_running_loop()
+                timed_f_with_kwargs = functools.partial(timed_f, **kwargs)
                 result, exec_time = await loop.run_in_executor(
                     self.executor,
-                    wrapper,
+                    timed_f_with_kwargs,
+                    *args,
                 )
             else:
-                result, exec_time = wrapper()
+                result, exec_time = timed_f(*args, **kwargs)
 
         with self.profiler(request_id, profiler_name, additional=exec_time):
             pass
@@ -124,18 +133,14 @@ class Mapper(abc.ABC):
         self.executor = self.register_executor()
 
         if start_server:
-            self._server = Sanic(self.worker_id)
-            Compress(self._server)
-            self._server.add_route(self._handle_request, "/", methods=["POST"])
-            self._server.add_route(self._sleep, "/sleep", methods=["POST"])
+            self.server = Sanic(self.worker_id)
+            Compress(self.server)
+            self.server.add_route(self._handle_request, "/", methods=["POST"])
+            self.server.add_route(self._sleep, "/sleep", methods=["POST"])
         else:
-            self._server = None
+            self.server = None
 
         self._init_time = time.perf_counter() - self._init_start_time
-
-    async def __call__(self, *args, **kwargs):
-        if self._server is not None:
-            return await self._server(*args, **kwargs)
 
     async def _handle_request(self, request):
         init_time = self._init_time
