@@ -107,7 +107,7 @@ class IndexEmbeddingMapper(Mapper):
             spatial_embeddings = next(iter(model_output_dict.values())).numpy()
             n, c, h, w = spatial_embeddings.shape
             assert n == 1
-            return spatial_embeddings.reshape((c, h * w)).T
+            return np.ascontiguousarray(spatial_embeddings.reshape((c, h * w)).T)
 
     async def download_image(
         self, image_path: str, num_retries: int = config.DOWNLOAD_NUM_RETRIES
