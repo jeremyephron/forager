@@ -31,20 +31,17 @@ class RequestProfiler:
         self.start_time = time.perf_counter()
 
     def __exit__(self, type, value, traceback):
+        end_time = time.perf_counter()
         self.results_dict[self.request_id][self.category].append(
-            time.perf_counter() - self.start_time + self.additional
+            end_time - self.start_time + self.additional
         )
 
 
-def _make_timed_func(f):
-    @functools.wraps(f)
-    def wrapper(*args, **kwargs):
-        start_time = time.perf_counter()
-        result = f(*args, **kwargs)
-        end_time = time.perf_counter()
-        return result, end_time - start_time
-
-    return wrapper
+def _apply_timed(f, *args, **kwargs):
+    start_time = time.perf_counter()
+    result = f(*args, **kwargs)
+    end_time = time.perf_counter()
+    return result, end_time - start_time
 
 
 class Mapper(abc.ABC):
@@ -96,22 +93,18 @@ class Mapper(abc.ABC):
     # UTILITY FUNCTIONS
 
     async def apply_in_executor(self, f, *args, request_id, profiler_name, **kwargs):
-        timed_f = _make_timed_func(f)
-
         with self.profiler(request_id, f"{profiler_name}_total"):
             if self.executor:
                 loop = asyncio.get_running_loop()
-                timed_f_with_kwargs = functools.partial(timed_f, **kwargs)
-                result, exec_time = (
-                    await loop.run_in_executor(
-                        self.executor,
-                        f,
-                        *args,
-                    ),
-                    None,
+                apply_timed_with_kwargs = functools.partial(_apply_timed, **kwargs)
+                result, exec_time = await loop.run_in_executor(
+                    self.executor,
+                    apply_timed_with_kwargs,
+                    f,
+                    *args,
                 )
             else:
-                result, exec_time = timed_f(*args, **kwargs)
+                result, exec_time = _apply_timed(f, *args, **kwargs)
 
         with self.profiler(request_id, profiler_name, additional=exec_time):
             pass
