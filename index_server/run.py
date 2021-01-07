@@ -335,7 +335,7 @@ class LabeledIndex:
 
         # TODO(mihirg): Fix throughput slowdown for Map when Add is started concurrently
         # and remove this line!
-        await self.mapper_job.reducer.finished().wait()
+        await self.mapper_job.reducer.finished.wait()
 
         # Step 3: As the Map step computes and saves embeddings, "Add" them into shards
         # of the newly trained indexes
