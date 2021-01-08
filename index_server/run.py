@@ -757,6 +757,7 @@ async def active_batch(request):
 
 @app.route("/query_svm", methods=["POST"])
 async def query_svm(request):
+    print(request.form)
     index_id = request.form["index_id"][0]
     bucket = request.form["bucket"][0]
     pos_image_paths = request.form["positive_paths"]
