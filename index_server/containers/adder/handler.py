@@ -1,7 +1,8 @@
 import asyncio
 from collections import ChainMap, defaultdict
 import concurrent
-from queue import SimpleQueue
+
+# from queue import SimpleQueue
 
 import numpy as np
 
@@ -18,13 +19,13 @@ import config
 
 class Index:
     def __init__(self, index_dir: str, worker_id: str):
-        self.indexes: SimpleQueue[InteractiveIndex] = SimpleQueue()
-        for i in range(config.NPROC):
-            index = InteractiveIndex.load(index_dir)
-            index.SHARD_INDEX_NAME_TMPL = config.SHARD_INDEX_NAME_TMPL.format(
-                worker_id, i
-            )
-            self.indexes.put(index)
+        # self.indexes: SimpleQueue[InteractiveIndex] = SimpleQueue()
+        # for i in range(config.NPROC):
+        self.index = InteractiveIndex.load(index_dir)
+        self.index.SHARD_INDEX_NAME_TMPL = config.SHARD_INDEX_NAME_TMPL.format(
+            worker_id, 0
+        )
+        # self.indexes.put(index)
 
     def add(self, embedding_dict: Dict[int, np.ndarray]) -> int:
         ids = [
@@ -32,11 +33,11 @@ class Index:
             for id, embeddings in embedding_dict.items()
             for _ in range(embeddings.shape[0])
         ]
-        index = self.indexes.get()  # get an index no other thread is adding to
-        index.add(
+        # index = self.indexes.get()  # get an index no other thread is adding to
+        self.index.add(
             np.concatenate(list(embedding_dict.values())), ids, update_metadata=False
         )
-        self.indexes.put(index)
+        # self.indexes.put(index)
         return len(ids)
 
 
@@ -47,7 +48,11 @@ class IndexBuildingMapper(Mapper):
         ).format("*")
 
     def register_executor(self):
-        return concurrent.futures.ThreadPoolExecutor() if config.NPROC > 1 else None
+        return (
+            concurrent.futures.ThreadPoolExecutor(config.NPROC)
+            if config.NPROC > 1
+            else None
+        )
 
     async def initialize_job(self, job_args) -> InteractiveIndex:
         index_dicts = job_args["indexes"]

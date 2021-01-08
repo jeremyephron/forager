@@ -86,8 +86,7 @@ class IndexEmbeddingMapper(Mapper):
         if "http" not in image_path:
             image_bucket = job_args["input_bucket"]
             image_path = os.path.join(config.GCS_URL_PREFIX, image_bucket, image_path)
-        with self.profiler(request_id, "download_time"):
-            image_bytes = await self.download_image(image_path)
+        image_bytes = await self.download_image(image_path)
 
         # Run inference
         model_output_dict = await self.apply_in_executor(
