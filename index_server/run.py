@@ -645,6 +645,10 @@ async def delete_index(request):
 # TODO(all): Clean up this code
 
 
+def extract_embedding_from_mapper_output(output):
+    return np.squeeze(utils.base64_to_numpy(output), axis=0)
+
+
 @app.route("/query_index", methods=["POST"])
 async def query_index(request):
     image_paths = request.form["paths"]
@@ -675,7 +679,7 @@ async def query_index(request):
     # Generate query vector as average of patch embeddings
     job = MapReduceJob(
         MapperSpec(url=mapper_url, n_mappers=n_mappers),
-        PoolingReducer(extract_func=utils.base64_to_numpy),
+        PoolingReducer(extract_func=extract_embedding_from_mapper_output),
         {"input_bucket": bucket, "reduction": "average"},
         n_retries=config.CLOUD_RUN_N_RETRIES,
         chunk_size=1,
@@ -725,7 +729,7 @@ async def active_batch(request):
             url=mapper_url,
             n_mappers=n_mappers,
         ),
-        TrivialReducer(extract_func=utils.base64_to_numpy),
+        TrivialReducer(extract_func=extract_embedding_from_mapper_output),
         {"input_bucket": bucket, "reduction": "average"},
         n_retries=config.CLOUD_RUN_N_RETRIES,
         chunk_size=1,
@@ -789,7 +793,7 @@ async def query_svm(request):
             n_mappers=n_mappers,
         ),  # Figure out n_mappers later
         TrivialReducer(
-            extract_func=utils.base64_to_numpy
+            extract_func=extract_embedding_from_mapper_output
         ),  # Returns all individual inputs back
         {"input_bucket": bucket, "reduction": "average"},
         n_retries=config.CLOUD_RUN_N_RETRIES,
@@ -813,7 +817,7 @@ async def query_svm(request):
             n_mappers=n_mappers,
         ),  # Figure out n_mappers later
         TrivialReducer(
-            extract_func=utils.base64_to_numpy
+            extract_func=extract_embedding_from_mapper_output
         ),  # Returns all individual inputs back
         {"input_bucket": bucket, "reduction": "average"},
         n_retries=config.CLOUD_RUN_N_RETRIES,
