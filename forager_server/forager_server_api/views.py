@@ -1022,6 +1022,7 @@ def lookup_svm(request, dataset_name):
         "use_full_image": use_full_image,
         "mode": mode
     }
+    print(params)
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/query_svm",
         data=params, headers=POST_HEADERS
