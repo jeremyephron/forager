@@ -1,4 +1,5 @@
 import distutils.util
+from google.cloud import storage
 import json
 import os
 import requests
@@ -6,7 +7,7 @@ import urllib.request
 import numpy as np
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
-from google.cloud import storage
+from django.db.models import Q
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
@@ -987,8 +988,8 @@ def lookup_svm(request, dataset_name):
     # getNextImages shows good way to do this
     # Positive patches:
     pos_anns = Annotation.objects.filter(
+        Q(label_type="klabel_extreme") | Q(label_type="klabel_box"),
         dataset_item__in=dataset.datasetitem_set.filter(),
-        label_type="klabel_extreme",
         label_function=label_function,
         label_category=label_category)
     pos_paths = [ann.dataset_item.path for ann in pos_anns]
