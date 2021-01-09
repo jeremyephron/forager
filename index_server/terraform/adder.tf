@@ -15,7 +15,7 @@ variable "adder_num_nodes" {
 
 variable "adder_node_type" {
   type    = string
-  default = "n2-standard-1"
+  default = "n2-standard-2"
 }
 
 variable "adder_nproc" {
