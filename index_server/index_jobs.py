@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import IntEnum
 import os
 from pathlib import Path
@@ -132,10 +132,10 @@ class IndexType(IntEnum):
     SPATIAL_DOT = 3
 
 
-@dataclass
 class Trainer:
-    url: str
-    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    def __init__(self, url: str):
+        self.url = url
+        self.lock = asyncio.Lock()
 
     async def __aenter__(self) -> str:  # returns endpoint
         await self.lock.acquire()
