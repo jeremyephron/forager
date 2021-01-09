@@ -19,16 +19,18 @@ CLUSTER_REUSE_EXISTING = False
 CLUSTER_MOUNT_DIR = Path("~/forager/mount").expanduser().resolve()
 CLUSTER_CLEANUP_TIME = 20 * 60  # seconds (destroy cluster after idle for this long)
 
-MAPPER_NUM_RETRIES = 3
+MAPPER_NUM_RETRIES = 5
 MAPPER_CHUNK_SIZE = lambda nproc: 3
 MAPPER_REQUEST_MULTIPLE = lambda nproc: nproc
-MAPPER_REQUEST_TIMEOUT = 3 * 20  # seconds; more than 20 per image is probably too much
+MAPPER_REQUEST_TIMEOUT = (
+    3 * 60
+)  # seconds; more than a minute per image is probably too much
 MAPPER_CLOUD_RUN_URL = "https://forager-index-mapper-g6rwrca4fq-uc.a.run.app"
 
-ADDER_NUM_RETRIES = 3
+ADDER_NUM_RETRIES = 5
 ADDER_CHUNK_SIZE = lambda nproc: 1
 ADDER_REQUEST_MULTIPLE = lambda nproc: nproc
-ADDER_REQUEST_TIMEOUT = 3 * 60  # seconds
+ADDER_REQUEST_TIMEOUT = 5 * 60  # seconds
 
 NUM_IMAGES_TO_MAP_BEFORE_CONFIGURING_INDEX = 100
 EMBEDDING_DIM = 2048
