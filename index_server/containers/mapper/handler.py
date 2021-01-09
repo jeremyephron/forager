@@ -14,7 +14,7 @@ from detectron2.modeling.backbone.resnet import build_resnet_backbone
 from typing import List, Optional, Tuple, Union
 
 from knn import utils
-from knn.mappers import Mapper
+from knn.mappers import Mapper, MultiprocesingMapper
 
 import config
 import inference
@@ -157,5 +157,7 @@ class IndexEmbeddingMapper(Mapper):
             return None, serialized_outputs
 
 
-mapper = IndexEmbeddingMapper()
-server = mapper.server
+if config.NPROC == 1:
+    server = IndexEmbeddingMapper().server
+else:
+    server = MultiprocesingMapper(IndexEmbeddingMapper, config.NPROC).server

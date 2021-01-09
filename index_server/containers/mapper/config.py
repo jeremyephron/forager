@@ -1,6 +1,7 @@
 from detectron2.config.config import get_cfg as get_default_detectron_config
 import functools
 import numpy as np
+import os
 
 WEIGHTS_PATH = "R-50.pkl"  # model will be downloaded here during container build
 RESNET_CONFIG = get_default_detectron_config()
@@ -14,3 +15,5 @@ REDUCTIONS = {
     None: lambda x: x,
     "average": functools.partial(np.mean, axis=0, keepdims=True),
 }
+
+NPROC = int(os.getenv("NPROC", "1"))

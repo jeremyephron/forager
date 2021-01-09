@@ -13,4 +13,4 @@ RUN apt-get update \
 
 # Run the web service on container startup.
 COPY . ./
-CMD exec uvicorn --host "0.0.0.0" --port $PORT --workers $NPROC --log-level warning handler:server
+CMD exec uvicorn --host "0.0.0.0" --port $PORT --workers 1 --log-level warning handler:server
