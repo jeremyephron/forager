@@ -200,29 +200,40 @@ class TrainingJob:
             )
 
     def configure_index(self, mapper_result: MapperReducer.Result):
-        num_images = (
+        n_vecs = (
             mapper_result.num_images
             if mapper_result.finished
             else self.dataset_num_images
         )
-        if self.average:
-            n_vecs = num_images
-        else:
+        if not self.average:
             n_vecs = int(
-                mapper_result.num_embeddings / mapper_result.num_images * num_images
+                mapper_result.num_embeddings / mapper_result.num_images * n_vecs
             )
         self.index_kwargs = auto_config(
             d=config.EMBEDDING_DIM,
             n_vecs=n_vecs,
             max_ram=config.TRAINING_MAX_RAM,
-            pca_d=config.INDEX_PCA_DIM,
-            sq=config.INDEX_SQ_BYTES,
         )
         self.index_kwargs.update(
             vectors_per_index=config.INDEX_SUBINDEX_SIZE,
             metric="inner product" if self.inner_product else "L2",
             multi_id=True,
         )
+        if (
+            config.BUILD_UNCOMPRESSED_FULL_IMAGE_INDEX
+            and self.average
+            and self.inner_product
+        ):
+            # Don't apply any compression on the flat dot product index so that we can
+            # extract raw full image embeddings (to accelerate SVM training later on)
+            self.index_kwargs.update(direct_map="Hashtable")
+        else:
+            self.index_kwargs.update(
+                transform="PCAR",
+                transform_args=[config.INDEX_PCA_DIM],
+                encoding="SQ",
+                encoding_args=[config.INDEX_SQ_BYTES],
+            )
 
     @property
     def status(self):
