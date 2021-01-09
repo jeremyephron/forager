@@ -27,8 +27,10 @@ async def run_worker(
     output_queue: multiprocessing.Queue,
 ):
     mapper = cls(*args, start_server=False, **kwargs)
-    for request in input_queue.get():
-        output_queue.put(await mapper._handle_request(request))
+    while True:
+        request = input_queue.get()
+        response = await mapper._handle_request(request)
+        output_queue.put(response)
 
 
 class MultiprocesingMapper(Mapper):
