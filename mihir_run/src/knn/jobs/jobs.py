@@ -187,20 +187,23 @@ class MapReduceJob:
 
     @property
     def progress(self) -> Any:
-        end_time = self._end_time or time.time()
-        start_time = self._start_time or end_time
-
         progress = {
             "cost": self.cost,
             "finished": self.finished,
             "n_processed": self._n_successful,
             "n_skipped": self._n_failed,
-            "elapsed_time": end_time - start_time,
+            "elapsed_time": self.elapsed_time,
         }
         if self._n_total is not None:
             progress["n_total"] = self._n_total
 
         return progress
+
+    @property
+    def elapsed_time(self):
+        end_time = self._end_time or time.time()
+        start_time = self._start_time or end_time
+        return end_time - start_time
 
     @property
     def performance(self):

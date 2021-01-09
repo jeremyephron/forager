@@ -795,10 +795,16 @@ class SVMReducer(Reducer):
         training_features = np.stack(self.embeddings)
 
         # Train SVM
+        logger.debug("Starting SVM training")
+        start_time = time.perf_counter()
+
         self.model = svm.SVC(kernel="linear")
         self.model.fit(training_features, training_labels)
         predicted = self.model.predict(training_features)
-        print("SVM accuracy: ", accuracy_score(training_labels, predicted))
+
+        end_time = time.perf_counter()
+        logger.info(f"Trained SVM in {end_time - start_time}s")
+        logger.debug("SVM accuracy: ", accuracy_score(training_labels, predicted))
 
     @property
     def result(self) -> Optional[svm.SVC]:
@@ -842,7 +848,15 @@ async def query_svm(request):
         for image_path, patch in zip(pos_image_paths, pos_patches)
     ]
     neg_inputs = [{"image": image_path, "label": 0} for image_path in neg_image_paths]
+
+    logger.info(
+        f"Starting SVM training vector computation: {len(pos_inputs)} positives, "
+        f"{len(neg_inputs)} negatives"
+    )
     model = await job.run_until_complete(itertools.chain(pos_inputs, neg_inputs))
+    logger.info(
+        f"Finished SVM construction; vector computation took {job.elapsed_time}s"
+    )
 
     if mode == "svmPos" or mode == "spatialSvmPos":
         # Evaluate the SVM by querying index
@@ -897,15 +911,15 @@ async def query_svm(request):
 @app.listener("after_server_stop")
 async def cleanup(app, loop):
     print("Terminating:")
-    await _cleanup_index_build_jobs()
+    await _cleanup_indexes()
     await _cleanup_clusters()
 
 
 @utils.log_exception_from_coro_but_return_none
-async def _cleanup_index_build_jobs():
+async def _cleanup_indexes():
     n = len(current_indexes)
     await current_indexes.clear_async()
-    print(f"- cleaned up {n} index build jobs")
+    print(f"- cleaned up {n} indexes")
 
 
 @utils.log_exception_from_coro_but_return_none
