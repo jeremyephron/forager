@@ -862,7 +862,7 @@ function LabelingPage() {
         var prevFrame = getPrevFrame();
         var nextFrame = getNextFrame();
         if (e.key && e.key.localeCompare("k") === 0) {
-          // Mark interesting
+          // Mark to keep
           for (var i = 0; i < labeler.current_indices.length; i++) {
             var currFrame = labeler.current_indices[i]
             var currIdentifier = labeler.frames[currFrame].data.identifier;
