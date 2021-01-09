@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
+import functools
 import heapq
 
 from dataclasses_json import dataclass_json
@@ -49,14 +50,15 @@ class TopKReducer(Reducer):
         return list(reversed(sorted(self._top_k)))
 
 
-class PoolingReducer(Reducer):
+class VectorReducer(Reducer):
     class PoolingType(Enum):
-        MAX = np.max
-        AVG = np.mean
+        NONE = lambda x: x
+        MAX = functools.partial(np.max, axis=0)
+        AVG = functools.partial(np.mean, axis=0)
 
     def __init__(
         self,
-        pool_func: PoolingType = PoolingType.AVG,
+        pool_func: PoolingType = PoolingType.NONE,
         extract_func: Optional[Callable[[JSONType], np.ndarray]] = None,
     ) -> None:
         super().__init__()
@@ -73,28 +75,7 @@ class PoolingReducer(Reducer):
 
     @property
     def result(self) -> np.ndarray:
-        return self.pool_func(np.stack(self._results), axis=0)
-
-
-class TrivialReducer(Reducer):
-    def __init__(
-        self,
-        extract_func: Optional[Callable[[JSONType], np.ndarray]] = None,
-    ) -> None:
-        super().__init__()
-        self.extract_func = extract_func or self.extract_value
-        self._results = []  # type: List[np.ndarray]
-
-    def handle_result(self, input: JSONType, output: JSONType) -> None:
-        self._results.append(self.extract_func(output))
-
-    def extract_value(self, output: JSONType) -> np.ndarray:
-        assert isinstance(output, str)
-        return utils.base64_to_numpy(output)
-
-    @property
-    def result(self) -> np.ndarray:
-        return np.stack(self._results)
+        return self.pool_func.value(np.stack(self._results))
 
 
 class StatisticsReducer(Reducer):

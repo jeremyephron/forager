@@ -1,2 +1,2 @@
 from .base import Reducer
-from .reducers import TopKReducer, PoolingReducer, StatisticsReducer, TrivialReducer
+from .reducers import TopKReducer, VectorReducer, StatisticsReducer

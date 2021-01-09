@@ -4,6 +4,7 @@ from collections import defaultdict
 from distutils.util import strtobool
 import functools
 import heapq
+import itertools
 import json
 import logging
 import operator
@@ -27,7 +28,7 @@ from interactive_index import InteractiveIndex
 from knn import utils
 from knn.clusters import TerraformModule
 from knn.jobs import MapReduceJob, MapperSpec
-from knn.reducers import PoolingReducer, TrivialReducer
+from knn.reducers import Reducer, VectorReducer
 from knn.utils import JSONType
 
 import config
@@ -663,7 +664,7 @@ async def delete_index(request):
 # TODO(all): Clean up this code
 
 
-def extract_embedding_from_mapper_output(output):
+def extract_embedding_from_mapper_output(output: str) -> np.ndarray:
     return np.squeeze(utils.base64_to_numpy(output), axis=0)
 
 
@@ -677,7 +678,6 @@ async def query_index(request):
             request.form["patches"][0]
         )  # Modified to pass all patches, not just the first
     ]  # [0, 1]^2
-    print(patches)
     index_id = request.form["index_id"][0]
     num_results = int(request.form["num_results"][0])
     augmentations = []
@@ -697,7 +697,10 @@ async def query_index(request):
     # Generate query vector as average of patch embeddings
     job = MapReduceJob(
         MapperSpec(url=mapper_url, n_mappers=n_mappers),
-        PoolingReducer(extract_func=extract_embedding_from_mapper_output),
+        VectorReducer(
+            VectorReducer.PoolingType.AVERAGE,
+            extract_func=extract_embedding_from_mapper_output,
+        ),
         {"input_bucket": bucket, "reduction": "average"},
         n_retries=config.CLOUD_RUN_N_RETRIES,
         chunk_size=1,
@@ -747,7 +750,7 @@ async def active_batch(request):
             url=mapper_url,
             n_mappers=n_mappers,
         ),
-        TrivialReducer(extract_func=extract_embedding_from_mapper_output),
+        VectorReducer(extract_func=extract_embedding_from_mapper_output),
         {"input_bucket": bucket, "reduction": "average"},
         n_retries=config.CLOUD_RUN_N_RETRIES,
         chunk_size=1,
@@ -777,9 +780,35 @@ async def active_batch(request):
     return resp.json({"results": paths})
 
 
+class SVMReducer(Reducer):
+    def __init__(self):
+        self.labels: List[int] = []
+        self.embeddings: List[np.ndarray] = []
+        self.svm: Optional[svm.SVC] = None
+
+    def handle_result(self, input: JSONType, output: str):
+        self.labels.append(int(bool(input["label"])))
+        self.embeddings.append(extract_embedding_from_mapper_output(output))
+
+    def finish(self):
+        training_labels = np.array(self.labels)
+        training_features = np.stack(self.embeddings)
+
+        # Train SVM
+        model = svm.SVC(kernel="linear")
+        model.fit(training_features, training_labels)
+        predicted = model.predict(training_features)
+
+        # Log accuracy
+        print("SVM accuracy: ", accuracy_score(training_labels, predicted))
+
+    @property
+    def result(self) -> Optional[svm.SVC]:
+        return self.svm
+
+
 @app.route("/query_svm", methods=["POST"])
 async def query_svm(request):
-    print(request.form)
     index_id = request.form["index_id"][0]
     bucket = request.form["bucket"][0]
     pos_image_paths = request.form["positive_paths"]
@@ -793,91 +822,35 @@ async def query_svm(request):
     num_results = int(request.form["num_results"][0])
     mode = request.form["mode"][0]
 
+    use_full_image = bool(strtobool(request.form.get("use_full_image", "False")))
+
     # TODO(mihirg): Fall back to cluster?
     mapper_url = config.MAPPER_CLOUD_RUN_URL
     n_mappers = config.CLOUD_RUN_N_MAPPERS
-
-    # Get embeddings from index
-    # We may want to get patch embeddings for labeled images in future--might as well use the bounding box
-    # Only do this if we are using spatial KNN?
-    # Can't really do the following lines on a large index--too expensive
-    # embedding_keys = current_indexes[index_id].labels
-    # embedding = current_indexes[index_id].values
 
     # Generate training vectors
     job = MapReduceJob(
         MapperSpec(
             url=mapper_url,
             n_mappers=n_mappers,
-        ),  # Figure out n_mappers later
-        TrivialReducer(
-            extract_func=extract_embedding_from_mapper_output
-        ),  # Returns all individual inputs back
+        ),
+        SVMReducer(),
         {"input_bucket": bucket, "reduction": "average"},
         n_retries=config.CLOUD_RUN_N_RETRIES,
         chunk_size=1,
     )
-    augmentation_dict = {}
     pos_inputs = [
-        {"image": image_path, "patch": patch, "augmentations": augmentation_dict}
+        {"image": image_path, "patch": patch, "label": 1}
         for image_path, patch in zip(pos_image_paths, pos_patches)
     ]
-    neg_inputs = [
-        {"image": image_path, "augmentations": augmentation_dict}
-        for image_path in neg_image_paths
-    ]
-    # Run positive and negatives separately in case the reducer doesn't maintain order
-    print(pos_inputs + neg_inputs)
-    pos_features = await job.run_until_complete(pos_inputs)
-    job = MapReduceJob(
-        MapperSpec(
-            url=mapper_url,
-            n_mappers=n_mappers,
-        ),  # Figure out n_mappers later
-        TrivialReducer(
-            extract_func=extract_embedding_from_mapper_output
-        ),  # Returns all individual inputs back
-        {"input_bucket": bucket, "reduction": "average"},
-        n_retries=config.CLOUD_RUN_N_RETRIES,
-        chunk_size=1,
-    )
-    neg_features = await job.run_until_complete(neg_inputs)
-    training_labels = np.concatenate(
-        [
-            np.ones(
-                (
-                    len(
-                        pos_features,
-                    )
-                ),
-                dtype=int,
-            ),
-            np.zeros(
-                (
-                    len(
-                        neg_features,
-                    )
-                ),
-                dtype=int,
-            ),
-        ]
-    )
-    training_features = np.concatenate((pos_features, neg_features), axis=0)
-
-    # Train the SVM using pos/neg + their corresponding embeddings
-    model = svm.SVC(kernel="linear")
-    model.fit(training_features, training_labels)
-    predicted = model.predict(training_features)
-
-    # get the accuracy
-    print(accuracy_score(training_labels, predicted))
-
-    use_full_image = bool(strtobool(request.form.get("use_full_image", "False")))
+    neg_inputs = [{"image": image_path, "label": 0} for image_path in neg_image_paths]
+    model = await job.run_until_complete(itertools.chain(pos_inputs, neg_inputs))
 
     if mode == "svmPos" or mode == "spatialSvmPos":
         # Evaluate the SVM by querying index
         w = model.coef_  # This will be the query vector
-        # Also consider returning the support vectors--good to look at examples along hyperplane
+        # Also consider returning the support vectors; good to look at examples along
+        # hyperplane
         w = np.float32(w[0] * 1000)
 
         augmentations = []
@@ -897,7 +870,8 @@ async def query_svm(request):
         return resp.json({"results": paths})
     elif mode == "svmBoundary":
         # Get samples close to boundary vectors
-        # For now, looks like most vectors end up being support vectors since underparamtrized system
+        # For now, looks like most vectors end up being support vectors since
+        # underparamtrized system
         sv = model.support_vectors_
         paths = []
         # Results per vector
