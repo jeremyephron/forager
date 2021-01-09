@@ -160,6 +160,7 @@ class LabeledIndex:
             and not self.start_adding_eventually_task.done()
         ):
             self.start_adding_eventually_task.cancel()
+            await self.start_adding_eventually_task
         if self.adder_job:
             await self.adder_job.stop()
 
@@ -174,6 +175,7 @@ class LabeledIndex:
         # Merge
         if self.merge_task:
             self.merge_task.cancel()
+            await self.merge_task
 
         # Delete unnecessary intermediates from disk
         if not self.ready.is_set():

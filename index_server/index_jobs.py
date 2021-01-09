@@ -225,9 +225,10 @@ class TrainingJob:
 
     def start(self, mapper_result: MapperReducer.Result):
         self.started = True
-        self._task = asyncio.create_task(self.run_until_complete(mapper_result))
+        self._task = self.run_in_background(mapper_result)
 
-    async def run_until_complete(self, mapper_result: MapperReducer.Result):
+    @utils.unasync_as_task
+    async def run_in_background(self, mapper_result: MapperReducer.Result):
         self._start_time = time.time()
         self.configure_index(mapper_result)
 
@@ -243,6 +244,8 @@ class TrainingJob:
                         if response.status != 200:
                             continue
                     await self._failed_or_finished.wait()
+        except asyncio.CancelledError:
+            pass
         finally:
             self._end_time = time.time()
 
