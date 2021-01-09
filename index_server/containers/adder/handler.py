@@ -1,5 +1,7 @@
 import asyncio
-from collections import ChainMap, defaultdict
+from collections import defaultdict
+import concurrent
+import itertools
 
 import numpy as np
 
@@ -21,16 +23,21 @@ class Index:
             worker_id
         )
 
-    def add(self, embedding_dict: Dict[int, np.ndarray]) -> int:
+    def add(self, embedding_dicts: List[Dict[int, np.ndarray]]):
         ids = [
             int(id)
+            for embedding_dict in embedding_dicts
             for id, embeddings in embedding_dict.items()
             for _ in range(embeddings.shape[0])
         ]
-        self.index.add(
-            np.concatenate(list(embedding_dict.values())), ids, update_metadata=False
+        embeddings = np.concatenate(
+            list(
+                itertools.chain(
+                    *[embedding_dict.values() for embedding_dict in embedding_dicts]
+                )
+            )
         )
-        return len(ids)
+        self.index.add(embeddings, ids, update_metadata=False)
 
 
 class IndexBuildingMapper(Mapper):
@@ -38,6 +45,9 @@ class IndexBuildingMapper(Mapper):
         self.shard_pattern_for_glob = config.SHARD_INDEX_NAME_TMPL.format(
             self.worker_id
         ).format("*")
+
+    def register_executor(self):
+        return concurrent.futures.ThreadPoolExecutor()
 
     async def initialize_job(self, job_args) -> InteractiveIndex:
         index_dicts = job_args["indexes"]
@@ -53,53 +63,48 @@ class IndexBuildingMapper(Mapper):
 
         return job_args
 
-    # input = path to a np.save'd Dict[int, np.ndarray] where each value is N x D
+    # inputs = paths to np.save'd Dict[int, np.ndarray] where each value is N x D
     @utils.log_exception_from_coro_but_return_none
-    async def process_element(
-        self, input, job_id, job_args, request_id, element_index
-    ) -> Dict[str, int]:
+    async def process_chunk(
+        self, chunk: List[str], job_id, job_args, request_id
+    ) -> Optional[bool]:
         indexes_by_reduction = job_args["indexes_by_reduction"]
-        path_tmpl = input
+        path_tmpls = chunk
 
-        num_added_dicts = await asyncio.gather(
-            *[
-                self.build_indexes_for_reduction(
-                    reduction, path_tmpl, indexes, request_id
-                )
-                for reduction, indexes in indexes_by_reduction.items()
-            ]
-        )
-        return dict(ChainMap(*num_added_dicts))  # merge the dicts
+        for reduction, indexes in indexes_by_reduction.items():
+            # Step 1: Load saved embeddings of entire chunk into memory
+            with self.profiler(request_id, f"{reduction}_load_time_chunk"):
+                embedding_dicts = await asyncio.gather(
+                    *[
+                        self.apply_in_executor(
+                            lambda p: np.load(p, allow_pickle=True).item(),
+                            path_tmpl.format(reduction),
+                            request_id,
+                            f"{reduction}_load_time",
+                        )
+                        for path_tmpl in path_tmpls
+                    ]
+                )  # type: List[Dict[int, np.ndarray]]
 
-    async def build_indexes_for_reduction(
-        self,
-        reduction: Optional[str],
-        path_tmpl: str,
-        indexes: Dict[str, Index],
-        request_id: str,
-    ) -> Dict[str, int]:
-        # Step 1: Load saved embeddings into memory
-        with self.profiler(request_id, f"{reduction}_load_time"):
-            embedding_dict = np.load(
-                path_tmpl.format(reduction), allow_pickle=True
-            ).item()  # type: Dict[int, np.ndarray]
+            # Step 2: Add to applicable on-disk indexes
+            for index_name, index in indexes.items():
+                with self.profiler(request_id, f"{index_name}_add_time_chunk"):
+                    index.add(embedding_dicts)
 
-        # Step 2: Add to applicable on-disk indexes
-        num_added = {}
-        for index_name, index in indexes.items():
-            with self.profiler(request_id, f"{index_name}_add_time"):
-                num_added[index_name] = index.add(embedding_dict)
-        return num_added
+        return True  # success
+
+    async def process_element(self, *args, **kwargs):
+        raise NotImplementedError()
 
     async def postprocess_chunk(
         self,
         inputs,
-        outputs,
+        outputs: JSONType,
         job_id,
         job_args,
         request_id,
     ) -> Tuple[str, List[JSONType]]:
-        return self.shard_pattern_for_glob, outputs
+        return self.shard_pattern_for_glob, [outputs] * len(inputs)
 
 
 app = IndexBuildingMapper().server

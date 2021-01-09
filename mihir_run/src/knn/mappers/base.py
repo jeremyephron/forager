@@ -58,7 +58,7 @@ class Mapper(abc.ABC):
 
     async def process_chunk(
         self, chunk: List[JSONType], job_id: str, job_args: Any, request_id: str
-    ) -> Tuple[JSONType, List[JSONType]]:
+    ) -> Any:
         return await asyncio.gather(
             *[
                 self.process_element(input, job_id, job_args, request_id, i)
@@ -69,15 +69,17 @@ class Mapper(abc.ABC):
     async def postprocess_chunk(
         self,
         inputs: List[JSONType],
-        outputs: List[Any],
+        outputs: Any,
         job_id: str,
         job_args: Any,
         request_id: str,
     ) -> Tuple[JSONType, List[JSONType]]:
+        if not outputs:
+            outputs = [None] * len(inputs)
         return (
             None,
             outputs,
-        )  # if this is not overridden, process_element must return JSONType
+        )  # if this is not overridden, process_chunk must return List[JSONType]
 
     @abc.abstractmethod
     async def process_element(
