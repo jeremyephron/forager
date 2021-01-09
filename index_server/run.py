@@ -101,25 +101,23 @@ class LabeledIndex:
 
         if use_full_image:
             index = self.indexes[IndexType.FULL_DOT if svm else IndexType.FULL]
-            dists, ids = index.query(query_vector, num_results, n_probes=num_probes)
+            dists, (ids, _) = index.query(
+                query_vector, num_results, n_probes=num_probes
+            )
             assert len(ids) == 1 and len(dists) == 1
-            sorted_id_dist_tuples = [
-                (i, d) for (i, _), d in zip(ids[0], dists[0]) if i >= 0
-            ]
+            sorted_id_dist_tuples = [(i, d) for i, d in zip(ids[0], dists[0]) if i >= 0]
         else:
             index = self.indexes[IndexType.SPATIAL_DOT if svm else IndexType.SPATIAL]
-            dists, ids = index.query(
+            dists, (ids, spatial_ids) = index.query(
                 query_vector,
                 config.QUERY_NUM_RESULTS_MULTIPLE * num_results,
                 n_probes=num_probes,
             )
-            print(dists.shape)
-            print(ids)
-            assert len(ids) == 1 and len(dists) == 1
+            assert len(ids) == 1 and len(spatial_ids) == 1 and len(dists) == 1
 
             # Gather lowest QUERY_PATCHES_PER_IMAGE distances for each image
             dists_by_id: DefaultDict[int, List[float]] = defaultdict(list)
-            for (i, i_spatial), d in zip(ids[0], dists[0]):
+            for i, s, d in zip(ids[0], spatial_ids[0], dists[0]):
                 if i >= 0 and len(dists_by_id[i]) < config.QUERY_PATCHES_PER_IMAGE:
                     dists_by_id[i].append(d)
 
