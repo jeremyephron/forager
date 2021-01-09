@@ -803,7 +803,7 @@ class SVMReducer(Reducer):
         predicted = self.model.predict(training_features)
 
         end_time = time.perf_counter()
-        logger.info(f"Trained SVM in {end_time - start_time}s")
+        logger.info(f"Trained SVM in {end_time - start_time:.3f}s")
         logger.debug(f"SVM accuracy: {accuracy_score(training_labels, predicted)}")
 
     @property
@@ -855,7 +855,7 @@ async def query_svm(request):
     )
     model = await job.run_until_complete(itertools.chain(pos_inputs, neg_inputs))
     logger.info(
-        f"Finished SVM construction; vector computation took {job.elapsed_time}s"
+        f"Finished SVM construction; vector computation took {job.elapsed_time:.3f}s"
     )
     logger.debug(f"Vector computation performance: {job.performance}")
 
