@@ -32,9 +32,9 @@ function BuildIndex({ dataset }) {
 
   if (index.id) {
     if (index.status === 'INDEX_READY') {
-      text = 'Delete index';
+      text = 'Delete index from disk';
     } else if (index.status === 'INDEX_NOT_DOWNLOADED') {
-      text = 'Download index';
+      text = 'Download index to disk';
     } else {
       text = 'Loading index...';
       enabled = false;
