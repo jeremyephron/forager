@@ -259,6 +259,8 @@ class MapReduceJob:
                         break
             except asyncio.CancelledError:
                 raise
+            except asyncio.TimeoutError:
+                pass
             except Exception:
                 action = "skipping" if i == self.n_retries - 1 else "ignoring"
                 print(f"Error from _request ({action})")

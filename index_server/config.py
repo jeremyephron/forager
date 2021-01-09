@@ -21,13 +21,13 @@ CLUSTER_MOUNT_DIR = Path("~/forager/mount").expanduser().resolve()
 MAPPER_NUM_RETRIES = 3
 MAPPER_CHUNK_SIZE = lambda nproc: 12
 MAPPER_REQUEST_MULTIPLE = lambda nproc: nproc
-MAPPER_REQUEST_TIMEOUT = 1.5 * 60  # seconds
+MAPPER_REQUEST_TIMEOUT = 12 * 6  # 6 seconds per image
 MAPPER_CLOUD_RUN_URL = "https://forager-index-mapper-g6rwrca4fq-uw.a.run.app"
 
 ADDER_NUM_RETRIES = 3
 ADDER_CHUNK_SIZE = lambda nproc: 5
 ADDER_REQUEST_MULTIPLE = lambda nproc: nproc
-ADDER_REQUEST_TIMEOUT = 5 * 60  # seconds
+ADDER_REQUEST_TIMEOUT = 5 * 60  # 1 minute per embedding file
 
 NUM_IMAGES_TO_MAP_BEFORE_CONFIGURING_INDEX = 100
 EMBEDDING_DIM = 2048
