@@ -247,9 +247,7 @@ class LabeledIndex:
 
         # Start a background task that waits until the Train step (started automatically
         # per above) is done and then kicks off the Add step
-        self.start_adding_eventually_task = asyncio.create_task(
-            self.start_adding_eventually()
-        )
+        self.start_adding_eventually_task = self.start_adding_eventually()
 
         return self
 
