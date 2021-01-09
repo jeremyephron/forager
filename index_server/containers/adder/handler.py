@@ -80,7 +80,7 @@ class IndexBuildingMapper(Mapper):
                     index.add(
                         all_embeddings,
                         all_image_ids,
-                        extra_ids=all_spatial_ids,
+                        ids_extra=all_spatial_ids,
                         update_metadata=False,
                     )
 
