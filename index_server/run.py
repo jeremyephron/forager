@@ -531,7 +531,7 @@ async def _stop_cluster(cluster):
     # Unmount NFS
     await cluster.mounted.wait()
     proc = await asyncio.create_subprocess_exec(
-        "sudo", "umount", str(cluster.mount_dir)
+        "sudo", "umount", "-f", str(cluster.mount_dir)
     )
     await proc.wait()
     shutil.rmtree(cluster.mount_parent_dir)
