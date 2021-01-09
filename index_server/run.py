@@ -113,6 +113,9 @@ class LabeledIndex:
                 config.QUERY_NUM_RESULTS_MULTIPLE * num_results,
                 n_probes=num_probes,
             )
+            print(dists.shape)
+            print(ids.shape)
+            print(ids)
             assert len(ids) == 1 and len(dists) == 1
 
             # Gather lowest QUERY_PATCHES_PER_IMAGE distances for each image
