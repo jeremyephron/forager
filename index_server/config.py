@@ -27,7 +27,7 @@ MAPPER_CLOUD_RUN_URL = "https://forager-index-mapper-g6rwrca4fq-uw.a.run.app"
 ADDER_NUM_RETRIES = 3
 ADDER_CHUNK_SIZE = lambda nproc: 1
 ADDER_REQUEST_MULTIPLE = lambda nproc: nproc
-ADDER_REQUEST_TIMEOUT = 5 * 60  # 1 minute per embedding file
+ADDER_REQUEST_TIMEOUT = 2 * 60  # seconds
 
 NUM_IMAGES_TO_MAP_BEFORE_CONFIGURING_INDEX = 100
 EMBEDDING_DIM = 2048
