@@ -12,7 +12,7 @@ INSTANCE_IP = urlopen(ip_request).read().decode()
 SANIC_RESPONSE_TIMEOUT = 10 * 60  # seconds
 
 CLOUD_RUN_N_MAPPERS = 100
-CLOUD_RUN_N_RETRIES = 3
+CLOUD_RUN_N_RETRIES = 1
 
 CLUSTER_TERRAFORM_MODULE_PATH = Path("./terraform").resolve()
 CLUSTER_REUSE_EXISTING = False

@@ -20,7 +20,7 @@ gcloud run deploy $name --image gcr.io/$project/$name \
                         --concurrency 1 \
                         --cpu 1 \
                         --max-instances 1000 \
-                        --memory 1Gi \
+                        --memory 2Gi \
                         --timeout 900 \
                         --region $gcr_region \
                         --update-env-vars NPROC=1 \
