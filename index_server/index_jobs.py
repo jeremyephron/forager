@@ -127,8 +127,8 @@ class AdderReducer(Reducer):
 
 class IndexType(IntEnum):
     FULL = 0
-    SPATIAL = 1
-    FULL_DOT = 2
+    FULL_DOT = 1
+    SPATIAL = 2
     SPATIAL_DOT = 3
 
 
