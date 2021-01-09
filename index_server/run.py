@@ -784,7 +784,7 @@ class SVMReducer(Reducer):
     def __init__(self):
         self.labels: List[int] = []
         self.embeddings: List[np.ndarray] = []
-        self.svm: Optional[svm.SVC] = None
+        self.model: Optional[svm.SVC] = None
 
     def handle_result(self, input: JSONType, output: str):
         self.labels.append(int(bool(input["label"])))
@@ -795,16 +795,14 @@ class SVMReducer(Reducer):
         training_features = np.stack(self.embeddings)
 
         # Train SVM
-        model = svm.SVC(kernel="linear")
-        model.fit(training_features, training_labels)
-        predicted = model.predict(training_features)
-
-        # Log accuracy
+        self.model = svm.SVC(kernel="linear")
+        self.model.fit(training_features, training_labels)
+        predicted = self.model.predict(training_features)
         print("SVM accuracy: ", accuracy_score(training_labels, predicted))
 
     @property
     def result(self) -> Optional[svm.SVC]:
-        return self.svm
+        return self.model
 
 
 @app.route("/query_svm", methods=["POST"])
