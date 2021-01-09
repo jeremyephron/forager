@@ -31,7 +31,7 @@ from knn.reducers import PoolingReducer, TrivialReducer
 from knn.utils import JSONType
 
 import config
-from index_jobs import AdderReducer, IndexType, MapperReducer, TrainingJob
+from index_jobs import AdderReducer, IndexType, MapperReducer, Trainer, TrainingJob
 from utils import CleanupDict
 
 
@@ -210,12 +210,13 @@ class LabeledIndex:
         self.cluster = cluster
         self.cluster_unlock_fn = cluster_unlock_fn
 
+        trainers = [Trainer(url) for url in self.cluster.output["trainer_urls"]]
         for index_type in IndexType:
             self.training_jobs[index_type] = TrainingJob(
                 index_type,
                 len(paths),
                 self.index_id,
-                self.cluster.output["trainer_urls"][index_type.value],
+                trainers[index_type.value % len(trainers)],
                 self.cluster.mount_parent_dir,
                 self.http_session,
             )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import IntEnum
 import os
 from pathlib import Path
@@ -132,20 +132,33 @@ class IndexType(IntEnum):
     SPATIAL_DOT = 3
 
 
+@dataclass
+class Trainer:
+    url: str
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+    async def __aenter__(self) -> str:  # returns endpoint
+        await self.lock.acquire()
+        return self.url
+
+    async def __aexit__(self, type, value, traceback):
+        self.lock.release()
+
+
 class TrainingJob:
     def __init__(
         self,
         index_type: IndexType,
         dataset_num_images: int,
         index_id: str,
-        trainer_url: str,
+        trainer: Trainer,
         cluster_mount_parent_dir: Path,
         session: aiohttp.ClientSession,
     ):
         self.index_name = index_type.name
         self.dataset_num_images = dataset_num_images
         self.index_id = index_id
-        self.trainer_url = trainer_url
+        self.trainer = trainer
         self.cluster_mount_parent_dir = cluster_mount_parent_dir
         self.session = session
 
@@ -236,14 +249,15 @@ class TrainingJob:
         try:
             request = self._construct_request(mapper_result.output_path_tmpls)
 
-            while not self.finished.is_set():
-                async with self._failed_or_finished:
-                    async with self.session.post(
-                        self.trainer_url, json=request
-                    ) as response:
-                        if response.status != 200:
-                            continue
-                    await self._failed_or_finished.wait()
+            async with self.trainer as trainer_url:
+                while not self.finished.is_set():
+                    async with self._failed_or_finished:
+                        async with self.session.post(
+                            trainer_url, json=request
+                        ) as response:
+                            if response.status != 200:
+                                continue
+                        await self._failed_or_finished.wait()
         except asyncio.CancelledError:
             pass
         finally:

@@ -10,7 +10,7 @@ variable "trainer_node_pool_name" {
 
 variable "trainer_num_nodes" {
   type    = number
-  default = 4
+  default = 2
 }
 
 variable "trainer_node_type" {
