@@ -1,8 +1,5 @@
 import asyncio
 from collections import ChainMap, defaultdict
-import concurrent
-
-# from queue import SimpleQueue
 
 import numpy as np
 
@@ -19,13 +16,10 @@ import config
 
 class Index:
     def __init__(self, index_dir: str, worker_id: str):
-        # self.indexes: SimpleQueue[InteractiveIndex] = SimpleQueue()
-        # for i in range(config.NPROC):
         self.index = InteractiveIndex.load(index_dir)
         self.index.SHARD_INDEX_NAME_TMPL = config.SHARD_INDEX_NAME_TMPL.format(
-            worker_id, 0
+            worker_id
         )
-        # self.indexes.put(index)
 
     def add(self, embedding_dict: Dict[int, np.ndarray]) -> int:
         ids = [
@@ -33,26 +27,17 @@ class Index:
             for id, embeddings in embedding_dict.items()
             for _ in range(embeddings.shape[0])
         ]
-        # index = self.indexes.get()  # get an index no other thread is adding to
         self.index.add(
             np.concatenate(list(embedding_dict.values())), ids, update_metadata=False
         )
-        # self.indexes.put(index)
         return len(ids)
 
 
 class IndexBuildingMapper(Mapper):
     def initialize_container(self):
         self.shard_pattern_for_glob = config.SHARD_INDEX_NAME_TMPL.format(
-            self.worker_id, "*"
+            self.worker_id
         ).format("*")
-
-    def register_executor(self):
-        return (
-            concurrent.futures.ThreadPoolExecutor(config.NPROC)
-            if config.NPROC > 1
-            else None
-        )
 
     async def initialize_job(self, job_args) -> InteractiveIndex:
         index_dicts = job_args["indexes"]
@@ -100,19 +85,11 @@ class IndexBuildingMapper(Mapper):
             ).item()  # type: Dict[int, np.ndarray]
 
         # Step 2: Add to applicable on-disk indexes
-        num_added = await asyncio.gather(
-            *[
-                self.apply_in_executor(
-                    index.add,
-                    embedding_dict,
-                    request_id=request_id,
-                    profiler_name=f"{index_name}_add_time",
-                )
-                for index_name, index in indexes.items()
-            ]
-        )
-
-        return dict(zip(indexes.keys(), num_added))
+        num_added = {}
+        for index_name, index in indexes.items():
+            with self.profiler(request_id, f"{index_name}_add_time"):
+                num_added[index_name] = index.add(embedding_dict)
+        return num_added
 
     async def postprocess_chunk(
         self,

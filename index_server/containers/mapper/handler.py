@@ -1,5 +1,4 @@
 import asyncio
-import concurrent
 from enum import Enum
 import os
 from pathlib import Path
@@ -50,18 +49,6 @@ class IndexEmbeddingMapper(Mapper):
         # Create connection pool
         self.session = aiohttp.ClientSession()
 
-    def register_executor(self):
-        # Create process pool for parallel inference
-        if config.NPROC > 1:
-            self.model.share_memory()
-            self.pixel_mean.share_memory_()
-            self.pixel_std.share_memory_()
-            return concurrent.futures.ProcessPoolExecutor(
-                config.NPROC, mp_context=torch.multiprocessing.get_context("spawn")
-            )
-        else:
-            return None
-
     async def initialize_job(self, job_args):
         return_type = job_args.get("return_type", "serialize")
         if return_type == "save":
@@ -89,18 +76,16 @@ class IndexEmbeddingMapper(Mapper):
         image_bytes = await self.download_image(image_path)
 
         # Run inference
-        model_output_dict = await self.apply_in_executor(
-            inference.run,
-            image_bytes,
-            image_patch,
-            augmentations,
-            self.input_format,
-            self.pixel_mean,
-            self.pixel_std,
-            self.model,
-            request_id=request_id,
-            profiler_name="inference_time",
-        )
+        with self.profiler(request_id, "inference_time"):
+            model_output_dict = inference.run(
+                image_bytes,
+                image_patch,
+                augmentations,
+                self.input_format,
+                self.pixel_mean,
+                self.pixel_std,
+                self.model,
+            )
 
         with self.profiler(request_id, "flatten_time"):
             spatial_embeddings = next(iter(model_output_dict.values())).numpy()
@@ -111,13 +96,13 @@ class IndexEmbeddingMapper(Mapper):
     async def download_image(
         self, image_path: str, num_retries: int = config.DOWNLOAD_NUM_RETRIES
     ) -> bytes:
-        for i in range(num_retries):
+        for i in range(num_retries + 1):
             try:
                 async with self.session.get(image_path) as response:
                     assert response.status == 200
                     return await response.read()
             except Exception:
-                if i < num_retries - 1:
+                if i < num_retries:
                     await asyncio.sleep(2 ** i)
                 else:
                     raise
