@@ -102,7 +102,8 @@ class IndexBuildingMapper(Mapper):
         return self.shard_pattern_for_glob, outputs
 
 
-if config.NPROC == 1:
-    server = IndexBuildingMapper().server
-else:
-    server = MultiprocesingMapper(IndexBuildingMapper, config.NPROC).server
+if __name__ == "__main__":
+    if config.NPROC == 1:
+        server = IndexBuildingMapper().server
+    else:
+        server = MultiprocesingMapper(IndexBuildingMapper, config.NPROC).server

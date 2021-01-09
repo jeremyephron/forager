@@ -157,7 +157,8 @@ class IndexEmbeddingMapper(Mapper):
             return None, serialized_outputs
 
 
-if config.NPROC == 1:
-    server = IndexEmbeddingMapper().server
-else:
-    server = MultiprocesingMapper(IndexEmbeddingMapper, config.NPROC).server
+if __name__ == "__main__":
+    if config.NPROC == 1:
+        server = IndexEmbeddingMapper().server
+    else:
+        server = MultiprocesingMapper(IndexEmbeddingMapper, config.NPROC).server

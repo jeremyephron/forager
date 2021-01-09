@@ -65,8 +65,8 @@ class MultiprocesingMapper(Mapper):
                 target=run_worker,
                 args=(cls, args, kwargs, self.input_queues[c], self.output_queues[c]),
             )
-            os.system(f"taskset -p -c {c} {proc.pid}")
             proc.start()
+            os.system(f"taskset -p -c {c} {proc.pid}")
             self.worker_queue.put_nowait(c)
 
     def register_executor(self):
