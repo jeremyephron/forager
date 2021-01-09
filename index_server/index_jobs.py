@@ -242,14 +242,15 @@ class TrainingJob:
 
     @utils.unasync_as_task
     async def run_in_background(self, mapper_result: MapperReducer.Result):
-        self._start_time = time.time()
         self.configure_index(mapper_result)
 
-        # TODO(mihirg): Add exponential backoff/better error handling
-        try:
-            request = self._construct_request(mapper_result.output_path_tmpls)
+        async with self.trainer as trainer_url:
+            self._start_time = time.time()
 
-            async with self.trainer as trainer_url:
+            # TODO(mihirg): Add exponential backoff/better error handling
+            try:
+                request = self._construct_request(mapper_result.output_path_tmpls)
+
                 while not self.finished.is_set():
                     async with self._failed_or_finished:
                         async with self.session.post(
@@ -258,10 +259,10 @@ class TrainingJob:
                             if response.status != 200:
                                 continue
                         await self._failed_or_finished.wait()
-        except asyncio.CancelledError:
-            pass
-        finally:
-            self._end_time = time.time()
+            except asyncio.CancelledError:
+                pass
+            finally:
+                self._end_time = time.time()
 
     async def stop(self):
         if self._task is not None and not self._task.done():
