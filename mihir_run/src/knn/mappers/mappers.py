@@ -7,6 +7,7 @@ import os
 
 from typing import Any, DefaultDict, Dict, List, Type
 
+from knn import utils
 from knn.utils import JSONType
 
 from .base import Mapper
@@ -17,7 +18,8 @@ class DummyRequest:
     json: JSONType
 
 
-def run_worker(
+@utils.unasync
+async def run_worker(
     cls: Type[Mapper],
     args: List[Any],
     kwargs: Dict[str, Any],
@@ -26,7 +28,7 @@ def run_worker(
 ):
     mapper = cls(*args, start_server=False, **kwargs)
     for request in input_queue.get():
-        output_queue.put(mapper._handle_request(request))
+        output_queue.put(await mapper._handle_request(request))
 
 
 class MultiprocesingMapper(Mapper):
