@@ -1,7 +1,6 @@
 import asyncio
 from collections import defaultdict
 import concurrent
-import itertools
 
 import numpy as np
 
@@ -24,20 +23,20 @@ class Index:
         )
 
     def add(self, embedding_dicts: List[Dict[int, np.ndarray]]):
-        ids = [
+        all_embeddings = np.concatenate(
+            [
+                embeddings
+                for embedding_dict in embedding_dicts
+                for embeddings in embedding_dict.values()
+            ]
+        )
+        all_ids = [
             int(id)
             for embedding_dict in embedding_dicts
             for id, embeddings in embedding_dict.items()
             for _ in range(embeddings.shape[0])
         ]
-        embeddings = np.concatenate(
-            list(
-                itertools.chain(
-                    *[embedding_dict.values() for embedding_dict in embedding_dicts]
-                )
-            )
-        )
-        self.index.add(embeddings, ids, update_metadata=False)
+        self.index.add(all_embeddings, all_ids, update_metadata=False)
 
 
 class IndexBuildingMapper(Mapper):
