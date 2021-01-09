@@ -1,6 +1,5 @@
 import asyncio
 from collections import defaultdict
-import concurrent
 
 import numpy as np
 
@@ -20,9 +19,6 @@ class IndexBuildingMapper(Mapper):
         self.shard_pattern_for_glob = config.SHARD_INDEX_NAME_TMPL.format(
             self.worker_id
         ).format("*")
-
-    def register_executor(self):
-        return concurrent.futures.ThreadPoolExecutor()
 
     async def initialize_job(self, job_args) -> InteractiveIndex:
         index_dicts = job_args["indexes"]
@@ -51,17 +47,10 @@ class IndexBuildingMapper(Mapper):
         for reduction, indexes in indexes_by_reduction.items():
             # Step 1: Load saved embeddings of entire chunk into memory
             with self.profiler(request_id, f"{reduction}_load_time_chunk"):
-                embedding_dicts = await asyncio.gather(
-                    *[
-                        self.apply_in_executor(
-                            lambda p: np.load(p, allow_pickle=True).item(),
-                            path_tmpl.format(reduction),
-                            request_id=request_id,
-                            profiler_name=f"{reduction}_load_time",
-                        )
-                        for path_tmpl in path_tmpls
-                    ]
-                )  # type: List[Dict[int, np.ndarray]]
+                embedding_dicts = [
+                    np.load(path_tmpl.format(reduction), allow_pickle=True).item()
+                    for path_tmpl in path_tmpls
+                ]  # type: List[Dict[int, np.ndarray]]
 
             # Step 2: Extract embeddings
             with self.profiler(request_id, f"{reduction}_extract_time_chunk"):
