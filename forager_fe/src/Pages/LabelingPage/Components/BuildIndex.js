@@ -8,7 +8,7 @@ import { baseUrl } from "../../../Constants";
 const BuildButton = styled(Button)`
   font-size: 13px;
   height: 28px;
-  width: 150px;
+  width: 200px;
   padding: 0 5px;
   margin-left: 5px;
 `;
