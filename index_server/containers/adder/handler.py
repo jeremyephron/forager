@@ -78,8 +78,8 @@ class IndexBuildingMapper(Mapper):
                         self.apply_in_executor(
                             lambda p: np.load(p, allow_pickle=True).item(),
                             path_tmpl.format(reduction),
-                            request_id,
-                            f"{reduction}_load_time",
+                            request_id=request_id,
+                            profiler_name=f"{reduction}_load_time",
                         )
                         for path_tmpl in path_tmpls
                     ]
