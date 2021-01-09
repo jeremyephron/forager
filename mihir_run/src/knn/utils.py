@@ -6,6 +6,7 @@ import io
 import textwrap
 import traceback
 
+import aiohttp
 import numpy as np
 
 from typing import (
@@ -165,3 +166,8 @@ def base64_to_numpy(nda_base64):
     with io.BytesIO(nda_bytes) as nda_buffer:
         nda = np.load(nda_buffer, allow_pickle=False)
     return nda
+
+
+def create_unlimited_aiohttp_session() -> aiohttp.ClientSession:
+    conn = aiohttp.TCPConnector(limit=0, force_close=True)
+    return aiohttp.ClientSession(connector=conn)

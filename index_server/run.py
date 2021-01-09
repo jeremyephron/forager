@@ -75,7 +75,7 @@ class LabeledIndex:
 
         # Will only be used by the start_building() pathway
         self.cluster: Optional[TerraformModule] = None
-        self.training_http_session: Optional[aiohttp.ClientSession] = None
+        self.http_session: Optional[aiohttp.ClientSession] = None
         self.mapper_job: Optional[MapReduceJob] = None
         self.training_jobs: CleanupDict[IndexType, TrainingJob] = CleanupDict(
             lambda job: job.stop()
@@ -152,8 +152,6 @@ class LabeledIndex:
 
         # Train
         await self.training_jobs.clear_async()
-        if self.training_http_session:
-            await self.training_http_session.close()
 
         # Add
         if (
@@ -164,6 +162,10 @@ class LabeledIndex:
             await self.start_adding_eventually_task
         if self.adder_job:
             await self.adder_job.stop()
+
+        # Close network connections
+        if self.http_session:
+            await self.http_session.close()
 
         # Merge
         if self.merge_task:
@@ -186,6 +188,7 @@ class LabeledIndex:
         **kwargs,
     ):
         self = cls(str(uuid.uuid4()), *args, **kwargs)
+        self.http_session = utils.create_unlimited_aiohttp_session()
 
         # Randomly shuffle input images
         self.labels = random.sample(paths, k=len(paths))
@@ -200,7 +203,6 @@ class LabeledIndex:
         await asyncio.gather(cluster.ready.wait(), cluster.mounted.wait())
         self.cluster = cluster
 
-        self.training_http_session = aiohttp.ClientSession()
         for index_type in IndexType:
             self.training_jobs[index_type] = TrainingJob(
                 index_type,
@@ -208,7 +210,7 @@ class LabeledIndex:
                 self.index_id,
                 self.cluster.output["trainer_urls"][index_type.value],
                 self.cluster.mount_parent_dir,
-                self.training_http_session,
+                self.http_session,
             )
 
         # Step 1: "Map" input images to embedding files saved to shared disk
@@ -230,6 +232,7 @@ class LabeledIndex:
             ),
             MapperReducer([notification_request_to_configure_indexes]),
             {"input_bucket": bucket, "return_type": "save"},
+            session=self.http_session,
             n_retries=config.MAPPER_NUM_RETRIES,
             chunk_size=chunk_size,
             request_timeout=config.MAPPER_REQUEST_TIMEOUT,
@@ -335,10 +338,6 @@ class LabeledIndex:
                 f"({job.mounted_index_dir}) to local disk ({index_subdir})"
             )
 
-        # TODO(mihirg): Fix throughput slowdown for Map when Add is started concurrently
-        # and remove this line!
-        await self.mapper_job.reducer.finished.wait()
-
         # Step 3: As the Map step computes and saves embeddings, "Add" them into shards
         # of the newly trained indexes
         # TODO(mihirg): Consider adding to each index independently as training
@@ -356,6 +355,7 @@ class LabeledIndex:
             ),
             AdderReducer(),
             {"indexes": indexes},
+            session=self.http_session,
             n_retries=config.ADDER_NUM_RETRIES,
             chunk_size=chunk_size,
             request_timeout=config.ADDER_REQUEST_TIMEOUT,

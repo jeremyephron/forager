@@ -86,6 +86,7 @@ class MapReduceJob:
         reducer: Reducer,
         mapper_args: JSONType = {},
         *,
+        session: Optional[aiohttp.ClientSession] = None,
         n_retries: int = defaults.N_RETRIES,
         chunk_size: int = defaults.CHUNK_SIZE,
         request_timeout: int = defaults.REQUEST_TIMEOUT,
@@ -99,7 +100,10 @@ class MapReduceJob:
 
         self.n_retries = n_retries
         self.chunk_size = chunk_size
-        self.request_timeout = request_timeout
+        self.request_timeout = aiohttp.ClientTimeout(total=request_timeout)
+
+        self.owns_session = session is None
+        self.session = session or utils.create_unlimited_aiohttp_session()
 
         # Performance stats
         self._n_requests = 0
@@ -149,17 +153,9 @@ class MapReduceJob:
         try:
             chunk_stream = stream.chunks(stream.iterate(iterable), self.chunk_size)
 
-            connector = aiohttp.TCPConnector(limit=0, force_close=True)
-            timeout = aiohttp.ClientTimeout(total=self.request_timeout)
-            async with self.mapper as mapper_url, chunk_stream.stream() as chunk_gen, aiohttp.ClientSession(
-                connector=connector,
-                timeout=timeout,
-            ) as session:
+            async with self.mapper as mapper_url, chunk_stream.stream() as chunk_gen:
                 async for response in utils.limited_as_completed_from_async_coro_gen(
-                    (
-                        self._request(session, mapper_url, chunk)
-                        async for chunk in chunk_gen
-                    ),
+                    (self._request(mapper_url, chunk) async for chunk in chunk_gen),
                     self.mapper.n_mappers,
                 ):
                     response_tuple = await response
@@ -174,6 +170,9 @@ class MapReduceJob:
             return self.result
         finally:
             self._end_time = time.time()
+
+            if self.owns_session:
+                await self.session.close()
 
     async def stop(self) -> None:
         if self._task and not self._task.done():
@@ -239,7 +238,7 @@ class MapReduceJob:
         }
 
     async def _request(
-        self, session: aiohttp.ClientSession, mapper_url: str, chunk: List[JSONType]
+        self, mapper_url: str, chunk: List[JSONType]
     ) -> Tuple[JSONType, Optional[JSONType], float]:
         result = None
         start_time = 0.0
@@ -252,7 +251,9 @@ class MapReduceJob:
             end_time = start_time
 
             try:
-                async with session.post(mapper_url, json=request) as response:
+                async with self.session.post(
+                    mapper_url, json=request, timeout=self.request_timeout
+                ) as response:
                     end_time = time.time()
                     if response.status == 200:
                         result = await response.json()
