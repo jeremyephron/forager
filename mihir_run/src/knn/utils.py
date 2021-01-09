@@ -132,6 +132,7 @@ def unasync(coro):
 def unasync_as_task(coro):
     @functools.wraps(coro)
     def wrapper(*args, **kwargs):
+        # Surface exceptions when they occur, not when awaited (makes debugging easier)
         new_coro = log_exception_from_coro_but_return_none(coro)
         return asyncio.create_task(new_coro(*args, **kwargs))
 

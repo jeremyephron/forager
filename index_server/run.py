@@ -20,7 +20,7 @@ import sanic.response as resp
 from sklearn import svm
 from sklearn.metrics import accuracy_score
 
-from typing import DefaultDict, Dict, List, Optional, Set
+from typing import Callable, DefaultDict, Dict, List, Optional, Set
 
 from interactive_index import InteractiveIndex
 
@@ -83,6 +83,7 @@ class LabeledIndex:
         self.start_adding_eventually_task: Optional[asyncio.Task] = None
         self.adder_job: Optional[MapReduceJob] = None
         self.merge_task: Optional[asyncio.Task] = None
+        self.cluster_unlock_fn: Optional[Callable[[None], None]] = None
 
     def query(
         self,
@@ -159,7 +160,6 @@ class LabeledIndex:
             and not self.start_adding_eventually_task.done()
         ):
             self.start_adding_eventually_task.cancel()
-            await self.start_adding_eventually_task
         if self.adder_job:
             await self.adder_job.stop()
 
@@ -167,10 +167,13 @@ class LabeledIndex:
         if self.http_session:
             await self.http_session.close()
 
+        # Unlock cluster
+        if self.cluster_unlock_fn:
+            self.cluster_unlock_fn()
+
         # Merge
         if self.merge_task:
             self.merge_task.cancel()
-            await self.merge_task
 
         # Delete unnecessary intermediates from disk
         if not self.ready.is_set():
@@ -182,6 +185,7 @@ class LabeledIndex:
     async def start_building(
         cls,
         cluster: TerraformModule,
+        cluster_unlock_fn: Callable[[None], None],
         bucket: str,
         paths: List[str],
         *args,
@@ -202,6 +206,7 @@ class LabeledIndex:
         # sufficient progress
         await asyncio.gather(cluster.ready.wait(), cluster.mounted.wait())
         self.cluster = cluster
+        self.cluster_unlock_fn = cluster_unlock_fn
 
         for index_type in IndexType:
             self.training_jobs[index_type] = TrainingJob(
@@ -307,6 +312,7 @@ class LabeledIndex:
         if index_type in self.training_jobs:
             await self.training_jobs[index_type].handle_result(result)
 
+    @utils.unasync_as_task
     async def start_adding_eventually(self):
         self.index_dir.mkdir(parents=True, exist_ok=False)
         indexes = {}
@@ -371,9 +377,10 @@ class LabeledIndex:
 
     def start_merging(self, shard_patterns: Set[str]):
         self.logger.info(f"Add: finished with {len(shard_patterns)} shard patterns")
-        self.merge_task = asyncio.create_task(self.merge_indexes(shard_patterns))
+        self.merge_task = self.merge_indexes_in_background(shard_patterns)
 
-    async def merge_indexes(self, shard_patterns: Set[str]):
+    @utils.unasync_as_task
+    async def merge_indexes_in_background(self, shard_patterns: Set[str]):
         loop = asyncio.get_running_loop()
 
         # Step 4: "Merge" shards from shared disk into final local index (in a thread
@@ -384,29 +391,18 @@ class LabeledIndex:
             futures = []
             for index_type, index in self.indexes.items():
                 index_dir = self.training_jobs[index_type].mounted_index_dir
-                shard_paths = [
-                    str(p.resolve())
-                    for shard_pattern in shard_patterns
-                    for p in index_dir.glob(shard_pattern)
-                ]
-
                 future = asyncio.ensure_future(
                     loop.run_in_executor(
-                        pool,
-                        index.merge_partial_indexes,
-                        shard_paths,
+                        pool, self.merge_index, index, shard_patterns, index_dir
                     )
                 )
-                futures.append(future)
-
-                self.logger.info(
-                    f"Merge ({index_type.name}): started with {len(shard_paths)} shards"
-                )
+                self.logger.info(f"Merge ({index_type.name}): started")
                 future.add_done_callback(
                     lambda _, index_type=index_type: self.logger.info(
                         f"Merge ({index_type.name}): finished"
                     )
                 )
+                futures.append(future)
 
             await asyncio.gather(*futures)
 
@@ -415,6 +411,16 @@ class LabeledIndex:
 
         self.logger.info("Finished building index")
         self.ready.set()
+        self.cluster_unlock_fn()
+
+    @staticmethod
+    def merge_index(index: InteractiveIndex, shard_patterns: Set[str], index_dir: str):
+        shard_paths = [
+            str(p.resolve())
+            for shard_pattern in shard_patterns
+            for p in index_dir.glob(shard_pattern)
+        ]
+        index.merge_partial_indexes(shard_paths)
 
     async def upload(self):
         # Dump labels
@@ -535,7 +541,9 @@ async def _stop_cluster(cluster):
 
 
 # TODO(mihirg): Automatically clean up inactive clusters
-current_clusters: CleanupDict[str, TerraformModule] = CleanupDict(_stop_cluster)
+current_clusters: CleanupDict[str, TerraformModule] = CleanupDict(
+    _stop_cluster, app.add_task, config.CLUSTER_CLEANUP_TIME
+)
 
 
 @app.route("/start_cluster", methods=["POST"])
@@ -588,7 +596,10 @@ async def start_job(request):
     paths = request.form["paths"]
 
     cluster = current_clusters[cluster_id]
-    index = await LabeledIndex.start_building(cluster, bucket, paths)
+    lock_id = str(uuid.uuid4())
+    current_clusters.lock(cluster_id, lock_id)
+    cluster_unlock_fn = functools.partial(current_clusters.unlock, cluster_id, lock_id)
+    index = await LabeledIndex.start_building(cluster, cluster_unlock_fn, bucket, paths)
 
     index_id = index.index_id
     current_indexes[index_id] = index

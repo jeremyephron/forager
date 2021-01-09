@@ -15,14 +15,15 @@ CLOUD_RUN_N_MAPPERS = 50
 CLOUD_RUN_N_RETRIES = 1
 
 CLUSTER_TERRAFORM_MODULE_PATH = Path("./terraform").resolve()
-CLUSTER_REUSE_EXISTING = True
+CLUSTER_REUSE_EXISTING = False
 CLUSTER_MOUNT_DIR = Path("~/forager/mount").expanduser().resolve()
+CLUSTER_CLEANUP_TIME = 20 * 60  # seconds (destroy cluster after idle for this long)
 
 MAPPER_NUM_RETRIES = 3
 MAPPER_CHUNK_SIZE = lambda nproc: 12
 MAPPER_REQUEST_MULTIPLE = lambda nproc: nproc
 MAPPER_REQUEST_TIMEOUT = 12 * 6  # 6 seconds per image
-MAPPER_CLOUD_RUN_URL = "https://forager-index-mapper-g6rwrca4fq-uw.a.run.app"
+MAPPER_CLOUD_RUN_URL = "https://forager-index-mapper-g6rwrca4fq-uc.a.run.app"
 
 ADDER_NUM_RETRIES = 3
 ADDER_CHUNK_SIZE = lambda nproc: 1
@@ -42,7 +43,7 @@ TRAINER_STATUS_ENDPOINT = "/trainer_status"
 TRAINER_STATUS_CALLBACK = f"http://{INSTANCE_IP}:5000{TRAINER_STATUS_ENDPOINT}"
 
 INDEX_PARENT_DIR = Path("~/forager/indexes").expanduser().resolve()
-INDEX_UPLOAD_GCS_PATH = "gs://forager/indexes/"  # trailing slash = directory
+INDEX_UPLOAD_GCS_PATH = "gs://foragerml/indexes/"  # trailing slash = directory
 
 QUERY_PATCHES_PER_IMAGE = 8
 QUERY_NUM_RESULTS_MULTIPLE = 80

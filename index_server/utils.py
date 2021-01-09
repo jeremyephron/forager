@@ -25,7 +25,7 @@ class CleanupDict(MutableMapping[KT, VT]):
         cleanup_func: Callable[[VT], Awaitable[None]],
         schedule_func: Optional[Callable[[Awaitable[Any]], Any]] = None,
         timeout: Optional[float] = None,
-        interval: float = 1.0,
+        interval: float = 60,
     ) -> None:
         self.cleanup_func = cleanup_func
         self.schedule_func = schedule_func
@@ -63,7 +63,8 @@ class CleanupDict(MutableMapping[KT, VT]):
         return len(self.store)
 
     def lock(self, key: KT, lock_name: str) -> None:
-        self.locks[key].add(lock_name)
+        if key in self.store:
+            self.locks[key].add(lock_name)
 
     def unlock(self, key: KT, lock_name: str) -> None:
         self.last_accessed[key] = time.time()
