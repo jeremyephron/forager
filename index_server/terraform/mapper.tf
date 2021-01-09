@@ -15,7 +15,7 @@ variable "mapper_num_nodes" {
 
 variable "mapper_node_type" {
   type    = string
-  default = "n2-highcpu-16"
+  default = "n2-standard-16"
 }
 
 variable "mapper_nproc" {
