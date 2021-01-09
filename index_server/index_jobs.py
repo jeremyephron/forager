@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from collections import defaultdict
 from dataclasses import dataclass
 from enum import IntEnum
 import os
@@ -113,15 +112,13 @@ class MapperReducer(Reducer):
 
 class AdderReducer(Reducer):
     def __init__(self):
-        self.num_added_by_index_type = defaultdict(int)
         self.shard_patterns: Set[str] = set()
 
     def handle_chunk_result(self, chunk, chunk_output):
         self.shard_patterns.add(chunk_output)
 
     def handle_result(self, input, output):
-        for index_type, num_added in output.items():
-            self.num_added_by_index_type[index_type] += num_added
+        pass
 
     @property
     def result(self) -> Set[str]:
