@@ -807,7 +807,7 @@ class SVMReducer(Reducer):
 
         end_time = time.perf_counter()
         logger.info(f"Trained SVM in {end_time - start_time}s")
-        logger.debug("SVM accuracy: ", accuracy_score(training_labels, predicted))
+        logger.debug(f"SVM accuracy: {accuracy_score(training_labels, predicted)}")
 
     @property
     def result(self) -> Optional[svm.SVC]:
