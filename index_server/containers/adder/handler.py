@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Tuple
 from interactive_index import InteractiveIndex
 
 from knn import utils
-from knn.mappers import Mapper, MultiprocesingMapper
+from knn.mappers import Mapper
 from knn.utils import JSONType
 
 import config
@@ -102,8 +102,4 @@ class IndexBuildingMapper(Mapper):
         return self.shard_pattern_for_glob, outputs
 
 
-if __name__ == "__main__":
-    if config.NPROC == 1:
-        server = IndexBuildingMapper().server
-    else:
-        server = MultiprocesingMapper(IndexBuildingMapper, config.NPROC).server
+app = IndexBuildingMapper().server

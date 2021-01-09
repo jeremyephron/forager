@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import multiprocessing
 import os
 
-from typing import Any, DefaultDict, Dict, List, Type
+from typing import Any, DefaultDict, Dict, List, Optional, Type
 
 from knn import utils
 from knn.utils import JSONType
@@ -52,7 +52,6 @@ class MultiprocesingMapper(Mapper):
                 next_core = 1
 
         # Start workers in separate processes on CPU cores selected above
-        self.worker_queue: asyncio.Queue[int] = asyncio.Queue()
         self.input_queues: DefaultDict[int, multiprocessing.SimpleQueue] = defaultdict(
             multiprocessing.SimpleQueue
         )
@@ -67,12 +66,20 @@ class MultiprocesingMapper(Mapper):
             )
             proc.start()
             os.system(f"taskset -p -c {c} {proc.pid}")
-            self.worker_queue.put_nowait(c)
+
+        self.worker_queue: Optional[asyncio.Queue[int]] = None
 
     def register_executor(self):
         return concurrent.futures.ThreadPoolExecutor(self.nproc)
 
     async def _handle_request(self, request):
+        # Can't be done in initialize_container because requires async context
+        # Doesn't need lock because never "await"s
+        if self.worker_queue is None:
+            self.worker_queue = asyncio.Queue()
+            for worker_id in self.input_queues:
+                self.worker_queue.put_nowait(worker_id)
+
         # Get an available worker
         worker_id = await self.worker_queue.get()
 
