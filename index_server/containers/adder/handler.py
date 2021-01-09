@@ -15,30 +15,6 @@ from knn.utils import JSONType
 import config
 
 
-class Index:
-    def __init__(self, index_dir: str, worker_id: str):
-        self.index = InteractiveIndex.load(index_dir)
-        self.index.SHARD_INDEX_NAME_TMPL = config.SHARD_INDEX_NAME_TMPL.format(
-            worker_id
-        )
-
-    def add(self, embedding_dicts: List[Dict[int, np.ndarray]]):
-        all_embeddings = np.concatenate(
-            [
-                embeddings
-                for embedding_dict in embedding_dicts
-                for embeddings in embedding_dict.values()
-            ]
-        )
-        all_ids = [
-            int(id)
-            for embedding_dict in embedding_dicts
-            for id, embeddings in embedding_dict.items()
-            for _ in range(embeddings.shape[0])
-        ]
-        self.index.add(all_embeddings, all_ids, update_metadata=False)
-
-
 class IndexBuildingMapper(Mapper):
     def initialize_container(self):
         self.shard_pattern_for_glob = config.SHARD_INDEX_NAME_TMPL.format(
@@ -56,9 +32,11 @@ class IndexBuildingMapper(Mapper):
             reduction = index_dict["reduction"]
             index_dir = index_dict["index_dir"]
 
-            job_args["indexes_by_reduction"][reduction][index_name] = Index(
-                index_dir, self.worker_id
+            index = InteractiveIndex.load(index_dir)
+            index.SHARD_INDEX_NAME_TMPL = config.SHARD_INDEX_NAME_TMPL.format(
+                self.worker_id
             )
+            job_args["indexes_by_reduction"][reduction][index_name] = index
 
         return job_args
 
@@ -85,10 +63,37 @@ class IndexBuildingMapper(Mapper):
                     ]
                 )  # type: List[Dict[int, np.ndarray]]
 
-            # Step 2: Add to applicable on-disk indexes
+            # Step 2: Extract embeddings
+            with self.profiler(request_id, f"{reduction}_extract_time_chunk"):
+                all_embeddings = np.concatenate(
+                    [
+                        embeddings
+                        for embedding_dict in embedding_dicts
+                        for embeddings in embedding_dict.values()
+                    ]
+                )
+                all_image_ids = [
+                    int(id)
+                    for embedding_dict in embedding_dicts
+                    for id, embeddings in embedding_dict.items()
+                    for _ in range(embeddings.shape[0])
+                ]
+                all_spatial_ids = [
+                    i
+                    for embedding_dict in embedding_dicts
+                    for embeddings in embedding_dict.values()
+                    for i in range(embeddings.shape[0])
+                ]
+
+            # Step 3: Add to applicable on-disk indexes
             for index_name, index in indexes.items():
                 with self.profiler(request_id, f"{index_name}_add_time_chunk"):
-                    index.add(embedding_dicts)
+                    index.add(
+                        all_embeddings,
+                        all_image_ids,
+                        extra_ids=all_spatial_ids,
+                        update_metadata=False,
+                    )
 
         return True  # success
 

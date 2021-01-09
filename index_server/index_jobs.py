@@ -208,6 +208,7 @@ class TrainingJob:
         self.index_kwargs.update(
             vectors_per_index=config.INDEX_SUBINDEX_SIZE,
             metric="inner product" if self.inner_product else "L2",
+            multi_id=True,
         )
 
     @property
