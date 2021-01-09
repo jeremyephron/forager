@@ -46,7 +46,7 @@ log_fh.setLevel(logging.DEBUG)
 
 # Create a console handler to print errors to console
 log_ch = logging.StreamHandler()
-log_ch.setLevel(logging.INFO)
+log_ch.setLevel(logging.DEBUG)
 
 # create formatter and add it to the handlers
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -857,6 +857,7 @@ async def query_svm(request):
     logger.info(
         f"Finished SVM construction; vector computation took {job.elapsed_time}s"
     )
+    logger.debug(f"Vector computation performance: {job.performance}")
 
     if mode == "svmPos" or mode == "spatialSvmPos":
         # Evaluate the SVM by querying index
