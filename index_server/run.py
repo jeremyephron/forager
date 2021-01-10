@@ -23,7 +23,7 @@ import sanic.response as resp
 from sklearn import svm
 from sklearn.metrics import accuracy_score
 
-from typing import Callable, DefaultDict, Dict, List, Optional, Set, Tuple
+from typing import Callable, DefaultDict, Dict, List, Optional, Set, Tuple, Union
 
 from interactive_index import InteractiveIndex
 
@@ -68,7 +68,7 @@ class LabeledIndex:
     class QueryResult:
         id: int
         dist: float
-        spatial_dists: Optional[List[Tuple[int, float]]] = None
+        spatial_dists: Union[List[Tuple[int, float]], None] = None
         label: str = ""
 
     # Don't use this directly - use a @classmethod constructor
@@ -116,7 +116,7 @@ class LabeledIndex:
             )
             assert len(ids) == 1 and len(dists) == 1
             sorted_results = [
-                LabeledIndex.QueryResult(i, d)
+                LabeledIndex.QueryResult(int(i), float(d))  # cast numpy types
                 for i, d in zip(ids[0], dists[0])
                 if i >= 0
             ]
@@ -135,6 +135,7 @@ class LabeledIndex:
                 int, List[Tuple[int, float]]
             ] = defaultdict(list)
             for i, l, d in zip(ids[0], locs[0], dists[0]):
+                i, l, d = int(i), int(l), float(d)  # cast numpy types
                 if i >= 0 and len(dists_by_id[i]) < config.QUERY_PATCHES_PER_IMAGE:
                     dists_by_id[i].append(d)
                     spatial_dists_by_id[i].append((l, d))
