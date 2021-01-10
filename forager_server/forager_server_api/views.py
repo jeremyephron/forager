@@ -893,26 +893,29 @@ def delete_annotation(request, dataset_name, image_identifier, ann_identifier):
             safe=False,
             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-def process_ordering_data(request, dataset, ordered_paths):
+def process_image_query_results(request, dataset, ordered_results):
     data_directory = dataset.directory
     split_dir = data_directory[len('gs://'):].split('/')
     bucket_name = split_dir[0]
 
-    ditems = filtered_images(request, dataset, ordered_paths)
+    ditems = filtered_images(request, dataset, [r['label'] for r in ordered_results])
 
     response = {
         'identifiers': [],
-        'paths': []
+        'paths': [],
+        'all_spatial_dists': [],
     }
 
     path_to_id = {}
     for ditem in ditems:
         path_to_id[ditem.path] = ditem.pk
     path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
-    for path in ordered_paths:
+    for result in ordered_results:
+        path = result['label']
         if path in path_to_id:
             response['paths'].append(path_template.format(path))
             response['identifiers'].append(path_to_id[path])
+            response['all_spatial_dists'].append(result['spatial_dists'])
 
     response['num_total'] = len(response['paths'])
 
@@ -961,7 +964,7 @@ def lookup_knn(request, dataset_name):
         data=params, headers=POST_HEADERS
     )
     response_data = r.json()
-    response = process_ordering_data(request, dataset, response_data['results'])
+    response = process_image_query_results(request, dataset, response_data['results'])
 
     # 4. Return knn results
     return JsonResponse(response)
@@ -1030,7 +1033,7 @@ def lookup_svm(request, dataset_name):
     )
     response_data = r.json()
 
-    response = process_ordering_data(request, dataset, response_data['results'])
+    response = process_image_query_results(request, dataset, response_data['results'])
 
     # 4. Return knn results
     return JsonResponse(response)
@@ -1071,7 +1074,7 @@ def active_batch(request, dataset_name):
     response_data = r.json()
 
     # Apply filtering to generated order
-    response = process_ordering_data(request, dataset, response_data['results'])
+    response = process_image_query_results(request, dataset, response_data['results'])
 
     # 4. Return knn results
     return JsonResponse(response)

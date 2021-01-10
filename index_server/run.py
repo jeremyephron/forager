@@ -1,6 +1,7 @@
 import asyncio
 import concurrent
 from collections import defaultdict
+from dataclasses import dataclass
 from distutils.util import strtobool
 import functools
 import heapq
@@ -15,13 +16,14 @@ import time
 import uuid
 
 import aiohttp
+from dataclasses_json import dataclass_json
 import numpy as np
 from sanic import Sanic
 import sanic.response as resp
 from sklearn import svm
 from sklearn.metrics import accuracy_score
 
-from typing import Callable, DefaultDict, Dict, List, Optional, Set
+from typing import Callable, DefaultDict, Dict, List, Optional, Set, Tuple
 
 from interactive_index import InteractiveIndex
 
@@ -60,6 +62,14 @@ logger.addHandler(log_ch)
 
 class LabeledIndex:
     LABEL_FILENAME = "labels.json"
+
+    @dataclass_json
+    @dataclass
+    class QueryResult:
+        id: int
+        dist: float
+        spatial_dists: Optional[List[Tuple[int, float]]] = None
+        label: str = ""
 
     # Don't use this directly - use a @classmethod constructor
     def __init__(self, index_id: str, *args, **kwargs):
@@ -105,30 +115,38 @@ class LabeledIndex:
                 query_vector, num_results, n_probes=num_probes
             )
             assert len(ids) == 1 and len(dists) == 1
-            sorted_id_dist_tuples = [(i, d) for i, d in zip(ids[0], dists[0]) if i >= 0]
+            sorted_results = [
+                LabeledIndex.QueryResult(i, d)
+                for i, d in zip(ids[0], dists[0])
+                if i >= 0
+            ]
         else:
             index = self.indexes[IndexType.SPATIAL_DOT if svm else IndexType.SPATIAL]
-            dists, (ids, spatial_ids) = index.query(
+            dists, (ids, locs) = index.query(
                 query_vector,
                 config.QUERY_NUM_RESULTS_MULTIPLE * num_results,
                 n_probes=num_probes,
             )
-            assert len(ids) == 1 and len(spatial_ids) == 1 and len(dists) == 1
+            assert len(ids) == 1 and len(locs) == 1 and len(dists) == 1
 
             # Gather lowest QUERY_PATCHES_PER_IMAGE distances for each image
             dists_by_id: DefaultDict[int, List[float]] = defaultdict(list)
-            for i, s, d in zip(ids[0], spatial_ids[0], dists[0]):
+            spatial_dists_by_id: DefaultDict[
+                int, List[Tuple[int, float]]
+            ] = defaultdict(list)
+            for i, l, d in zip(ids[0], locs[0], dists[0]):
                 if i >= 0 and len(dists_by_id[i]) < config.QUERY_PATCHES_PER_IMAGE:
                     dists_by_id[i].append(d)
+                    spatial_dists_by_id.append((l, d))
 
             # Average them and resort
-            id_dist_tuple_gen = (
-                (i, sum(ds) / len(ds))
+            result_gen = (
+                LabeledIndex.QueryResult(i, sum(ds) / len(ds), spatial_dists_by_id[i])
                 for i, ds in dists_by_id.items()
                 if len(ds) == config.QUERY_PATCHES_PER_IMAGE
             )
-            sorted_id_dist_tuples = heapq.nsmallest(
-                num_results, id_dist_tuple_gen, operator.itemgetter(1)
+            sorted_results = heapq.nsmallest(
+                num_results, result_gen, operator.attrgetter("dist")
             )
 
         end = time.perf_counter()
@@ -136,10 +154,12 @@ class LabeledIndex:
             f"Query of size {query_vector.shape} with k={num_results}, "
             f"n_probes={num_probes}, n_centroids={index.n_centroids}, and "
             f"n_vectors={index.n_vectors} took {end - start:.3f}s, and "
-            f"got {len(sorted_id_dist_tuples)} results."
+            f"got {len(sorted_results)} results."
         )
 
-        return [(self.labels[i], d) for i, d in sorted_id_dist_tuples]
+        for result in sorted_results:
+            result.label = self.labels[result.id]
+        return sorted_results
 
     # CLEANUP
 
@@ -719,8 +739,7 @@ async def query_index(request):
     query_results = current_indexes[index_id].query(
         query_vector, num_results, None, use_full_image, False
     )
-    paths = [x[0] for x in query_results]
-    return resp.json({"results": paths})
+    return resp.json({"results": LabeledIndex.schema().dumps(query_results, many=True)})
 
 
 @app.route("/active_batch", methods=["POST"])
@@ -765,7 +784,7 @@ async def active_batch(request):
         ]
     )
 
-    paths = []
+    all_results = {}
     # Results per vector
     perVector = (int)(num_results / len(query_vectors)) + 2
     for vec in query_vectors:
@@ -777,10 +796,16 @@ async def active_batch(request):
             use_full_image,
             False,  # False bc just standard nearest neighbor
         )
-        paths.extend([x[0] for x in query_results])
-    paths = list(set(paths))  # Unordered, could choose to order this by distance
 
-    return resp.json({"results": paths})
+        # Remove duplicates; for each image, include closest result
+        for result in query_results:
+            label = result.label
+            if label not in all_results or all_results[label].dist > result.dist:
+                all_results[label] = result
+
+    return resp.json(
+        {"results": LabeledIndex.schema().dumps(list(all_results.values()), many=True)}
+    )  # unordered by distance for now
 
 
 class SVMReducer(Reducer):
@@ -881,15 +906,15 @@ async def query_svm(request):
         query_results = current_indexes[index_id].query(
             w, num_results, None, use_full_image, True
         )
-
-        paths = [x[0] for x in query_results]
-        return resp.json({"results": paths})
+        return resp.json(
+            {"results": LabeledIndex.schema().dumps(query_results, many=True)}
+        )
     elif mode == "svmBoundary":
         # Get samples close to boundary vectors
         # For now, looks like most vectors end up being support vectors since
         # underparamtrized system
         sv = model.support_vectors_
-        paths = []
+        all_results = {}
         # Results per vector
         perVector = (int)(num_results / len(sv)) + 2
         for vec in sv:
@@ -901,10 +926,20 @@ async def query_svm(request):
                 use_full_image,
                 False,  # False bc just standard nearest neighbor
             )
-            paths.extend([x[0] for x in query_results])
-        # Remove duplicates (without maintaining order for now)
-        paths = list(set(paths))
-        return resp.json({"results": paths})
+
+            # Remove duplicates; for each image, include closest result
+            for result in query_results:
+                label = result.label
+                if label not in all_results or all_results[label].dist > result.dist:
+                    all_results[label] = result
+
+        return resp.json(
+            {
+                "results": LabeledIndex.schema().dumps(
+                    list(all_results.values()), many=True
+                )
+            }
+        )  # unordered by distance for now
     else:
         return resp.json({"results": []})
 
