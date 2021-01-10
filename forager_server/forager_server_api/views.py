@@ -894,6 +894,8 @@ def delete_annotation(request, dataset_name, image_identifier, ann_identifier):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 def process_image_query_results(request, dataset, ordered_results):
+    print(ordered_results)
+
     data_directory = dataset.directory
     split_dir = data_directory[len('gs://'):].split('/')
     bucket_name = split_dir[0]

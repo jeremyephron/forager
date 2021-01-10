@@ -23,7 +23,7 @@ import sanic.response as resp
 from sklearn import svm
 from sklearn.metrics import accuracy_score
 
-from typing import Callable, DefaultDict, Dict, List, Optional, Set, Tuple, Union
+from typing import Callable, DefaultDict, Dict, List, Optional, Set, Tuple
 
 from interactive_index import InteractiveIndex
 
@@ -68,7 +68,7 @@ class LabeledIndex:
     class QueryResult:
         id: int
         dist: float
-        spatial_dists: Union[List[Tuple[int, float]], None] = None
+        spatial_dists: Optional[List[Tuple[int, float]]] = None
         label: str = ""
 
     # Don't use this directly - use a @classmethod constructor
