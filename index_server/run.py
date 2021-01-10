@@ -137,7 +137,7 @@ class LabeledIndex:
             for i, l, d in zip(ids[0], locs[0], dists[0]):
                 if i >= 0 and len(dists_by_id[i]) < config.QUERY_PATCHES_PER_IMAGE:
                     dists_by_id[i].append(d)
-                    spatial_dists_by_id.append((l, d))
+                    spatial_dists_by_id[i].append((l, d))
 
             # Average them and resort
             result_gen = (
