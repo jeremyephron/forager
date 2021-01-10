@@ -178,7 +178,7 @@ class LabeledIndex:
             self.merge_task.cancel()
             await self.merge_task
 
-        # Delete unnecessary intermediates from disk
+        # Delete unnecessary intermediates from local disk
         if not self.ready.is_set():
             shutil.rmtree(self.index_dir)
 
@@ -528,17 +528,20 @@ async def _start_cluster(cluster):
 
 
 async def _stop_cluster(cluster):
+    await asyncio.gather(cluster.ready.wait(), cluster.mounted.wait())
+
     # Unmount NFS
-    await cluster.mounted.wait()
     proc = await asyncio.create_subprocess_exec(
-        "sudo", "umount", "-f", str(cluster.mount_dir)
+        "sudo", "umount", "-f", "-l", str(cluster.mount_dir)
     )
     await proc.wait()
-    shutil.rmtree(cluster.mount_parent_dir)
+    try:
+        shutil.rmtree(cluster.mount_parent_dir)
+    except Exception:
+        pass
 
     # Destroy cluster
     if not config.CLUSTER_REUSE_EXISTING:
-        await cluster.ready.wait()
         await cluster.destroy()
 
 
