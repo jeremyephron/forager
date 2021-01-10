@@ -739,7 +739,9 @@ async def query_index(request):
     query_results = current_indexes[index_id].query(
         query_vector, num_results, None, use_full_image, False
     )
-    return resp.json({"results": LabeledIndex.schema().dumps(query_results, many=True)})
+    return resp.json(
+        {"results": LabeledIndex.QueryResult.schema().dumps(query_results, many=True)}
+    )
 
 
 @app.route("/active_batch", methods=["POST"])
@@ -804,7 +806,11 @@ async def active_batch(request):
                 all_results[label] = result
 
     return resp.json(
-        {"results": LabeledIndex.schema().dumps(list(all_results.values()), many=True)}
+        {
+            "results": LabeledIndex.QueryResult.schema().dumps(
+                list(all_results.values()), many=True
+            )
+        }
     )  # unordered by distance for now
 
 
@@ -907,7 +913,11 @@ async def query_svm(request):
             w, num_results, None, use_full_image, True
         )
         return resp.json(
-            {"results": LabeledIndex.schema().dumps(query_results, many=True)}
+            {
+                "results": LabeledIndex.QueryResult.schema().dumps(
+                    query_results, many=True
+                )
+            }
         )
     elif mode == "svmBoundary":
         # Get samples close to boundary vectors
@@ -935,7 +945,7 @@ async def query_svm(request):
 
         return resp.json(
             {
-                "results": LabeledIndex.schema().dumps(
+                "results": LabeledIndex.QueryResult.schema().dumps(
                     list(all_results.values()), many=True
                 )
             }
