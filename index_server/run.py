@@ -722,7 +722,7 @@ async def query_index(request):
     job = MapReduceJob(
         MapperSpec(url=mapper_url, n_mappers=n_mappers),
         VectorReducer(
-            VectorReducer.PoolingType.AVERAGE,
+            VectorReducer.PoolingType.AVG,
             extract_func=extract_embedding_from_mapper_output,
         ),
         {"input_bucket": bucket, "reduction": "average"},
