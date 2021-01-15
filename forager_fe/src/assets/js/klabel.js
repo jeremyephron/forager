@@ -517,8 +517,8 @@ export class ImageLabeler {
 	draw_heatmap(ctx, cur_frame) {
 		const PATCH_SIZE = 16;
 
-		for (let i = 0; i < cur_frame.image_data.spatial_dists.length; i++) {
-			let patch_idx = cur_frame.image_data.spatial_dists[i][0];
+		for (let i = 0; i < cur_frame.data.spatial_dists.length; i++) {
+			let patch_idx = cur_frame.data.spatial_dists[i][0];
 			let n_cols = Math.floor(cur_frame.source_image.width / PATCH_SIZE);
 			let x = (patch_idx % n_cols) * PATCH_SIZE;
 			let y = Math.floor(patch_idx / n_cols) * PATCH_SIZE;
