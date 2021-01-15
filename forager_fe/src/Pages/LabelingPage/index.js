@@ -560,6 +560,7 @@ function LabelingPage() {
         const data = new ImageData();
         data.source_url = res.paths[i];
         data.identifier = res.identifiers[i];
+        data.spatial_dists = res.all_spatial_dists[i];
 
         if (data.identifier in annotations) {
           annotations[data.identifier].map(ann => {
