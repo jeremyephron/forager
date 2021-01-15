@@ -523,7 +523,7 @@ export class ImageLabeler {
 			let x = (patch_idx % n_cols) * PATCH_SIZE;
 			let y = Math.floor(patch_idx / n_cols) * PATCH_SIZE;
 
-			canvas_coord = this.image_to_canvas(Point2D(x, y));
+			let canvas_coord = this.image_to_canvas(Point2D(x, y));
 
 			ctx.fillStyle = 'rgba(230,0,0,0.5)';
 			ctx.fillRect(canvas_coord.x, canvas_coord.y, PATCH_SIZE, PATCH_SIZE);
