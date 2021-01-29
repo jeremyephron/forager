@@ -1,5 +1,6 @@
 import distutils.util
 from google.cloud import storage
+from enum import Enum
 import json
 import os
 import requests
@@ -24,6 +25,12 @@ POST_HEADERS = {
     "Content-type": "application/x-www-form-urlencoded",
     "Accept": "application/json",
 }
+
+class LabelCategory:
+    positive = 1
+    negative = 2
+    hard_negative = 3
+    unsure = 4
 
 def nest_anns(anns, nest_category=True, nest_lf=True):
     if nest_category and nest_lf:
@@ -510,12 +517,6 @@ def get_users_and_categories(request, dataset_name):
     return JsonResponse(result)
 
 def filtered_images(request, dataset, path_filter=None):
-    CATEGORIES = {
-        'positive': 1,
-        'negative': 2,
-        'hard_negative': 3,
-        'unsure': 4,
-    }
     label_function = request.GET['user']
     category = request.GET['category']
     label_value = request.GET['filter']
@@ -560,7 +561,7 @@ def filtered_images(request, dataset, path_filter=None):
         anns = filter_most_recent_anns(
             nest_anns(annotations, nest_category=False, nest_lf=False))
 
-        cat_value = CATEGORIES[label_value]
+        cat_value = LabelCategory[label_value].value
         images_with_label = set()
         for di_pk, ann_list in anns.items():
             for ann in ann_list:
@@ -1010,7 +1011,10 @@ def lookup_svm(request, dataset_name):
     neg_paths = []
     for ann in frame_anns:
         label_value = json.loads(ann.label_data)['value']
-        if label_value == 2:
+        if label_value in (
+            LabelCategory.negative.value,
+            LabelCategory.hard_negative.value,
+        ):
             neg_paths.append(ann.dataset_item.path)
 
     # 3. Send paths and patches to /query_svm
