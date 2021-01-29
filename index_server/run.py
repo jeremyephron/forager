@@ -830,35 +830,21 @@ async def active_batch(request):
     )  # unordered by distance for now
 
 
-class SVMReducer(Reducer):
+# TODO(mihirg): Reuse these instances (maybe in an ExpiringDict, storing embeddings in
+# a Chest internally?) to cache embeddings and speed up repeatedly iterating on training
+# an SVM on a particular dataset
+class SVMExampleReducer(Reducer):
     def __init__(self):
         self.labels: List[int] = []
         self.embeddings: List[np.ndarray] = []
-        self.model: Optional[svm.SVC] = None
 
     def handle_result(self, input: JSONType, output: str):
         self.labels.append(int(bool(input["label"])))
         self.embeddings.append(extract_embedding_from_mapper_output(output))
 
-    def finish(self):
-        training_labels = np.array(self.labels)
-        training_features = np.stack(self.embeddings)
-
-        # Train SVM
-        logger.debug("Starting SVM training")
-        start_time = time.perf_counter()
-
-        self.model = svm.SVC(kernel="linear")
-        self.model.fit(training_features, training_labels)
-        predicted = self.model.predict(training_features)
-
-        end_time = time.perf_counter()
-        logger.info(f"Trained SVM in {end_time - start_time:.3f}s")
-        logger.debug(f"SVM accuracy: {accuracy_score(training_labels, predicted)}")
-
     @property
-    def result(self) -> Optional[svm.SVC]:
-        return self.model
+    def result(self) -> Tuple[np.ndarray, np.ndarray]:  # features, labels
+        return np.stack(self.embeddings), np.array(self.labels)
 
 
 @app.route("/query_svm", methods=["POST"])
@@ -883,7 +869,7 @@ async def query_svm(request):
     with BestMapper(cluster_id) as mapper:
         job = MapReduceJob(
             mapper,
-            SVMReducer(),
+            SVMExampleReducer(),
             {"input_bucket": bucket, "reduction": "average"},
             n_retries=config.CLOUD_RUN_N_RETRIES,
             chunk_size=1,
@@ -900,11 +886,23 @@ async def query_svm(request):
             f"Starting SVM training vector computation: {len(pos_inputs)} positives, "
             f"{len(neg_inputs)} negatives"
         )
-        model = await job.run_until_complete(itertools.chain(pos_inputs, neg_inputs))
-        logger.info(
-            f"Finished SVM construction; vector computation took {job.elapsed_time:.3f}s"
+        training_features, training_labels = await job.run_until_complete(
+            itertools.chain(pos_inputs, neg_inputs)
         )
+        logger.info(f"Finished SVM vector computation in {job.elapsed_time:.3f}s")
         logger.debug(f"Vector computation performance: {job.performance}")
+
+    # Train SVM
+    logger.debug("Starting SVM training")
+    start_time = time.perf_counter()
+
+    model = svm.SVC(kernel="linear")
+    model.fit(training_features, training_labels)
+    predicted = model.predict(training_features)
+
+    end_time = time.perf_counter()
+    logger.info(f"Finished training SVM in {end_time - start_time:.3f}s")
+    logger.debug(f"SVM accuracy: {accuracy_score(training_labels, predicted)}")
 
     if mode == "svmPos" or mode == "spatialSvmPos":
         # Evaluate the SVM by querying index
