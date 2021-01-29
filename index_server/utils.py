@@ -1,6 +1,7 @@
 import asyncio
 from collections import defaultdict
 import time
+import uuid
 
 from typing import (
     Any,
@@ -62,9 +63,12 @@ class CleanupDict(MutableMapping[KT, VT]):
     def __len__(self) -> int:
         return len(self.store)
 
-    def lock(self, key: KT, lock_name: str) -> None:
-        if key in self.store:
-            self.locks[key].add(lock_name)
+    def lock(self, key: KT, lock_name: Optional[str] = None) -> Optional[str]:
+        if key not in self.store:
+            return None
+        lock_name = lock_name or str(uuid.uuid4())
+        self.locks[key].add(lock_name)
+        return lock_name
 
     def unlock(self, key: KT, lock_name: str) -> None:
         self.last_accessed[key] = time.time()

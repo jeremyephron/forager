@@ -622,8 +622,7 @@ async def start_job(request):
     paths = request.form["paths"]
 
     cluster = current_clusters[cluster_id]
-    lock_id = str(uuid.uuid4())
-    current_clusters.lock(cluster_id, lock_id)
+    lock_id = current_clusters.lock(cluster_id)
     cluster_unlock_fn = functools.partial(current_clusters.unlock, cluster_id, lock_id)
     index = await LabeledIndex.start_building(cluster, cluster_unlock_fn, bucket, paths)
 
@@ -692,9 +691,35 @@ def extract_embedding_from_mapper_output(output: str) -> np.ndarray:
     return np.squeeze(utils.base64_to_numpy(output), axis=0)
 
 
+class BestMapper:
+    def __init__(self, cluster_id: str):
+        self.cluster_id = cluster_id
+        self.lock_id: Optional[str] = None
+
+    async def __aenter__(self) -> MapperSpec:  # returns endpoint
+        cluster = current_clusters.get(self.cluster_id)
+        if cluster and cluster.ready.is_set():
+            self.lock_id = current_clusters.lock(self.cluster_id)
+
+            nproc = cluster.output["mapper_nproc"]
+            n_mappers = int(
+                cluster.output["num_mappers"] * config.MAPPER_REQUEST_MULTIPLE(nproc)
+            )
+            return MapperSpec(url=cluster.output["mapper_url"], n_mappers=n_mappers)
+        else:
+            return MapperSpec(
+                url=config.MAPPER_CLOUD_RUN_URL, n_mappers=config.CLOUD_RUN_N_MAPPERS
+            )
+
+    async def __aexit__(self, type, value, traceback):
+        if self.lock_id:
+            current_clusters.unlock(self.cluster_id, self.lock_id)
+
+
 @app.route("/query_index", methods=["POST"])
 async def query_index(request):
     image_paths = request.form["paths"]
+    cluster_id = request.form["cluster_id"][0]
     bucket = request.form["bucket"][0]
     patches = [
         [float(patch[k]) for k in ("x1", "y1", "x2", "y2")]
@@ -714,27 +739,28 @@ async def query_index(request):
 
     use_full_image = bool(strtobool(request.form.get("use_full_image", "False")))
 
-    # TODO(mihirg): Fall back to cluster?
-    mapper_url = config.MAPPER_CLOUD_RUN_URL
-    n_mappers = config.CLOUD_RUN_N_MAPPERS
-
     # Generate query vector as average of patch embeddings
-    job = MapReduceJob(
-        MapperSpec(url=mapper_url, n_mappers=n_mappers),
-        VectorReducer(
-            VectorReducer.PoolingType.AVG,
-            extract_func=extract_embedding_from_mapper_output,
-        ),
-        {"input_bucket": bucket, "reduction": "average"},
-        n_retries=config.CLOUD_RUN_N_RETRIES,
-        chunk_size=1,
-    )
-    query_vector = await job.run_until_complete(
-        [
-            {"image": image_path, "patch": patch, "augmentations": augmentation_dict}
-            for image_path, patch in zip(image_paths, patches)
-        ]
-    )
+    with BestMapper(cluster_id) as mapper:
+        job = MapReduceJob(
+            mapper,
+            VectorReducer(
+                VectorReducer.PoolingType.AVG,
+                extract_func=extract_embedding_from_mapper_output,
+            ),
+            {"input_bucket": bucket, "reduction": "average"},
+            n_retries=config.CLOUD_RUN_N_RETRIES,
+            chunk_size=1,
+        )
+        query_vector = await job.run_until_complete(
+            [
+                {
+                    "image": image_path,
+                    "patch": patch,
+                    "augmentations": augmentation_dict,
+                }
+                for image_path, patch in zip(image_paths, patches)
+            ]
+        )
 
     # Run query and return results
     query_results = current_indexes[index_id].query(
@@ -751,6 +777,7 @@ async def active_batch(request):
     #    for patch in json.loads(request.form['patches'][0]) # Modified to pass all patches, not just the first
     # ]  # [0, 1]^2
     bucket = request.form["bucket"][0]
+    cluster_id = request.form["cluster_id"][0]
     index_id = request.form["index_id"][0]
     num_results = int(request.form["num_results"][0])
     augmentations = []
@@ -763,27 +790,21 @@ async def active_batch(request):
 
     use_full_image = True
 
-    # TODO(mihirg): Fall back to cluster?
-    mapper_url = config.MAPPER_CLOUD_RUN_URL
-    n_mappers = config.CLOUD_RUN_N_MAPPERS
-
     # Generate query vector as average of patch embeddings
-    job = MapReduceJob(
-        MapperSpec(
-            url=mapper_url,
-            n_mappers=n_mappers,
-        ),
-        VectorReducer(extract_func=extract_embedding_from_mapper_output),
-        {"input_bucket": bucket, "reduction": "average"},
-        n_retries=config.CLOUD_RUN_N_RETRIES,
-        chunk_size=1,
-    )
-    query_vectors = await job.run_until_complete(
-        [
-            {"image": image_path, "augmentations": augmentation_dict}
-            for image_path in image_paths
-        ]
-    )
+    with BestMapper(cluster_id) as mapper:
+        job = MapReduceJob(
+            mapper,
+            VectorReducer(extract_func=extract_embedding_from_mapper_output),
+            {"input_bucket": bucket, "reduction": "average"},
+            n_retries=config.CLOUD_RUN_N_RETRIES,
+            chunk_size=1,
+        )
+        query_vectors = await job.run_until_complete(
+            [
+                {"image": image_path, "augmentations": augmentation_dict}
+                for image_path in image_paths
+            ]
+        )
 
     all_results = {}
     # Results per vector
@@ -843,6 +864,7 @@ class SVMReducer(Reducer):
 @app.route("/query_svm", methods=["POST"])
 async def query_svm(request):
     index_id = request.form["index_id"][0]
+    cluster_id = request.form["cluster_id"][0]
     bucket = request.form["bucket"][0]
     pos_image_paths = request.form["positive_paths"]
     pos_patches = [
@@ -857,36 +879,32 @@ async def query_svm(request):
 
     use_full_image = bool(strtobool(request.form.get("use_full_image", "False")))
 
-    # TODO(mihirg): Fall back to cluster?
-    mapper_url = config.MAPPER_CLOUD_RUN_URL
-    n_mappers = config.CLOUD_RUN_N_MAPPERS
-
     # Generate training vectors
-    job = MapReduceJob(
-        MapperSpec(
-            url=mapper_url,
-            n_mappers=n_mappers,
-        ),
-        SVMReducer(),
-        {"input_bucket": bucket, "reduction": "average"},
-        n_retries=config.CLOUD_RUN_N_RETRIES,
-        chunk_size=1,
-    )
-    pos_inputs = [
-        {"image": image_path, "patch": patch, "label": 1}
-        for image_path, patch in zip(pos_image_paths, pos_patches)
-    ]
-    neg_inputs = [{"image": image_path, "label": 0} for image_path in neg_image_paths]
+    with BestMapper(cluster_id) as mapper:
+        job = MapReduceJob(
+            mapper,
+            SVMReducer(),
+            {"input_bucket": bucket, "reduction": "average"},
+            n_retries=config.CLOUD_RUN_N_RETRIES,
+            chunk_size=1,
+        )
+        pos_inputs = [
+            {"image": image_path, "patch": patch, "label": 1}
+            for image_path, patch in zip(pos_image_paths, pos_patches)
+        ]
+        neg_inputs = [
+            {"image": image_path, "label": 0} for image_path in neg_image_paths
+        ]
 
-    logger.info(
-        f"Starting SVM training vector computation: {len(pos_inputs)} positives, "
-        f"{len(neg_inputs)} negatives"
-    )
-    model = await job.run_until_complete(itertools.chain(pos_inputs, neg_inputs))
-    logger.info(
-        f"Finished SVM construction; vector computation took {job.elapsed_time:.3f}s"
-    )
-    logger.debug(f"Vector computation performance: {job.performance}")
+        logger.info(
+            f"Starting SVM training vector computation: {len(pos_inputs)} positives, "
+            f"{len(neg_inputs)} negatives"
+        )
+        model = await job.run_until_complete(itertools.chain(pos_inputs, neg_inputs))
+        logger.info(
+            f"Finished SVM construction; vector computation took {job.elapsed_time:.3f}s"
+        )
+        logger.debug(f"Vector computation performance: {job.performance}")
 
     if mode == "svmPos" or mode == "spatialSvmPos":
         # Evaluate the SVM by querying index
