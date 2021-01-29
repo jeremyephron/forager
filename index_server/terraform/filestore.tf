@@ -1,6 +1,6 @@
-variable "disk_tb" {
+variable "disk_gb" {
   type    = number
-  default = 2.5
+  default = 2560
 }
 
 locals {
@@ -14,7 +14,7 @@ resource "google_filestore_instance" "nfs" {
   tier = "BASIC_SSD"
 
   file_shares {
-    capacity_gb = var.disk_tb * 1024
+    capacity_gb = var.disk_gb
     name        = "share"
   }
 
@@ -37,7 +37,7 @@ resource "kubernetes_persistent_volume" "nfs_volume" {
   }
   spec {
     capacity = {
-      storage = "${var.disk_tb}Ti"
+      storage = "${var.disk_gb}Gi"
     }
     access_modes = ["ReadWriteMany"]
     persistent_volume_source {
@@ -58,7 +58,7 @@ resource "kubernetes_persistent_volume_claim" "nfs_claim" {
     access_modes = ["ReadWriteMany"]
     resources {
       requests = {
-        storage = kubernetes_persistent_volume.nfs_volume.spec.0.capacity.storage
+        storage = "${var.disk_gb}Gi"
       }
     }
     volume_name = kubernetes_persistent_volume.nfs_volume.metadata.0.name

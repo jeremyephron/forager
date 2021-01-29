@@ -118,16 +118,16 @@ class InteractiveIndex:
             self.co = None
 
         self.multi_id = self.cfg['multi_id']
+        self.direct_map = self.cfg['direct_map']
 
         if not exists:
             self.create(self.index_str)
+            self._save_metadata()
         else:
             self.requires_training = extra['requires_training']
             self.is_trained = extra['is_trained']
             self.n_indexes = extra['n_indexes']
             self.n_vectors = extra['n_vectors']
-
-        self._save_metadata()
 
     def create(self, index_str: str) -> None:
         """
@@ -142,7 +142,20 @@ class InteractiveIndex:
         if self.metric == 'inner product':
             metric = faiss.METRIC_INNER_PRODUCT
 
+        direct_map = faiss.DirectMap.NoMap
+        if self.direct_map == 'Hashtable':
+            direct_map = faiss.DirectMap.Hashtable
+        elif self.direct_map == 'Array':
+            direct_map = faiss.DirectMap.Array
+
+        # TODO(mihirg): Remove when/if FAISS supports merging direct map indexes
+        # https://github.com/facebookresearch/faiss/blob/c5975cda72981329af97df36b4986ae6f65550e2/faiss/IndexIVF.cpp#L934
+        assert (
+            direct_map == faiss.DirectMap.NoMap
+        ), 'Refusing to create direct mapped index because merging is unsupported'
+
         index = faiss.index_factory(self.d, index_str, metric)
+        index.set_direct_map(direct_map)
         faiss.write_index(index, str(self.tempdir/self.TRAINED_INDEX_NAME))
 
         # TODO: get from index_str
@@ -192,7 +205,8 @@ class InteractiveIndex:
         self,
         xb_src: Union[str, np.ndarray, List[float]],
         ids: Optional[Sequence[int]] = None,
-        ids_extra: Optional[Union[Sequence[int], int]] = 0
+        ids_extra: Optional[Union[Sequence[int], int]] = 0,
+        update_metadata: bool = True
     ) -> None:
         """
         Adds the given vectors to the index.
@@ -210,7 +224,9 @@ class InteractiveIndex:
                 E.g., you might have two embeddings for each image, so you
                 could make the ID the image number, and the ID extra a 0 or 1
                 for each embedding.
-
+            update_metadata: Whether to update the metadata JSON file after
+                adding with the new number of vectors and shards this index
+                contains.
         """
 
         if not self.is_trained:
@@ -266,7 +282,8 @@ class InteractiveIndex:
             index.reset()
             # del index  # TODO: does this improve memory performance?
 
-            self._save_metadata()
+            if update_metadata:
+                self._save_metadata()
 
             idx = end_idx
 
@@ -341,7 +358,7 @@ class InteractiveIndex:
 
         # TODO: assert IVF
         assert self.is_trained
-        
+
         # This fixes problem with SWIG and numpy int
         list_num = int(list_num)
 
@@ -364,7 +381,7 @@ class InteractiveIndex:
 
         # TODO: assert IVF
         assert self.is_trained
-        
+
         index = faiss.read_index(str(self.tempdir/self.MERGED_INDEX_NAME))
 
         # Get the IVF from potentially opaque index
@@ -372,13 +389,13 @@ class InteractiveIndex:
 
         centroids = index_ivf.quantizer.reconstruct_n(0, index_ivf.nlist)
         return centroids
-    
+
     def get_cluster_sizes(self) -> np.ndarray:
         """Returns the number of vectors assigned to each cluster."""
 
         # TODO: assert IVF
         assert self.is_trained
-        
+
         index = faiss.read_index(str(self.tempdir/self.MERGED_INDEX_NAME))
 
         # Get the IVF from potentially opaque index
@@ -529,8 +546,8 @@ class InteractiveIndex:
         """
 
         payload = json.load((Path(tempdir)/cls.META_FILE_NAME).open())
+        payload['cfg']['tempdir'] = tempdir  # override tempdir in case index was copied
         index = InteractiveIndex(
             **payload['cfg'], _extra=payload['extra'], _exists=True
         )
         return index
-

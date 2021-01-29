@@ -41,9 +41,6 @@ function ClusterStatus() {
     case 'CLUSTER_STARTING':
       mainText = 'Cluster starting...';
       break;
-    case 'CLUSTER_PREPARING':
-      mainText = 'Cluster preparing...';
-      break;
     case 'CLUSTER_STARTED':
       mainText = 'Cluster ready';
       subText = '(Click to shut down)';

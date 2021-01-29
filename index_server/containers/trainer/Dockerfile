@@ -1,4 +1,4 @@
-FROM nvidia/cuda:10.2-base-ubuntu18.04
+FROM nvidia/cuda:10.0-runtime-ubuntu18.04
 
 ENV APP_HOME /app
 WORKDIR $APP_HOME
@@ -15,6 +15,6 @@ RUN apt-get update \
 
 # Run script on container startup.
 COPY . ./
-STOPSIGNAL SIGINT
+STOPSIGNAL SIGTERM
 ENV FLASK_APP=main.py
 CMD exec flask run --host=0.0.0.0 --port=$PORT

@@ -1,3 +1,3 @@
 project_id = "visualdb-1046"
-zone       = "us-west1-b"
+zone       = "us-central1-a"
 network    = "kubernetes"

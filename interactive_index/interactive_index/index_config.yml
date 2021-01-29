@@ -18,7 +18,7 @@ search_args:
 # None: no transformation
 # PCA: applies a PCA transform to reduce the number of dimensions
 # ITQ: applies an iterative quantization transformation
-transform: 
+transform:
 transform_args:
     # None: no arguments
     # PCA: number of output dimensions
@@ -42,7 +42,11 @@ encoding_args:
     # LSH: whether to rotate vectors prior to binarization
     # - rotate
 
-# Whether to write ids as tuples of (<id>, <unique>) where <unique> is some 
+# Whether to write ids as tuples of (<id>, <unique>) where <unique> is some
 # unique extra number associated with the vector, which could be a sequence of
 # insertion like 1, 2, ...
 multi_id: false
+
+# {NoMap, Array, Hashtable}
+# https://github.com/facebookresearch/faiss/wiki/Special-operations-on-indexes#direct-map-for-an-indexivf
+direct_map: NoMap

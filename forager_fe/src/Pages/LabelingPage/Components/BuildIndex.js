@@ -8,7 +8,7 @@ import { baseUrl } from "../../../Constants";
 const BuildButton = styled(Button)`
   font-size: 13px;
   height: 28px;
-  width: 150px;
+  width: 200px;
   padding: 0 5px;
   margin-left: 5px;
 `;
@@ -32,9 +32,9 @@ function BuildIndex({ dataset }) {
 
   if (index.id) {
     if (index.status === 'INDEX_READY') {
-      text = 'Delete index';
+      text = 'Delete index from disk';
     } else if (index.status === 'INDEX_NOT_DOWNLOADED') {
-      text = 'Download index';
+      text = 'Download index to disk';
     } else {
       text = 'Loading index...';
       enabled = false;

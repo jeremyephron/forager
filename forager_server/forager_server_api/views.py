@@ -1,4 +1,5 @@
 import distutils.util
+from google.cloud import storage
 import json
 import os
 import requests
@@ -6,7 +7,7 @@ import urllib.request
 import numpy as np
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
-from google.cloud import storage
+from django.db.models import Q
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
@@ -140,11 +141,12 @@ def get_datasets(request):
 @api_view(['POST'])
 @csrf_exempt
 def start_cluster(request):
+    # TODO(mihirg): Remove this setting from Django; it's now managed by Terraform
+    # (or figure out how to set it from the frontend if we need that)
     params = {"n_nodes": settings.EMBEDDING_CLUSTER_NODES}
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/start_cluster",
-        data=params,
-        headers=POST_HEADERS,
+        json=params,
     )
     response_data = r.json()
     return JsonResponse({
@@ -170,8 +172,7 @@ def stop_cluster(request, cluster_id):
     params = {"cluster_id": cluster_id}
     requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/stop_cluster",
-        data=params,
-        headers=POST_HEADERS,
+        json=params,
     )
     return JsonResponse({
         "status": "success",
@@ -233,8 +234,7 @@ def download_index(request, index_id):
     params = {"index_id": index_id}
     requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/download_index",
-        data=params,
-        headers=POST_HEADERS,
+        json=params,
     )
     return JsonResponse({
         "status": "success",
@@ -247,8 +247,7 @@ def delete_index(request, index_id):
     params = {"index_id": index_id}
     requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/delete_index",
-        data=params,
-        headers=POST_HEADERS,
+        json=params,
     )
     return JsonResponse({
         "status": "success",
@@ -894,26 +893,29 @@ def delete_annotation(request, dataset_name, image_identifier, ann_identifier):
             safe=False,
             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-def process_ordering_data(request, dataset, ordered_paths):
+def process_image_query_results(request, dataset, ordered_results):
     data_directory = dataset.directory
     split_dir = data_directory[len('gs://'):].split('/')
     bucket_name = split_dir[0]
 
-    ditems = filtered_images(request, dataset, ordered_paths)
+    ditems = filtered_images(request, dataset, [r['label'] for r in ordered_results])
 
     response = {
         'identifiers': [],
-        'paths': []
+        'paths': [],
+        'all_spatial_dists': [],
     }
 
     path_to_id = {}
     for ditem in ditems:
         path_to_id[ditem.path] = ditem.pk
     path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
-    for path in ordered_paths:
+    for result in ordered_results:
+        path = result['label']
         if path in path_to_id:
             response['paths'].append(path_template.format(path))
             response['identifiers'].append(path_to_id[path])
+            response['all_spatial_dists'].append(result['spatial_dists'])
 
     response['num_total'] = len(response['paths'])
 
@@ -962,7 +964,7 @@ def lookup_knn(request, dataset_name):
         data=params, headers=POST_HEADERS
     )
     response_data = r.json()
-    response = process_ordering_data(request, dataset, response_data['results'])
+    response = process_image_query_results(request, dataset, response_data['results'])
 
     # 4. Return knn results
     return JsonResponse(response)
@@ -989,8 +991,8 @@ def lookup_svm(request, dataset_name):
     # getNextImages shows good way to do this
     # Positive patches:
     pos_anns = Annotation.objects.filter(
+        Q(label_type="klabel_extreme") | Q(label_type="klabel_box"),
         dataset_item__in=dataset.datasetitem_set.filter(),
-        label_type="klabel_extreme",
         label_function=label_function,
         label_category=label_category)
     pos_paths = [ann.dataset_item.path for ann in pos_anns]
@@ -1024,13 +1026,14 @@ def lookup_svm(request, dataset_name):
         "use_full_image": use_full_image,
         "mode": mode
     }
+    print(params)
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/query_svm",
         data=params, headers=POST_HEADERS
     )
     response_data = r.json()
 
-    response = process_ordering_data(request, dataset, response_data['results'])
+    response = process_image_query_results(request, dataset, response_data['results'])
 
     # 4. Return knn results
     return JsonResponse(response)
@@ -1071,7 +1074,7 @@ def active_batch(request, dataset_name):
     response_data = r.json()
 
     # Apply filtering to generated order
-    response = process_ordering_data(request, dataset, response_data['results'])
+    response = process_image_query_results(request, dataset, response_data['results'])
 
     # 4. Return knn results
     return JsonResponse(response)

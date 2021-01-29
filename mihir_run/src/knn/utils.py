@@ -1,12 +1,26 @@
 import asyncio
 import base64
+from dataclasses import dataclass, field
 import functools
 import io
-import itertools
+import textwrap
+import traceback
 
+import aiohttp
 import numpy as np
 
-from typing import Any, List, Union, Dict, Iterator
+from typing import (
+    Any,
+    AsyncGenerator,
+    AsyncIterable,
+    Coroutine,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Set,
+    Union,
+)
 
 JSONType = Union[str, int, float, bool, None, Dict[str, Any], List[Any]]
 
@@ -39,50 +53,105 @@ class FileListIterator:
         return self.map_fn(elem)
 
 
-def limited_as_completed(coros, limit):
-    # Based on https://github.com/andybalaam/asyncioplus/blob/master/asyncioplus/limited_as_completed.py  # noqa
-    futures = [asyncio.create_task(c) for c in itertools.islice(coros, 0, limit)]
-    pending = [len(futures)]  # list so that we can modify from first_to_finish
-
-    async def first_to_finish():
-        while True:
-            await asyncio.sleep(0)
-            for i, f in enumerate(futures):
-                if f is not None and f.done():
-                    try:
-                        newf = next(coros)
-                        futures[i] = asyncio.create_task(newf)
-                    except StopIteration:
-                        futures[i] = None
-                        pending[0] -= 1
-                    return f.result()
-
-    while pending[0] > 0:
-        yield first_to_finish()
+@dataclass
+class _LimitedAsCompletedState:
+    pending: List[asyncio.Future] = field(default_factory=list)
+    hit_stop_iteration = False
+    next_coro_is_pending = False
 
 
-def unasync(f):
-    @functools.wraps(f)
+async def limited_as_completed_from_async_coro_gen(
+    coros: AsyncIterable[Coroutine[Any, Any, Any]], limit: int
+) -> AsyncGenerator[asyncio.Task, None]:
+    state = _LimitedAsCompletedState()
+    NEXT_CORO_TASK_NAME = "get_next_coro"
+
+    async def get_next_coro():
+        try:
+            coro = await coros.__anext__()
+            return coro
+        except StopAsyncIteration:
+            state.hit_stop_iteration = True
+
+    def schedule_getting_next_coro():
+        task = asyncio.create_task(get_next_coro(), name=NEXT_CORO_TASK_NAME)
+        state.pending.append(task)
+        state.next_coro_is_pending = True
+
+    schedule_getting_next_coro()
+
+    while state.pending:
+        done_set, pending_set = await asyncio.wait(
+            state.pending, return_when=asyncio.FIRST_COMPLETED
+        )
+        state.pending = list(pending_set)
+
+        for done in done_set:
+            assert isinstance(done, asyncio.Task)
+            if done.get_name() == NEXT_CORO_TASK_NAME:
+                state.next_coro_is_pending = False
+                if state.hit_stop_iteration:
+                    continue
+
+                # Schedule the new coroutine
+                state.pending.append(asyncio.create_task(done.result()))
+
+                # If we have capacity, also ask for the next coroutine
+                if len(state.pending) < limit:
+                    schedule_getting_next_coro()
+            else:
+                # We definitely have capacity now, so ask for the next coroutine if
+                # we haven't already
+                if not state.next_coro_is_pending and not state.hit_stop_iteration:
+                    schedule_getting_next_coro()
+
+                yield done
+
+
+# https://stackoverflow.com/a/50029150
+async def as_completed_from_futures(
+    tasks: Iterable[asyncio.Future],
+) -> AsyncGenerator[asyncio.Future, None]:
+    pending_set: Set[asyncio.Future] = set(tasks)
+    while pending_set:
+        done_set, pending_set = await asyncio.wait(
+            pending_set, return_when=asyncio.FIRST_COMPLETED
+        )
+        for done in done_set:
+            yield done
+
+
+def unasync(coro):
+    @functools.wraps(coro)
     def wrapper(*args, **kwargs):
-        return asyncio.run(f(*args, **kwargs))
+        return asyncio.run(coro(*args, **kwargs))
 
     return wrapper
 
 
-def chunk(it, chunk_size, until=None):
-    n = 0
-    while True:
-        this_chunk_size = chunk_size
-        if until:
-            if n >= until:
-                break
-            this_chunk_size = min(this_chunk_size, until - n)
+def unasync_as_task(coro):
+    @functools.wraps(coro)
+    def wrapper(*args, **kwargs):
+        # Surface exceptions when they occur, not when awaited (makes debugging easier)
+        new_coro = log_exception_from_coro_but_return_none(coro)
+        return asyncio.create_task(new_coro(*args, **kwargs))
 
-        chunk = list(itertools.islice(it, this_chunk_size))
-        if not chunk:
-            break
-        n += len(chunk)
-        yield chunk
+    return wrapper
+
+
+def log_exception_from_coro_but_return_none(coro):
+    @functools.wraps(coro)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await coro(*args, **kwargs)
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            print(f"Error from {coro.__name__}")
+            print(textwrap.indent(traceback.format_exc(), "  "))
+        return None
+
+    return wrapper
 
 
 def numpy_to_base64(nda):
@@ -98,3 +167,8 @@ def base64_to_numpy(nda_base64):
     with io.BytesIO(nda_bytes) as nda_buffer:
         nda = np.load(nda_buffer, allow_pickle=False)
     return nda
+
+
+def create_unlimited_aiohttp_session() -> aiohttp.ClientSession:
+    conn = aiohttp.TCPConnector(limit=0, force_close=True)
+    return aiohttp.ClientSession(connector=conn)

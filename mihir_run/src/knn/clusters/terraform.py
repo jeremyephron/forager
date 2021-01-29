@@ -4,19 +4,18 @@ from pathlib import Path
 from shutil import copytree
 import subprocess
 from tempfile import TemporaryDirectory
+import uuid
 
 
 class TerraformModule:
-    def __init__(self, module_path: str, copy: bool = True):
-        module_path = Path(module_path)
-
+    def __init__(self, module_path: Path, copy: bool = True):
         if copy:
-            self.parent_dir = TemporaryDirectory()
-            copytree(module_path, self.parent_dir)
-            self.dir = Path(self.parent_dir) / module_path.name
+            self.dir = Path(TemporaryDirectory().name) / module_path.name
+            copytree(module_path, self.dir)
         else:
-            self.parent_dir = None
             self.dir = module_path
+
+        self.id = str(uuid.uuid4())
 
         self._output = None
         self.ready = asyncio.Event()
@@ -41,15 +40,16 @@ class TerraformModule:
                 stdout=subprocess.PIPE,
                 cwd=self.dir,
             )
-            self._output = json.loads(proc.stdout)
+            self._output = {k: v["value"] for k, v in json.loads(proc.stdout).items()}
         return self._output
 
     async def destroy(self):
         self._output = None
         proc = await asyncio.create_subprocess_exec(
+            "terraform", "refresh", cwd=self.dir
+        )
+        await proc.wait()
+        proc = await asyncio.create_subprocess_exec(
             "terraform", "destroy", "-auto-approve", cwd=self.dir
         )
         await proc.wait()
-
-        if self.parent_dir:
-            self.parent_dir.cleanup()

@@ -2,10 +2,12 @@ import asyncio
 import collections
 import resource
 import time
+import textwrap
 import traceback
 import uuid
 
 import aiohttp
+from aiostream import stream
 from runstats import Statistics
 
 from knn import utils
@@ -15,13 +17,25 @@ from knn.reducers import Reducer
 
 from . import defaults
 
-from typing import Optional, Callable, Tuple, List, Dict, Any, Iterable, Awaitable
+from typing import (
+    Any,
+    AsyncIterable,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
 
 
 # Increase maximum number of open sockets if necessary
 soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
 new_soft = max(min(defaults.DESIRED_ULIMIT, hard), soft)
 resource.setrlimit(resource.RLIMIT_NOFILE, (new_soft, hard))
+
+InputSequenceType = Union[Iterable[JSONType], AsyncIterable[JSONType]]
 
 
 class MapperSpec:
@@ -72,6 +86,7 @@ class MapReduceJob:
         reducer: Reducer,
         mapper_args: JSONType = {},
         *,
+        session: Optional[aiohttp.ClientSession] = None,
         n_retries: int = defaults.N_RETRIES,
         chunk_size: int = defaults.CHUNK_SIZE,
         request_timeout: int = defaults.REQUEST_TIMEOUT,
@@ -85,7 +100,10 @@ class MapReduceJob:
 
         self.n_retries = n_retries
         self.chunk_size = chunk_size
-        self.request_timeout = request_timeout
+        self.request_timeout = aiohttp.ClientTimeout(total=request_timeout)
+
+        self.owns_session = session is None
+        self.session = session or utils.create_unlimited_aiohttp_session()
 
         # Performance stats
         self._n_requests = 0
@@ -97,69 +115,69 @@ class MapReduceJob:
         # Will be initialized later
         self._n_total: Optional[int] = None
         self._start_time: Optional[float] = None
+        self._end_time: Optional[float] = None
         self._task: Optional[asyncio.Task] = None
 
     # REQUEST LIFECYCLE
 
     async def start(
         self,
-        iterable: Iterable[JSONType],
-        callback: Optional[Callable[[Dict[str, Any]], Awaitable[None]]] = None,
+        iterable: InputSequenceType,
+        callback: Optional[Callable[[Any], None]] = None,
+        n_total: Optional[int] = None,
     ) -> None:
         async def task():
             try:
-                result = await self.run_until_complete(iterable)
+                result = await self.run_until_complete(iterable, n_total)
             except asyncio.CancelledError:
                 pass
             else:
-                if callback is not None:
-                    await callback(result)
+                if callback:
+                    callback(result)
 
-        self.task = asyncio.create_task(task())
+        self._task = asyncio.create_task(task())
 
-    async def run_until_complete(self, iterable: Iterable[JSONType]) -> Dict[str, Any]:
-        assert self._start_time is None  # can't reuse Job instances
-        self.start_time = time.time()
-
-        # Prepare iterable
+    async def run_until_complete(
+        self,
+        iterable: InputSequenceType,
+        n_total: Optional[int] = None,
+    ) -> Any:
         try:
-            self._n_total = len(iterable)  # type: ignore
+            self._n_total = n_total or len(iterable)  # type: ignore
         except Exception:
             pass
 
-        iterable = iter(iterable)
-        chunked = utils.chunk(iterable, self.chunk_size)
+        assert self._start_time is None  # can't reuse Job instances
+        self._start_time = time.time()
 
-        async with self.mapper as mapper_url:
-            connector = aiohttp.TCPConnector(limit=0)
-            timeout = aiohttp.ClientTimeout(total=self.request_timeout)
-            async with aiohttp.ClientSession(
-                connector=connector, timeout=timeout
-            ) as session:
-                for response_tuple in utils.limited_as_completed(
-                    (self._request(session, mapper_url, chunk) for chunk in chunked),
+        try:
+            chunk_stream = stream.chunks(stream.iterate(iterable), self.chunk_size)
+
+            async with self.mapper as mapper_url, chunk_stream.stream() as chunk_gen:
+                async for response in utils.limited_as_completed_from_async_coro_gen(
+                    (self._request(mapper_url, chunk) async for chunk in chunk_gen),
                     self.mapper.n_mappers,
                 ):
-                    try:
-                        self._reduce_chunk(*(await response_tuple))
-                    except asyncio.CancelledError:
-                        raise
-                    except Exception as e:
-                        print(f"Error in _reduce_chunk, raising! {type(e)}: {e}")
-                        traceback.print_exc()
-                        raise
+                    response_tuple = await response
+                    self._reduce_chunk(*response_tuple)
 
-        if self._n_total is None:
-            self._n_total = self._n_successful + self._n_failed
-        else:
-            assert self._n_total == self._n_successful + self._n_failed
+            if self._n_total is None:
+                self._n_total = self._n_successful + self._n_failed
+            else:
+                assert self._n_total == self._n_successful + self._n_failed
 
-        return self.result
+            self.reducer.finish()
+            return self.result
+        finally:
+            self._end_time = time.time()
+
+            if self.owns_session:
+                await self.session.close()
 
     async def stop(self) -> None:
-        if self.task is not None and not self.task.done():
-            self.task.cancel()
-            await self.task
+        if self._task and not self._task.done():
+            self._task.cancel()
+            await self._task
 
     # RESULT GETTERS
 
@@ -169,14 +187,12 @@ class MapReduceJob:
 
     @property
     def progress(self) -> Any:
-        elapsed_time = (time.time() - self.start_time) if self.start_time else 0.0
-
         progress = {
             "cost": self.cost,
             "finished": self.finished,
             "n_processed": self._n_successful,
             "n_skipped": self._n_failed,
-            "elapsed_time": elapsed_time,
+            "elapsed_time": self.elapsed_time,
         }
         if self._n_total is not None:
             progress["n_total"] = self._n_total
@@ -184,19 +200,28 @@ class MapReduceJob:
         return progress
 
     @property
+    def elapsed_time(self):
+        end_time = self._end_time or time.time()
+        start_time = self._start_time or end_time
+        return end_time - start_time
+
+    @property
     def performance(self):
         return {
-            "profiling": {k: v.mean() for k, v in self._profiling.items()},
+            "profiling": {
+                k: {
+                    "mean": v.mean(),
+                    "std": v.stddev() if len(v) > 1 else 0,
+                    "n": len(v),
+                }
+                for k, v in self._profiling.items()
+            },
             "mapper_utilization": dict(enumerate(self._n_chunks_per_mapper.values())),
         }
 
     @property
-    def job_result(self) -> Dict[str, Any]:
-        return {
-            "performance": self.performance,
-            "progress": self.progress,
-            "result": self.result,
-        }
+    def status(self) -> Dict[str, Any]:
+        return {"performance": self.performance, "progress": self.progress}
 
     @property
     def finished(self) -> bool:
@@ -216,7 +241,7 @@ class MapReduceJob:
         }
 
     async def _request(
-        self, session: aiohttp.ClientSession, mapper_url: str, chunk: List[JSONType]
+        self, mapper_url: str, chunk: List[JSONType]
     ) -> Tuple[JSONType, Optional[JSONType], float]:
         result = None
         start_time = 0.0
@@ -229,16 +254,21 @@ class MapReduceJob:
             end_time = start_time
 
             try:
-                async with session.post(mapper_url, json=request) as response:
+                async with self.session.post(
+                    mapper_url, json=request, timeout=self.request_timeout
+                ) as response:
                     end_time = time.time()
                     if response.status == 200:
                         result = await response.json()
                         break
             except asyncio.CancelledError:
                 raise
-            except Exception as e:
-                print(f"Error in _request, but ignoring. {type(e)}: {e}")
-                traceback.print_exc()
+            except asyncio.TimeoutError:
+                print("Request timed out")
+            except Exception:
+                action = "skipping" if i == self.n_retries - 1 else "ignoring"
+                print(f"Error from _request ({action})")
+                print(textwrap.indent(traceback.format_exc(), "  "))
 
         return chunk, result, end_time - start_time
 
@@ -261,8 +291,9 @@ class MapReduceJob:
         self._n_chunks_per_mapper[result["worker_id"]] += 1
 
         self._profiling["total_time"].push(elapsed_time)
-        for k, v in result["profiling"].items():
-            self._profiling[k].push(v)
+        for k, vs in result["profiling"].items():
+            for v in vs:
+                self._profiling[k].push(v)
 
         if result["chunk_output"]:
             self.reducer.handle_chunk_result(chunk, result["chunk_output"])

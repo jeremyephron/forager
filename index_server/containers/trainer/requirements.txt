@@ -5,3 +5,4 @@ flask
 numpy
 PyYAML
 requests
+scikit-learn

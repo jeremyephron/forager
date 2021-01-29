@@ -7,6 +7,7 @@ setup(
     packages=find_packages("src"),
     install_requires=[
         "aiohttp[speedups]",
+        "aiostream",
         "dataclasses-json",
         "gcloud-aio-auth",
         "kubernetes_asyncio",

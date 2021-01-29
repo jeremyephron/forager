@@ -514,6 +514,27 @@ export class ImageLabeler {
 		ctx.strokeRect(box.bmin.x, box.bmin.y, box.width, box.height);
 	}
 
+	draw_heatmap(ctx, cur_frame) {
+		const PATCH_SIZE = 32;
+
+		for (let i = 0; i < cur_frame.data.spatial_dists.length; i++) {
+			let patch_idx = cur_frame.data.spatial_dists[i][0];
+			let n_cols = Math.ceil(cur_frame.source_image.width / PATCH_SIZE);
+			let x = (patch_idx % n_cols) * PATCH_SIZE;
+			let y = Math.floor(patch_idx / n_cols) * PATCH_SIZE;
+
+			let canvas_start = this.image_to_canvas(
+				new Point2D(x / cur_frame.source_image.width, y / cur_frame.source_image.height)
+			);
+			let canvas_end = this.image_to_canvas(
+				new Point2D((x + PATCH_SIZE) / cur_frame.source_image.width, (y + PATCH_SIZE) / cur_frame.source_image.height)
+			);
+
+			ctx.fillStyle = 'rgba(230,0,0,0.4)';
+			ctx.fillRect(canvas_start.x, canvas_start.y, canvas_start.x - canvas_end.x, canvas_start.y - canvas_end.y);
+		}
+	}
+
 	render() {
 
 		var ctx = this.main_canvas_el.getContext('2d');
@@ -539,6 +560,10 @@ export class ImageLabeler {
 			ctx.drawImage(cur_frame.source_image,
 				visible_box.bmin.x, visible_box.bmin.y, visible_box.width, visible_box.height,
 				display_box.bmin.x, display_box.bmin.y, display_box.width, display_box.height);
+
+			if (cur_frame.data.spatial_dists !== undefined && cur_frame.data.spatial_dists !== null) {
+				this.draw_heatmap(ctx, cur_frame);
+			}
 		}
 
 		var image_cursor_pt = this.clamp_to_visible_region(this.canvas_to_image(new Point2D(this.cursorx, this.cursory)));

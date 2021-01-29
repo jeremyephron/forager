@@ -560,6 +560,9 @@ function LabelingPage() {
         const data = new ImageData();
         data.source_url = res.paths[i];
         data.identifier = res.identifiers[i];
+        if (res.all_spatial_dists !== undefined) {
+          data.spatial_dists = res.all_spatial_dists[i];
+        }
 
         if (data.identifier in annotations) {
           annotations[data.identifier].map(ann => {
@@ -862,7 +865,7 @@ function LabelingPage() {
         var prevFrame = getPrevFrame();
         var nextFrame = getNextFrame();
         if (e.key && e.key.localeCompare("k") === 0) {
-          // Mark interesting
+          // Mark to keep
           for (var i = 0; i < labeler.current_indices.length; i++) {
             var currFrame = labeler.current_indices[i]
             var currIdentifier = labeler.frames[currFrame].data.identifier;

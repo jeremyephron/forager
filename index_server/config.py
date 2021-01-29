@@ -1,43 +1,54 @@
-GCP_PROJECT = "visualdb-1046"
-GCP_ZONE = "us-west1-b"
-GCP_MACHINE_TYPE = "n2-highcpu-4"
+from pathlib import Path
+from interactive_index.utils import GIGABYTE
+from urllib.request import Request, urlopen
 
-OUTPUT_FILENAME = "lvis-embeddings.npy"
-MAPPER_CLOUD_RUN_URL = (
-    "https://vishnu-demo-full-image-embedding-spatial-g6rwrca4fq-uw.a.run.app"
+# Get instance IP (https://stackoverflow.com/q/23362887)
+ip_request = Request(
+    "http://metadata/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip"
 )
-MAPPER_CONTAINER = "gcr.io/visualdb-1046/vishnu-demo-full-image-embedding-spatial"
-CLUSTER_NODE_N_MAPPERS = 2
-CLOUD_RUN_N_MAPPERS = 70
+ip_request.add_header("Metadata-Flavor", "Google")
+INSTANCE_IP = urlopen(ip_request).read().decode()
 
-N_RETRIES = 1
-CHUNK_SIZE = 1
+SANIC_RESPONSE_TIMEOUT = 10 * 60  # seconds
 
-EMBEDDING_LAYER = "res5"
+CLOUD_RUN_N_MAPPERS = 50
+CLOUD_RUN_N_RETRIES = 1
+
+CLUSTER_TERRAFORM_MODULE_PATH = Path("./terraform").resolve()
+CLUSTER_REUSE_EXISTING = False
+CLUSTER_MOUNT_DIR = Path("~/forager/mount").expanduser().resolve()
+CLUSTER_CLEANUP_TIME = 20 * 60  # seconds (destroy cluster after idle for this long)
+
+MAPPER_NUM_RETRIES = 5
+MAPPER_CHUNK_SIZE = lambda nproc: 3
+MAPPER_REQUEST_MULTIPLE = lambda nproc: nproc
+MAPPER_REQUEST_TIMEOUT = (
+    3 * 60
+)  # seconds; more than a minute per image is probably too much
+MAPPER_CLOUD_RUN_URL = "https://forager-index-mapper-g6rwrca4fq-uc.a.run.app"
+
+ADDER_NUM_RETRIES = 5
+ADDER_CHUNK_SIZE = lambda nproc: 1
+ADDER_REQUEST_MULTIPLE = lambda nproc: nproc
+ADDER_REQUEST_TIMEOUT = 5 * 60  # seconds
+
+NUM_IMAGES_TO_MAP_BEFORE_CONFIGURING_INDEX = 100
 EMBEDDING_DIM = 2048
+INDEX_PCA_DIM = 128
+INDEX_SQ_BYTES = 8
+INDEX_SUBINDEX_SIZE = 1_000_000
+
+# TODO(mihirg): Toggle when/if FAISS supports merging direct map indexes
+BUILD_UNCOMPRESSED_FULL_IMAGE_INDEX = False
+
+TRAINING_MAX_RAM = 35 * GIGABYTE
+TRAINER_N_CENTROIDS_MULTIPLE = 39
+TRAINER_EMBEDDING_SAMPLE_RATE = 0.1
+TRAINER_STATUS_ENDPOINT = "/trainer_status"
+TRAINER_STATUS_CALLBACK = f"http://{INSTANCE_IP}:5000{TRAINER_STATUS_ENDPOINT}"
+
+INDEX_PARENT_DIR = Path("~/forager/indexes").expanduser().resolve()
+INDEX_UPLOAD_GCS_PATH = "gs://foragerml/indexes/"  # trailing slash = directory
 
 QUERY_PATCHES_PER_IMAGE = 8
 QUERY_NUM_RESULTS_MULTIPLE = 80
-
-EMBEDDING_DICT_MAX_RAM = 3 * 2 ** 30  # bytes each
-INDEX_TRAIN_MAX_RAM = 36 * 2 ** 30  # bytes
-
-INDEX_NUM_CENTROIDS = 64
-INDEX_SUBINDEX_SIZE = 5_000_000
-INDEX_USE_GPU = False
-INDEX_TRAIN_ON_GPU = True
-INDEX_TRAIN_MULTIPLE = 39
-
-INDEX_TRANSFORM = "PCA"
-INDEX_TRANSFORM_ARGS = [64]
-INDEX_ENCODING = "SQ"
-INDEX_ENCODING_ARGS = [8]
-
-SPATIAL_INDEX_MULTIPLE = 400
-
-INDEX_FLUSH_SLEEP = 1  # seconds
-
-INDEX_UPLOAD_GCS_PATH = "gs://forager/indexes/"  # trailing slash = directory
-
-CLEANUP_TIMEOUT = 30 * 60  # seconds
-CLEANUP_INTERVAL = CLEANUP_TIMEOUT // 4
