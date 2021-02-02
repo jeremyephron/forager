@@ -374,6 +374,9 @@ class InteractiveIndex:
         faiss.memcpy(faiss.swig_ptr(list_ids), temp_ids, list_ids.nbytes)
         invlists.release_ids(list_num, temp_ids)
 
+        if self.multi_id:
+            list_ids = self._invert_cantor_pairing_vec(list_ids)
+
         return list_ids
 
     def get_centroids(self) -> np.ndarray:
