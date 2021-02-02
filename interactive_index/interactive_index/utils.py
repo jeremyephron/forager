@@ -137,18 +137,18 @@ def invert_cantor_pairing(z: int) -> Tuple[int, int]:
 def sample_farthest_vectors(
     index: 'InteractiveIndex',
     xq: np.ndarray,
-    n_clusters: int,
-    n_sample: int
+    percent: float,
+    n_samples: int
 ) -> np.ndarray:
     """
-    Samples `n_samples` vectors from each of the farthest `n_clusters` 
-    clusters within the provided index.
+    Samples a percentage of the furthest vectors (by cluster distance) to a
+    query vector.
 
     Args:
         index: The index to search within.
         xq: The query vector.
-        n_clusters: The number of clusters to sample from.
-        n_sample: The number of vectors to sample from each cluster.
+        percent: The bottom percentage of vectors to sample from.
+        n_samples: The maximum number of vectors to sample.
     
     Returns:
         The IDs of the vectors.
@@ -161,21 +161,27 @@ def sample_farthest_vectors(
     if index.metric == 'inner product':
         farthest_centroid_inds = np.argsort(
             [-xq.dot(centroids[i]) for i in range(len(centroids))]
-        )[:n_clusters]
+        )
     else:
         farthest_centroid_inds = np.argsort(
             [-np.linalg.norm(xq - centroids[i]) for i in range(len(centroids))]
-        )[:n_clusters]
+        )
+
+    total = 0
+    cluster_sizes = index.get_cluster_sizes() 
+    for n_clusters in range(len(cluster_sizes)):
+        total += cluster_sizes[i]
+        if total > index.n_vectors * percent:
+            break
+
+    cluster_pcts = cluster_sizes.astype(np.float) / total
 
     samples = []
     for i in range(n_clusters):
         vec_ids = index.get_cluster_ids(farthest_centroid_inds[i])
-        if len(vec_ids) <= n_sample:
-            samples.append(vec_ids)
-        else:
-            samples.append(
-                np.random.choice(vec_ids, size=n_sample, replace=False)
-            )
+        samples.append(np.random.choice(
+            vec_ids, size=int(n_samples * cluster_pcts[i]), replace=False
+        ))
 
     return np.concatenate(samples)
 
