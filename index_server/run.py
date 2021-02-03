@@ -660,14 +660,13 @@ current_indexes: CleanupDict[str, LabeledIndex] = CleanupDict(
 
 # -> BUILD
 # TODO(mihirg): Consider restructuring to simplfiy
-# TODO(mihirg): Change input from form encoding to JSON
 
 
 @app.route("/start_job", methods=["POST"])
 async def start_job(request):
-    cluster_id = request.form["cluster_id"][0]
-    bucket = request.form["bucket"][0]
-    paths = request.form["paths"]
+    cluster_id = request.json["cluster_id"]
+    bucket = request.json["bucket"]
+    paths = request.json["paths"]
 
     cluster = current_clusters[cluster_id]
     lock_id = current_clusters.lock(cluster_id)
@@ -766,26 +765,22 @@ class BestMapper:
 
 @app.route("/query_index", methods=["POST"])
 async def query_index(request):
-    image_paths = request.form["paths"]
-    cluster_id = request.form["cluster_id"][0]
-    bucket = request.form["bucket"][0]
+    image_paths = request.json["paths"]
+    cluster_id = request.json["cluster_id"]
+    bucket = request.json["bucket"]
     patches = [
         [float(patch[k]) for k in ("x1", "y1", "x2", "y2")]
-        for patch in json.loads(
-            request.form["patches"][0]
-        )  # Modified to pass all patches, not just the first
+        for patch in request.json["patches"]
     ]  # [0, 1]^2
-    index_id = request.form["index_id"][0]
-    num_results = int(request.form["num_results"][0])
-    augmentations = []
-    if "augmentations" in request.form:
-        augmentations = request.form["augmentations"]
+    index_id = request.json["index_id"]
+    num_results = int(request.json["num_results"])
+    augmentations = request.json.get("augmentations", [])
 
     augmentation_dict = {}
     for i in range(len(augmentations) // 2):
         augmentation_dict[augmentations[2 * i]] = float(augmentations[2 * i + 1])
 
-    use_full_image = bool(strtobool(request.form.get("use_full_image", "False")))
+    use_full_image = bool(request.json.get("use_full_image", False))
 
     # Generate query vector as average of patch embeddings
     async with BestMapper(cluster_id) as mapper:
@@ -819,18 +814,12 @@ async def query_index(request):
 
 @app.route("/active_batch", methods=["POST"])
 async def active_batch(request):
-    image_paths = request.form["paths"]  # Paths of seed images (at first from google)
-    # patches = [
-    #    [float(patch[k]) for k in ('x1', 'y1', 'x2', 'y2')]
-    #    for patch in json.loads(request.form['patches'][0]) # Modified to pass all patches, not just the first
-    # ]  # [0, 1]^2
-    bucket = request.form["bucket"][0]
-    cluster_id = request.form["cluster_id"][0]
-    index_id = request.form["index_id"][0]
-    num_results = int(request.form["num_results"][0])
-    augmentations = []
-    if "augmentations" in request.form:
-        augmentations = request.form["augmentations"]
+    image_paths = request.json["paths"]  # Paths of seed images (at first from google)
+    bucket = request.json["bucket"]
+    cluster_id = request.json["cluster_id"]
+    index_id = request.json["index_id"]
+    num_results = int(request.json["num_results"])
+    augmentations = request.json.get("augmentations", [])
 
     augmentation_dict = {}
     for i in range(len(augmentations) // 2):
@@ -898,30 +887,26 @@ class SVMExampleReducer(Reducer):
 
 @app.route("/query_svm", methods=["POST"])
 async def query_svm(request):
-    index_id = request.form["index_id"][0]
-    cluster_id = request.form["cluster_id"][0]
-    bucket = request.form["bucket"][0]
-    pos_image_paths = request.form["positive_paths"]
+    index_id = request.json["index_id"]
+    cluster_id = request.json["cluster_id"]
+    bucket = request.json["bucket"]
+    pos_image_paths = request.json["positive_paths"]
     pos_patches = [
         [float(patch[k]) for k in ("x1", "y1", "x2", "y2")]
-        for patch in json.loads(
-            request.form["positive_patches"][0]
-        )  # Pass all patches, not just the first
+        for patch in request.json["positive_patches"]
     ]  # [0, 1]^2
-    neg_image_paths = request.form["negative_paths"]
-    num_results = int(request.form["num_results"][0])
-    mode = request.form["mode"][0]
-    use_full_image = bool(strtobool(request.form.get("use_full_image", "False")))
+    neg_image_paths = request.json["negative_paths"]
+    num_results = int(request.json["num_results"])
+    mode = request.json["mode"]
+    use_full_image = bool(request.json.get("use_full_image", False))
 
     # Automatically label `autolabel_max_vectors` vectors randomly sampled from the
     # bottom `autolabel_percent`% of the previous SVM's results as negative
     index = current_indexes[index_id]
 
-    prev_svm_vector = utils.base64_to_numpy(
-        request.form.get("prev_svm_vector", [""])[0]
-    )
-    autolabel_percent = float(request.form["autolabel_percent"][0])
-    autolabel_max_vectors = int(request.form["autolabel_max_vectors"][0])
+    prev_svm_vector = utils.base64_to_numpy(request.json["prev_svm_vector"])
+    autolabel_percent = float(request.json["autolabel_percent"])
+    autolabel_max_vectors = int(request.json["autolabel_max_vectors"])
 
     if prev_svm_vector:
         already_labeled_image_paths = set(
@@ -990,9 +975,7 @@ async def query_svm(request):
         # hyperplane
         w = np.float32(w[0] * 1000)
 
-        augmentations = []
-        if "augmentations" in request.form:
-            augmentations = request.form["augmentations"]
+        augmentations = request.json.get("augmentations", [])
 
         augmentation_dict = {}
         for i in range(len(augmentations) // 2):

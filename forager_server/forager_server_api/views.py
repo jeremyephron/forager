@@ -20,12 +20,6 @@ from pycocotools.coco import COCO
 
 from .models import Dataset, DatasetItem, Annotation
 
-
-POST_HEADERS = {
-    "Content-type": "application/x-www-form-urlencoded",
-    "Accept": "application/json",
-}
-
 class LabelCategory(Enum):
     positive = 1
     negative = 2
@@ -205,7 +199,6 @@ def create_index(request, dataset_name, dataset=None):
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/start_job",
         data=params,
-        headers=POST_HEADERS,
     )
     response_data = r.json()
     return JsonResponse({
@@ -955,14 +948,14 @@ def lookup_knn(request, dataset_name):
         "index_id": index_id,
         "bucket": bucket_name,
         "paths": paths,
-        "patches": json.dumps(patches),
+        "patches": patches,
         "augmentations": augmentations,
         "num_results": 100,
         "use_full_image": use_full_image,
     }
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/query_index",
-        data=params, headers=POST_HEADERS
+        data=params,
     )
     response_data = r.json()
     response = process_image_query_results(request, dataset, response_data['results'])
@@ -1026,7 +1019,7 @@ def lookup_svm(request, dataset_name):
         "index_id": index_id,
         "bucket": bucket_name,
         "positive_paths": pos_paths,
-        "positive_patches": json.dumps(pos_patches),
+        "positive_patches": pos_patches,
         "negative_paths": neg_paths,
         "augmentations": augmentations,
         "num_results": 100,
@@ -1039,7 +1032,7 @@ def lookup_svm(request, dataset_name):
     print(params)
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/query_svm",
-        data=params, headers=POST_HEADERS
+        data=params,
     )
     response_data = r.json()
 
@@ -1081,7 +1074,7 @@ def active_batch(request, dataset_name):
     }
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/active_batch",
-        data=params, headers=POST_HEADERS
+        data=params,
     )
     response_data = r.json()
 
