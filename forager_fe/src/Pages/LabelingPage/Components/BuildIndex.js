@@ -33,6 +33,7 @@ function BuildIndex({ dataset }) {
   if (index.id) {
     if (index.status === 'INDEX_READY') {
       text = 'Delete index from disk';
+      enabled = false;  // TODO(mihirg): Consider removing this button entirely
     } else if (index.status === 'INDEX_NOT_DOWNLOADED') {
       text = 'Download index to disk';
     } else {

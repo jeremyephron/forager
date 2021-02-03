@@ -155,6 +155,9 @@ def log_exception_from_coro_but_return_none(coro):
 
 
 def numpy_to_base64(nda):
+    if nda is None:
+        return ""
+
     with io.BytesIO() as nda_buffer:
         np.save(nda_buffer, nda, allow_pickle=False)
         nda_bytes = nda_buffer.getvalue()
@@ -163,6 +166,9 @@ def numpy_to_base64(nda):
 
 
 def base64_to_numpy(nda_base64):
+    if not nda_base64:
+        return None
+
     nda_bytes = base64.b64decode(nda_base64)
     with io.BytesIO(nda_bytes) as nda_buffer:
         nda = np.load(nda_buffer, allow_pickle=False)

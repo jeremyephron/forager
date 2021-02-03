@@ -10,6 +10,7 @@ import json
 import logging
 import operator
 import os
+from pathlib import Path
 import shutil
 import random
 import time
@@ -26,6 +27,7 @@ from sklearn.metrics import accuracy_score
 from typing import Callable, DefaultDict, Dict, List, Optional, Set, Tuple
 
 from interactive_index import InteractiveIndex
+from interactive_index.utils import sample_farthest_vectors
 
 from knn import utils
 from knn.clusters import TerraformModule
@@ -67,8 +69,14 @@ class LabeledIndex:
     @dataclass
     class QueryResult:
         id: int
-        dist: float
+        dist: float = 0.0
         spatial_dists: Optional[List[Tuple[int, float]]] = None
+        label: str = ""
+
+    @dataclass
+    class FurthestQueryResult:
+        id: int
+        spatial_locs: Optional[List[int]] = None
         label: str = ""
 
     # Don't use this directly - use a @classmethod constructor
@@ -103,7 +111,7 @@ class LabeledIndex:
         num_probes: Optional[int] = None,
         use_full_image: bool = False,
         svm: bool = False,
-    ):
+    ) -> List[QueryResult]:
         assert self.ready.is_set()
 
         self.logger.info(f"Query: use_full_image={use_full_image}, svm={svm}")
@@ -162,6 +170,46 @@ class LabeledIndex:
             result.label = self.labels[result.id]
         return sorted_results
 
+    def query_farthest(
+        self,
+        query_vector: np.ndarray,
+        fraction: float,
+        max_samples: int,
+        use_full_image: bool = False,
+    ) -> List[FurthestQueryResult]:
+        if use_full_image:
+            ids, _ = sample_farthest_vectors(
+                self.indexes[IndexType.FULL_DOT], query_vector, fraction, max_samples
+            )
+            results = [LabeledIndex.FurthestQueryResult(int(i)) for i in ids]
+        else:
+            ids, locs = sample_farthest_vectors(
+                self.indexes[IndexType.SPATIAL_DOT],
+                query_vector,
+                fraction,
+                config.QUERY_NUM_RESULTS_MULTIPLE * max_samples,
+            )
+
+            # Gather spatial locations for each image
+            locs_by_id: DefaultDict[int, List[int]] = defaultdict(list)
+            for i, l in zip(ids, locs):
+                i, l = int(i), int(l)  # cast numpy types
+                locs_by_id[i].append(l)
+
+            # Return up to max_samples images with the highest number (but at least
+            # QUERY_PATCHES_PER_IMAGE) of returned spatial locations
+            result_gen = (
+                LabeledIndex.FurthestQueryResult(i, locs)
+                for i, locs in locs_by_id.items()
+            )
+            results = heapq.nlargest(
+                max_samples, result_gen, lambda r: len(r.spatial_locs)
+            )
+
+        for result in results:
+            result.label = self.labels[result.id]
+        return results
+
     # CLEANUP
 
     def delete(self):
@@ -209,7 +257,7 @@ class LabeledIndex:
     async def start_building(
         cls,
         cluster: TerraformModule,
-        cluster_unlock_fn: Callable[[None], None],
+        cluster_unlock_fn: Callable[[], None],
         bucket: str,
         paths: List[str],
         *args,
@@ -437,7 +485,7 @@ class LabeledIndex:
         self.cluster_unlock_fn()
 
     @staticmethod
-    def merge_index(index: InteractiveIndex, shard_patterns: Set[str], index_dir: str):
+    def merge_index(index: InteractiveIndex, shard_patterns: Set[str], index_dir: Path):
         shard_paths = [
             str(p.resolve())
             for shard_pattern in shard_patterns
@@ -839,7 +887,8 @@ class SVMExampleReducer(Reducer):
         self.embeddings: List[np.ndarray] = []
 
     def handle_result(self, input: JSONType, output: str):
-        self.labels.append(int(bool(input["label"])))
+        label = int(bool(input["label"]))
+        self.labels.append(label)
         self.embeddings.append(extract_embedding_from_mapper_output(output))
 
     @property
@@ -862,8 +911,33 @@ async def query_svm(request):
     neg_image_paths = request.form["negative_paths"]
     num_results = int(request.form["num_results"][0])
     mode = request.form["mode"][0]
-
     use_full_image = bool(strtobool(request.form.get("use_full_image", "False")))
+
+    # Automatically label `autolabel_max_vectors` vectors randomly sampled from the
+    # bottom `autolabel_percent`% of the previous SVM's results as negative
+    index = current_indexes[index_id]
+
+    prev_svm_vector = utils.base64_to_numpy(request.form["prev_svm_vector"][0])
+    autolabel_percent = float(request.form["autolabel_percent"][0])
+    autolabel_max_vectors = int(request.form["autolabel_max_vectors"][0])
+
+    if prev_svm_vector:
+        already_labeled_image_paths = set(
+            itertools.chain(pos_image_paths, neg_image_paths)
+        )
+        autolabel_results = index.query_farthest(
+            prev_svm_vector,
+            autolabel_percent / 100,  # percentage to fraction!
+            autolabel_max_vectors,
+            use_full_image,
+        )
+        autolabel_image_paths = [
+            r.label
+            for r in autolabel_results
+            if r.label not in already_labeled_image_paths
+        ]
+    else:
+        autolabel_image_paths = []
 
     # Generate training vectors
     with BestMapper(cluster_id) as mapper:
@@ -881,13 +955,16 @@ async def query_svm(request):
         neg_inputs = [
             {"image": image_path, "label": 0} for image_path in neg_image_paths
         ]
+        auto_inputs = [
+            {"image": image_path, "label": 0} for image_path in autolabel_image_paths
+        ]
 
         logger.info(
             f"Starting SVM training vector computation: {len(pos_inputs)} positives, "
-            f"{len(neg_inputs)} negatives"
+            f"{len(neg_inputs)} negatives, {len(auto_inputs)} auto-negatives"
         )
         training_features, training_labels = await job.run_until_complete(
-            itertools.chain(pos_inputs, neg_inputs)
+            itertools.chain(pos_inputs, neg_inputs, auto_inputs)
         )
         logger.info(f"Finished SVM vector computation in {job.elapsed_time:.3f}s")
         logger.debug(f"Vector computation performance: {job.performance}")
@@ -920,10 +997,13 @@ async def query_svm(request):
             augmentation_dict[augmentations[2 * i]] = float(augmentations[2 * i + 1])
 
         # Run query and return results
-        query_results = current_indexes[index_id].query(
-            w, num_results, None, use_full_image, True
+        query_results = index.query(w, num_results, None, use_full_image, True)
+        return resp.json(
+            {
+                "results": [r.to_dict() for r in query_results],
+                "svm_vector": utils.numpy_to_base64(w),
+            }
         )
-        return resp.json({"results": [r.to_dict() for r in query_results]})
     elif mode == "svmBoundary":
         # Get samples close to boundary vectors
         # For now, looks like most vectors end up being support vectors since
@@ -934,7 +1014,7 @@ async def query_svm(request):
         perVector = (int)(num_results / len(sv)) + 2
         for vec in sv:
             # Return nearby images
-            query_results = current_indexes[index_id].query(
+            query_results = index.query(
                 np.float32(vec),
                 perVector,
                 None,
@@ -949,7 +1029,10 @@ async def query_svm(request):
                     all_results[label] = result
 
         return resp.json(
-            {"results": [r.to_dict() for r in all_results.values()]}
+            {
+                "results": [r.to_dict() for r in all_results.values()],
+                "svm_vector": utils.numpy_to_base64(w),
+            }
         )  # unordered by distance for now
     else:
         return resp.json({"results": []})

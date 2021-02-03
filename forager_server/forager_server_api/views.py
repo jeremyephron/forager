@@ -980,6 +980,9 @@ def lookup_svm(request, dataset_name):
     augmentations = [x.split(":") for x in request.GET['augmentations'].split(',')]
     use_full_image = bool(distutils.util.strtobool(request.GET['use_full_image']))
     mode = request.GET['mode']
+    prev_svm_vector = request.GET['prev_svm_vector']
+    autolabel_percent = float(request.GET['autolabel_percent'])
+    autolabel_max_vectors = int(request.GET['autolabel_max_vectors'])
 
     # 1. Retrieve dataset info from db
     dataset = Dataset.objects.get(name=dataset_name)
@@ -1028,7 +1031,10 @@ def lookup_svm(request, dataset_name):
         "augmentations": augmentations,
         "num_results": 100,
         "use_full_image": use_full_image,
-        "mode": mode
+        "mode": mode,
+        "prev_svm_vector": prev_svm_vector,
+        "autolabel_percent": autolabel_percent,
+        "autolabel_max_vectors": autolabel_max_vectors,
     }
     print(params)
     r = requests.post(
@@ -1038,6 +1044,8 @@ def lookup_svm(request, dataset_name):
     response_data = r.json()
 
     response = process_image_query_results(request, dataset, response_data['results'])
+    del response['results']
+    response.update(response_data)  # include any other keys from upstream response
 
     # 4. Return knn results
     return JsonResponse(response)

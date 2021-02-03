@@ -151,16 +151,29 @@ function LabelingPage() {
   var currKeyPaths = [];
   var currKeyIdentifiers = [];
 
+  const [orderingMode, setOrderingMode] = useState("default");
+
+  // SVM autolabeling
+  const [svmVector, setSvmVector] = useState("");
+  const [autolabelPercent, setAutolabelPercent] = useState(50);
+  const [autolabelMaxVectors, setAutolabelMaxVectors] = useState(0);
+
   const cluster = useSelector(state => state.cluster);
   const index = useSelector(state => state.indexes[datasetName] || {});
 
   const clusterRef = useRef();
   const indexRef = useRef();
+  const autolabelInfo = useRef({});
 
   useEffect(() => {
     clusterRef.current = cluster;
     indexRef.current = index;
-  }, [cluster, index]);
+    autolabelInfo.current = {
+      prev_svm_vector: svmVector || "",
+      autolabel_percent: autolabelPercent,
+      autolabel_max_vectors: autolabelMaxVectors,
+    };
+  }, [cluster, index, svmVector, autolabelPercent, autolabelMaxVectors]);
 
   const getAnnotationsSummaryUrl = baseUrl + "/get_annotations_summary/" + datasetName;
   const getAnnotationsUrl = baseUrl + "/get_annotations/" + datasetName;
@@ -285,15 +298,9 @@ function LabelingPage() {
     }
   }
 
-  const onOrderingMode = (event) => {
-    var order = document.getElementById("fetch_image_mode").value;
-    if (order !== "default") {
-      // Show relevant filters
-      document.getElementById("knnParamWrapper").style.display = "flex"
-    } else  {
-      // Show relevant filters
-      document.getElementById("knnParamWrapper").style.display = "none"
-    }
+  const onOrderingMode = (e) => {
+    setSvmVector("");
+    setOrderingMode(e.target.value);
   }
 
   const onFilterCategory = (event) => {
@@ -474,11 +481,14 @@ function LabelingPage() {
           use_full_image: (method.localeCompare("svmPos") === 0),
           augmentations: augmentations,
           mode: method,
-          window: window
+          window: window,
+          ...(autolabelInfo.current),
         }).toString();
         res = await fetch(url, {method: "GET",
           credentials: 'include',
         }).then(results => results.json());
+
+        setSvmVector(res.svm_vector);
       } else if (method.localeCompare("svmBoundary") === 0) {
         // Turned this off for now, add back to querySvmUrl call when desired
       } else if (method.localeCompare("activeBatch") === 0) {
@@ -963,7 +973,7 @@ function LabelingPage() {
               </datalist>
               <LabelContainer id="orderingWrapper">
                 <label>Ordering</label><br/>
-                <OptionsSelect alt="true" id="fetch_image_mode" onChange={onOrderingMode}>
+                <OptionsSelect alt="true" id="fetch_image_mode" value={orderingMode} onChange={onOrderingMode}>
                   <option value="default">Default</option>
                   {index.status === 'INDEX_READY' &&
                   <option value="knn">KNN</option>}
@@ -977,28 +987,40 @@ function LabelingPage() {
                   <option value="activeBatch">Active Batch</option>}
                 </OptionsSelect>
               </LabelContainer>
-              <RowContainer id="knnParamWrapper" style={{display: "none"}}>
-                <LabelContainer>
-                  <label>Optic Window</label><br/>
-                  <Slider id="windowSlider" type="range" min="0" max="500" defaultValue="0" ></Slider>
-                </LabelContainer>
-                <LabelContainer>
-                  <label>Augment</label><br/>
-                  <select id="augmentations" size="2" multiple>
-                    <option>none</option>
-                    <option>flip</option>
-                    <option>gray</option>
-                    <option>brightness</option>
-                    <option>resize</option>
-                    <option>rotate</option>
-                    <option>contrast</option>
-                  </select>
-                </LabelContainer>
-                <LabelContainer>
-                  <label>AugParam</label><br/>
-                  <TextInput id="augmentationParam" style={{width: "70px"}}/>
-                </LabelContainer>
-              </RowContainer>
+              {/* <RowContainer id="knnParamWrapper" style={{display: "none"}}> */}
+              {/*   <LabelContainer> */}
+              {/*     <label>Optic Window</label><br/> */}
+              {/*     <Slider id="windowSlider" type="range" min="0" max="500" defaultValue="0" ></Slider> */}
+              {/*   </LabelContainer> */}
+              {/*   <LabelContainer> */}
+              {/*     <label>Augment</label><br/> */}
+              {/*     <select id="augmentations" size="2" multiple> */}
+              {/*       <option>none</option> */}
+              {/*       <option>flip</option> */}
+              {/*       <option>gray</option> */}
+              {/*       <option>brightness</option> */}
+              {/*       <option>resize</option> */}
+              {/*       <option>rotate</option> */}
+              {/*       <option>contrast</option> */}
+              {/*     </select> */}
+              {/*   </LabelContainer> */}
+              {/*   <LabelContainer> */}
+              {/*     <label>AugParam</label><br/> */}
+              {/*     <TextInput id="augmentationParam" style={{width: "70px"}}/> */}
+              {/*   </LabelContainer> */}
+              {/* </RowContainer> */}
+              {(orderingMode === "svmPos" || orderingMode === "spatialSvmPos") &&
+                <RowContainer>
+                  <LabelContainer>
+                    <label>Autolabel () images...</label><br/>
+                    <TextInput type="number" value={autolabelMaxVectors} onChange={(e) => setAutolabelMaxVectors(e.target.value)} ></Slider>
+                  </LabelContainer>
+                  <LabelContainer>
+                    <label>...sampled from bottom ()%</label><br/>
+                    <Slider type="range" min="0" max="100" value={autolabelPercent} onChange={(e) => setAutolabelPercent(e.target.value)} ></Slider>
+                  </LabelContainer>
+                </RowContainer>
+              }
             </RowContainer>
             <FetchButton id="filter_button">Apply Filter</FetchButton>
           </RowContainer>
