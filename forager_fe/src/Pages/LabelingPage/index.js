@@ -597,7 +597,7 @@ function LabelingPage() {
   const fetchPage = (page) => {
     setPage(page);
     setIsFetching(true);
-    fetchImages().finally(() => setIsFetching(false));
+    HandleFetchImages(page).finally(() => setIsFetching(false));
   };
 
   useEffect(() => {
