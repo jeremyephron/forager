@@ -184,14 +184,15 @@ def sample_farthest_vectors(
         else:
             extra_ids = None
 
+        print(len(ids))
         random_inds = np.random.choice(
             len(ids),
-            size=int(n_samples * cluster_sizes[i] / total),
-            replace=False
+            size=min(len(ids), int(n_samples * cluster_sizes[i] / total)),
+            replace=False,
         )
 
         sample_ids.append(ids[random_inds])
-        if extra_ids:
+        if extra_ids is not None:
             sample_extra_ids.append(extra_ids[random_inds])
 
     if index.multi_id:
