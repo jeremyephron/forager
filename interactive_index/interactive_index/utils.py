@@ -159,12 +159,10 @@ def sample_farthest_vectors(
     xq = index.apply_transform(xq)[0]
 
     if index.metric == 'inner product':
-        farthest_centroid_inds = np.argsort(
-            [-xq.dot(centroids[i]) for i in range(len(centroids))]
-        )
+        farthest_centroid_inds = np.argsort([-xq.dot(c) for c in centroids])
     else:
         farthest_centroid_inds = np.argsort(
-            [-np.linalg.norm(xq - centroids[i]) for i in range(len(centroids))]
+            [-np.linalg.norm(xq - c) for c in centroids]
         )
 
     total = 0
@@ -179,7 +177,7 @@ def sample_farthest_vectors(
     sample_ids = []
     sample_extra_ids = []
     for i in cluster_inds_to_use:
-        ids = index.get_cluster_ids(farthest_centroid_inds[i])
+        ids = index.get_cluster_ids(i)
         if index.multi_id:
             ids, extra_ids = ids
         else:
