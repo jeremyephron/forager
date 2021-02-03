@@ -987,36 +987,36 @@ function LabelingPage() {
                   <option value="activeBatch">Active Batch</option>}
                 </OptionsSelect>
               </LabelContainer>
-              {/* <RowContainer id="knnParamWrapper" style={{display: "none"}}> */}
-              {/*   <LabelContainer> */}
-              {/*     <label>Optic Window</label><br/> */}
-              {/*     <Slider id="windowSlider" type="range" min="0" max="500" defaultValue="0" ></Slider> */}
-              {/*   </LabelContainer> */}
-              {/*   <LabelContainer> */}
-              {/*     <label>Augment</label><br/> */}
-              {/*     <select id="augmentations" size="2" multiple> */}
-              {/*       <option>none</option> */}
-              {/*       <option>flip</option> */}
-              {/*       <option>gray</option> */}
-              {/*       <option>brightness</option> */}
-              {/*       <option>resize</option> */}
-              {/*       <option>rotate</option> */}
-              {/*       <option>contrast</option> */}
-              {/*     </select> */}
-              {/*   </LabelContainer> */}
-              {/*   <LabelContainer> */}
-              {/*     <label>AugParam</label><br/> */}
-              {/*     <TextInput id="augmentationParam" style={{width: "70px"}}/> */}
-              {/*   </LabelContainer> */}
-              {/* </RowContainer> */}
+              <RowContainer id="knnParamWrapper" style={{display: "none"}}>  {/* Not shown */}
+                <LabelContainer>
+                  <label>Optic Window</label><br/>
+                  <Slider id="windowSlider" type="range" min="0" max="500" defaultValue="0" ></Slider>
+                </LabelContainer>
+                <LabelContainer>
+                  <label>Augment</label><br/>
+                  <select id="augmentations" size="2" multiple>
+                    <option>none</option>
+                    <option>flip</option>
+                    <option>gray</option>
+                    <option>brightness</option>
+                    <option>resize</option>
+                    <option>rotate</option>
+                    <option>contrast</option>
+                  </select>
+                </LabelContainer>
+                <LabelContainer>
+                  <label>AugParam</label><br/>
+                  <TextInput id="augmentationParam" style={{width: "70px"}}/>
+                </LabelContainer>
+              </RowContainer>
               {(orderingMode === "svmPos" || orderingMode === "spatialSvmPos") &&
                 <RowContainer>
                   <LabelContainer>
-                    <label>Autolabel () images...</label><br/>
+                    <label>Autolabel up to {autolabelMaxVectors} images...</label><br/>
                     <TextInput type="number" value={autolabelMaxVectors} onChange={(e) => setAutolabelMaxVectors(e.target.value)} ></TextInput>
                   </LabelContainer>
                   <LabelContainer>
-                    <label>...sampled from bottom ()%</label><br/>
+                    <label>...sampled from bottom {autolabelPercent}}%</label><br/>
                     <Slider type="range" min="0" max="100" value={autolabelPercent} onChange={(e) => setAutolabelPercent(e.target.value)} ></Slider>
                   </LabelContainer>
                 </RowContainer>
