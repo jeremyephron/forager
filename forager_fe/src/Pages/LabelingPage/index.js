@@ -733,6 +733,10 @@ function LabelingPage() {
 
       if (annotation.type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
         annotation.labeling_time = currFrame.data.labeling_time;
+      } else {
+        if (!labeler.has_per_frame_category_annotation()) {
+            labeler.set_per_frame_category_annotation(1 /* positive */);
+        }
       }
 
       let endpoint = new URL(addAnnotationUrl + '/' + currFrame.data.identifier);

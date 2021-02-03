@@ -1028,6 +1028,7 @@ def lookup_svm(request, dataset_name):
         "prev_svm_vector": prev_svm_vector,
         "autolabel_percent": autolabel_percent,
         "autolabel_max_vectors": autolabel_max_vectors,
+        "log_id_string": "logid:[{:s}:{:s}]".format(label_function, label_category)
     }
     print(params)
     r = requests.post(
