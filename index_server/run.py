@@ -907,6 +907,7 @@ async def query_svm(request):
     prev_svm_vector = utils.base64_to_numpy(request.json["prev_svm_vector"])
     autolabel_percent = float(request.json["autolabel_percent"])
     autolabel_max_vectors = int(request.json["autolabel_max_vectors"])
+    log_id_string = int(request.json["log_id_string"])
 
     if (
         prev_svm_vector is not None
@@ -951,17 +952,17 @@ async def query_svm(request):
         ]
 
         logger.info(
-            f"Starting SVM training vector computation: {len(pos_inputs)} positives, "
+            f"{log_id_string} - Starting SVM training vector computation: {len(pos_inputs)} positives, "
             f"{len(neg_inputs)} negatives, {len(auto_inputs)} auto-negatives"
         )
         training_features, training_labels = await job.run_until_complete(
             itertools.chain(pos_inputs, neg_inputs, auto_inputs)
         )
-        logger.info(f"Finished SVM vector computation in {job.elapsed_time:.3f}s")
-        logger.debug(f"Vector computation performance: {job.performance}")
+        logger.info(f"{log_id_string} - Finished SVM vector computation in {job.elapsed_time:.3f}s")
+        logger.debug(f"{log_id_string} - Vector computation performance: {job.performance}")
 
     # Train SVM
-    logger.debug("Starting SVM training")
+    logger.debug(f"{log_id_string} - Starting SVM training")
     start_time = time.perf_counter()
 
     model = svm.SVC(kernel="linear")
@@ -969,8 +970,8 @@ async def query_svm(request):
     predicted = model.predict(training_features)
 
     end_time = time.perf_counter()
-    logger.info(f"Finished training SVM in {end_time - start_time:.3f}s")
-    logger.debug(f"SVM accuracy: {accuracy_score(training_labels, predicted)}")
+    logger.info(f"{log_id_string} - Finished training SVM in {end_time - start_time:.3f}s")
+    logger.debug(f"{log_id_string} - SVM accuracy: {accuracy_score(training_labels, predicted)}")
 
     if mode == "svmPos" or mode == "spatialSvmPos":
         # Evaluate the SVM by querying index
