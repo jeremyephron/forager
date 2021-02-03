@@ -178,9 +178,13 @@ def sample_farthest_vectors(
     samples = []
     for i in range(n_clusters):
         vec_ids = index.get_cluster_ids(farthest_centroid_inds[i])
-        samples.append(np.random.choice(
-            vec_ids, size=int(n_samples * cluster_sizes[i] / total), replace=False
-        ))
+        print(vec_ids.shape)
+        # random_inds = np.random.choice(
+        #     len(vec_ids),
+        #     size=int(n_samples * cluster_sizes[i] / total),
+        #     replace=False,
+        # )
+        # samples.append()
 
     return np.concatenate(samples)
 
