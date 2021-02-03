@@ -601,6 +601,10 @@ function LabelingPage() {
   };
 
   useEffect(() => {
+    fetchPage(1);
+  }, []);
+
+  useEffect(() => {
     let button = document.getElementById("filter_button");
     var currPaginationNum = PAGINATION_NUM;
     if (document.getElementById("select_data_source").value.localeCompare("google") === 0) {
