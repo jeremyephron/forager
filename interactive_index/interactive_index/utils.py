@@ -158,6 +158,9 @@ def sample_farthest_vectors(
     centroids = index.get_centroids()
     xq = index.apply_transform(xq)
 
+    print("CENTROIDS", centroids)
+    print("CENTROIDS SHAPE", centroids.shape)
+
     if index.metric == 'inner product':
         farthest_centroid_inds = np.argsort(
             [-xq.dot(centroids[i]) for i in range(len(centroids))]
