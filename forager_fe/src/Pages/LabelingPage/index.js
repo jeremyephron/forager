@@ -299,7 +299,7 @@ function LabelingPage() {
   }
 
   const onOrderingMode = (e) => {
-    setSvmVector("");
+    setAutolabelMaxVectors(0);
     setOrderingMode(e.target.value);
   }
 
@@ -1016,7 +1016,7 @@ function LabelingPage() {
                     <TextInput type="number" value={autolabelMaxVectors} onChange={(e) => setAutolabelMaxVectors(e.target.value)} ></TextInput>
                   </LabelContainer>
                   <LabelContainer>
-                    <label>...sampled from bottom {autolabelPercent}%</label><br/>
+                    <label>...from bottom {autolabelPercent}% of prev SVM</label><br/>
                     <Slider type="range" min="0" max="100" value={autolabelPercent} onChange={(e) => setAutolabelPercent(e.target.value)} ></Slider>
                   </LabelContainer>
                 </RowContainer>

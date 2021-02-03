@@ -908,7 +908,7 @@ async def query_svm(request):
     autolabel_percent = float(request.json["autolabel_percent"])
     autolabel_max_vectors = int(request.json["autolabel_max_vectors"])
 
-    if prev_svm_vector:
+    if prev_svm_vector is not None:
         already_labeled_image_paths = set(
             itertools.chain(pos_image_paths, neg_image_paths)
         )
