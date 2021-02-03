@@ -907,7 +907,7 @@ async def query_svm(request):
     prev_svm_vector = utils.base64_to_numpy(request.json["prev_svm_vector"])
     autolabel_percent = float(request.json["autolabel_percent"])
     autolabel_max_vectors = int(request.json["autolabel_max_vectors"])
-    log_id_string = int(request.json["log_id_string"])
+    log_id_string = request.json["log_id_string"]
 
     if (
         prev_svm_vector is not None
