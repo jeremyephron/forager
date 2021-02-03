@@ -15,7 +15,7 @@ CLOUD_RUN_N_MAPPERS = 50
 CLOUD_RUN_N_RETRIES = 1
 
 CLUSTER_TERRAFORM_MODULE_PATH = Path("./terraform").resolve()
-CLUSTER_REUSE_EXISTING = False
+CLUSTER_REUSE_EXISTING = True
 CLUSTER_MOUNT_DIR = Path("~/forager/mount").expanduser().resolve()
 CLUSTER_CLEANUP_TIME = 20 * 60  # seconds (destroy cluster after idle for this long)
 
