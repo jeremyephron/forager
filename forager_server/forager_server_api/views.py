@@ -198,7 +198,7 @@ def create_index(request, dataset_name, dataset=None):
     }
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/start_job",
-        data=params,
+        json=params,
     )
     response_data = r.json()
     return JsonResponse({
@@ -955,7 +955,7 @@ def lookup_knn(request, dataset_name):
     }
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/query_index",
-        data=params,
+        json=params,
     )
     response_data = r.json()
     response = process_image_query_results(request, dataset, response_data['results'])
@@ -1032,7 +1032,7 @@ def lookup_svm(request, dataset_name):
     print(params)
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/query_svm",
-        data=params,
+        json=params,
     )
     response_data = r.json()
 
@@ -1074,7 +1074,7 @@ def active_batch(request, dataset_name):
     }
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/active_batch",
-        data=params,
+        json=params,
     )
     response_data = r.json()
 
