@@ -1044,7 +1044,7 @@ def lookup_svm(request, dataset_name):
     response_data = r.json()
 
     response = process_image_query_results(request, dataset, response_data['results'])
-    del response['results']
+    del response_data['results']
     response.update(response_data)  # include any other keys from upstream response
 
     # 4. Return knn results
