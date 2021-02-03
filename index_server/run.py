@@ -788,7 +788,7 @@ async def query_index(request):
     use_full_image = bool(strtobool(request.form.get("use_full_image", "False")))
 
     # Generate query vector as average of patch embeddings
-    with BestMapper(cluster_id) as mapper:
+    async with BestMapper(cluster_id) as mapper:
         job = MapReduceJob(
             mapper,
             VectorReducer(
@@ -839,7 +839,7 @@ async def active_batch(request):
     use_full_image = True
 
     # Generate query vector as average of patch embeddings
-    with BestMapper(cluster_id) as mapper:
+    async with BestMapper(cluster_id) as mapper:
         job = MapReduceJob(
             mapper,
             VectorReducer(extract_func=extract_embedding_from_mapper_output),
@@ -942,7 +942,7 @@ async def query_svm(request):
         autolabel_image_paths = []
 
     # Generate training vectors
-    with BestMapper(cluster_id) as mapper:
+    async with BestMapper(cluster_id) as mapper:
         job = MapReduceJob(
             mapper,
             SVMExampleReducer(),
