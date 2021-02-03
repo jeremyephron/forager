@@ -346,7 +346,9 @@ function LabelingPage() {
       }
 
       //get_notes(false);
+      const current = labeler.get_current_frame_num();
       labeler.load_image_stack(imageData);
+      labeler.set_current_frame_num(current);
       labeler.set_focus();
     });
   }, [paths, identifiers])
@@ -599,10 +601,6 @@ function LabelingPage() {
     setIsFetching(true);
     HandleFetchImages(page).finally(() => setIsFetching(false));
   };
-
-  useEffect(() => {
-    fetchPage(1);
-  }, []);
 
   useEffect(() => {
     let button = document.getElementById("filter_button");
