@@ -123,14 +123,6 @@ const StatsBar = (props) => {
   );
 }
 
-const SummaryBar = (props) => {
-  return (
-    <StatsContainer>
-      <label>Images {1 + (props.page - 1)*props.pageSize} to {Math.min(props.numTotalFilteredImages, props.page*props.pageSize)} out of {props.numTotalFilteredImages}</label>
-    </StatsContainer>
-  );
-}
-
 function LabelingPage() {
   const location = useLocation();
   const datasetName = location.state.datasetName;
@@ -193,6 +185,7 @@ function LabelingPage() {
   const [PAGINATION_NUM, setPaginationNum] = useState(500);
   const [pageSize, setPageSize] = useState(500);
   const [page, setPage] = useState(1);
+  const [isFetching, setIsFetching] = useState(false);
 
   /* Klabel stuff */
   const labeler = useMemo(() => new ImageLabeler(), []);
@@ -601,6 +594,12 @@ function LabelingPage() {
     });
   }, [keyPaths, keyIdentifiers, PAGINATION_NUM])
 
+  const fetchPage = (page) => {
+    setPage(page);
+    setIsFetching(true);
+    fetchImages().finally(() => setIsFetching(false));
+  };
+
   useEffect(() => {
     let button = document.getElementById("filter_button");
     var currPaginationNum = PAGINATION_NUM;
@@ -609,40 +608,23 @@ function LabelingPage() {
     }
     var maxPage = Math.ceil(numTotalFilteredImages/currPaginationNum)
     if (button) {
-      button.onclick = (function() {
-        setPage(1);
-        HandleFetchImages(1);
-      })
+      button.onclick = () => fetchPage(1);
     }
     button = document.getElementById("first_button");
     if (button) {
-      button.onclick = (function() {
-        setPage(1);
-        HandleFetchImages(1);
-      })
+      button.onclick = () => fetchPage(1);
     }
     button = document.getElementById("prev_button");
     if (button) {
-      button.onclick = (function() {
-        var nextPage = Math.max(page - 1,1)
-        setPage(nextPage);
-        HandleFetchImages(nextPage);
-      })
+      button.onclick = () => fetchPage(Math.max(page - 1,1));
     }
     button = document.getElementById("next_button");
     if (button) {
-      button.onclick = (function() {
-        var nextPage = Math.min(page + 1,maxPage)
-        setPage(nextPage);
-        HandleFetchImages(nextPage);
-      })
+      button.onclick = () => fetchPage(Math.min(page + 1,maxPage));
     }
     button = document.getElementById("last_button");
     if (button) {
-      button.onclick = (function() {
-        setPage(maxPage);
-        HandleFetchImages(maxPage);
-      })
+      button.onclick = () => fetchPage(maxPage);
     }
   },[HandleFetchImages, page, numTotalFilteredImages])
 
@@ -1022,7 +1004,7 @@ function LabelingPage() {
                 </RowContainer>
               }
             </RowContainer>
-            <FetchButton id="filter_button">Apply Filter</FetchButton>
+            <FetchButton id="filter_button" disabled={isFetching}>Apply Filter</FetchButton>
           </RowContainer>
           <MainCanvas numTotalFilteredImages={numTotalFilteredImages} onCategory={OnLabel} onUser={OnLabel} annotationsSummary={annotationsSummary}/>
           <RowContainer id="ann_import_container">
@@ -1042,12 +1024,17 @@ function LabelingPage() {
               <Slider type="range" min="50" max="300" defaultValue="100" onChange={(e) => setImageSize(e.target.value)}></Slider>
             </LabelContainer>
             <LabelContainer>
-              <SummaryBar id="image_summary" numTotalFilteredImages={numTotalFilteredImages} page={page} pageSize={pageSize}/>
+              <StatsContainer>
+                {(isFetching) ?
+                  <progress /> :
+                  <label>Images {1 + (page - 1)*pageSize} to {Math.min(numTotalFilteredImages, page*pageSize)} out of {numTotalFilteredImages}</label>
+                }
+              </StatsContainer>
               <RowContainer>
-                <FetchButton id="first_button">First</FetchButton>
-                <FetchButton id="prev_button">Prev</FetchButton>
-                <FetchButton id="next_button">Next</FetchButton>
-                <FetchButton id="last_button">Last</FetchButton>
+                <FetchButton id="first_button" disabled={isFetching}>First</FetchButton>
+                <FetchButton id="prev_button" disabled={isFetching}>Prev</FetchButton>
+                <FetchButton id="next_button" disabled={isFetching}>Next</FetchButton>
+                <FetchButton id="last_button" disabled={isFetching}>Last</FetchButton>
               </RowContainer>
             </LabelContainer>
           </RowContainer>
