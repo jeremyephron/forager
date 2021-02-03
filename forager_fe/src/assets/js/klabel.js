@@ -128,7 +128,7 @@ export class ImageLabeler {
 		this.autoStepId = null;
 
 		// annotation state
-		this.annotation_mode = Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY;
+		this.annotation_mode = Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX;
 		this.category_to_name = [];
 		this.category_to_color = [];
 		this.in_progress_points = [];
@@ -756,87 +756,82 @@ export class ImageLabeler {
 
 	handle_keydown(event, prevFrame, nextFrame) {
 		console.log("KeyDown: " + event.keyCode);
-		if (this.is_annotation_mode_per_frame_category()) {
-			// number key: 0-9
-			var stopAuto = (this.current_frame_index === nextFrame);
-			if (event.keyCode >= 48 && event.keyCode <= 57) {
-				var key_pressed = event.keyCode - 48;
-				var category_name = this.category_to_name[key_pressed];
+		// number key: 0-9
+		var stopAuto = (this.current_frame_index === nextFrame);
+		if (event.keyCode >= 48 && event.keyCode <= 57) {
+			var key_pressed = event.keyCode - 48;
+			var category_name = this.category_to_name[key_pressed];
 
-				// ignore keys if image hasn't loaded yet
-				var cur_frame = this.get_current_frame();
-				if (cur_frame.image_load_complete && category_name !== "") {
-					this.set_per_frame_category_annotation(key_pressed);
+			// ignore keys if image hasn't loaded yet
+			var cur_frame = this.get_current_frame();
+			if (cur_frame.image_load_complete && category_name !== "") {
+				this.set_per_frame_category_annotation(key_pressed);
+			}
+			//this.render();
+			this.current_indices = [nextFrame]
+			setTimeout(() => {this.set_current_frame_num(nextFrame)},100);
+		} else if (event.keyCode === 65) {   // "a" for autolabel
+			if (!this.autoStepId) {
+				var timeDiv = document.getElementById("frameSpeed")
+				var imageTime = 500;
+				if (timeDiv) {
+					var divValue = parseInt(timeDiv.value)
+					if (!isNaN(divValue)) {
+						imageTime = divValue
+					}
+					if (imageTime < 250) {
+						imageTime = 250
+					}
 				}
-				//this.render();
-				this.current_indices = [nextFrame]
-				setTimeout(() => {this.set_current_frame_num(nextFrame)},100);
-			} else if (event.keyCode === 65) {   // "a" for autolabel
-				if (!this.autoStepId) {
-					var timeDiv = document.getElementById("frameSpeed")
-					var imageTime = 500;
-					if (timeDiv) {
-						var divValue = parseInt(timeDiv.value)
-						if (!isNaN(divValue)) {
-							imageTime = divValue
-						}
-						if (imageTime < 250) {
-							imageTime = 250
-						}
+				this.autoStepId = setInterval(() => {
+					console.log("Keypress")
+					var evt = new KeyboardEvent("keydown", {
+					bubbles : true,
+					cancelable : true,
+					char : "2",
+					key : "2",
+					shiftKey : false,
+					keyCode : 50
+					})
+					console.log(evt)
+					window.dispatchEvent(evt);
+				}, imageTime)
+			}
+		} else if (event.keyCode === 83) {   // "s" for autolabel stop
+			this.stop_autolabel();
+		} else if (event.keyCode === 68) {   // "d" for autolabel defer (marking last few frames unsure)
+			// if a per-frame annotation exists, remove it
+			if (this.autoStepId) {
+				var timeDiv = document.getElementById("frameSpeed")
+				var imageTime = 500;
+				if (timeDiv) {
+					var divValue = parseInt(timeDiv.value)
+					if (!isNaN(divValue)) {
+						imageTime = divValue
 					}
-					this.autoStepId = setInterval(() => {
-						console.log("Keypress")
-						var evt = new KeyboardEvent("keydown", {
-						bubbles : true,
-						cancelable : true,
-						char : "2",
-						key : "2",
-						shiftKey : false,
-						keyCode : 50
-						})
-						console.log(evt)
-						window.dispatchEvent(evt);
-					}, imageTime)
+					if (imageTime < 250) {
+						imageTime = 250
+					}
 				}
-			} else if (event.keyCode === 83) {   // "s" for autolabel stop
-				this.stop_autolabel();
-			} else if (event.keyCode === 68) {   // "d" for autolabel defer (marking last few frames unsure)
-				// if a per-frame annotation exists, remove it
-				if (this.autoStepId) {
-					var timeDiv = document.getElementById("frameSpeed")
-					var imageTime = 500;
-					if (timeDiv) {
-						var divValue = parseInt(timeDiv.value)
-						if (!isNaN(divValue)) {
-							imageTime = divValue
-						}
-						if (imageTime < 250) {
-							imageTime = 250
+				// label last 2 seconds of images as unsure
+				var j = 0;
+				var currFrameNum = this.get_current_frame_num();
+				while (imageTime*j < 2000 && j <= currFrameNum) {
+					cur_frame = this.frames[currFrameNum - j];
+					for (var i=0; i<cur_frame.data.annotations.length; i++) {
+						if (cur_frame.data.annotations[i].type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+							cur_frame.data.annotations.splice(i, 1);
 						}
 					}
-					// label last 2 seconds of images as unsure
-					var j = 0;
-					var currFrameNum = this.get_current_frame_num();
-					while (imageTime*j < 2000 && j <= currFrameNum) {
-						cur_frame = this.frames[currFrameNum - j];
-						for (var i=0; i<cur_frame.data.annotations.length; i++) {
-							if (cur_frame.data.annotations[i].type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
-								cur_frame.data.annotations.splice(i, 1);
-							}
-						}
-						var newAnnotation = new PerFrameAnnotation(3); // Unsure
-						cur_frame.data.annotations.push(newAnnotation);
-						//console.log("KLabeler: set per-frame annotation: " + this.category_to_name[cat_idx]);
-						this.add_annotation(newAnnotation);
-						j += 1
-					}
+					var newAnnotation = new PerFrameAnnotation(3); // Unsure
+					cur_frame.data.annotations.push(newAnnotation);
+					//console.log("KLabeler: set per-frame annotation: " + this.category_to_name[cat_idx]);
+					this.add_annotation(newAnnotation);
+					j += 1
 				}
 			}
-
-			if (stopAuto) {
-				this.stop_autolabel();
-			}
-		} else {
+		}
+		if (stopAuto) {
 			this.stop_autolabel();
 		}
 

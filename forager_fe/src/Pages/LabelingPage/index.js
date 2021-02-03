@@ -845,7 +845,7 @@ function LabelingPage() {
       setUsers(usersAndCategories['users']);
       setCategories(usersAndCategories['categories']);
 
-      labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY);
+      labeler.set_annotation_mode(Annotation.ANNOTATION_MODE_EXTREME_POINTS_BBOX);
       labeler.annotation_added_callback = handle_annotation_added;
       labeler.annotation_deleted_callback = handle_annotation_deleted;
 
