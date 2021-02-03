@@ -175,16 +175,26 @@ def sample_farthest_vectors(
         if total > index.n_vectors * percent:
             break
 
-    samples = []
+    sample_ids = []
+    sample_extra_ids = []
     for i in range(n_clusters):
-        vec_ids = index.get_cluster_ids(farthest_centroid_inds[i])
-        print(vec_ids.shape)
-        # random_inds = np.random.choice(
-        #     len(vec_ids),
-        #     size=int(n_samples * cluster_sizes[i] / total),
-        #     replace=False,
-        # )
-        # samples.append()
+        ids = index.get_cluster_ids(farthest_centroid_inds[i])
+        if index.multi_id:
+            ids, extra_ids = ids
+        else:
+            extra_ids = None
 
-    return np.concatenate(samples)
+        random_inds = np.random.choice(
+            len(ids),
+            size=int(n_samples * cluster_sizes[i] / total),
+            replace=False
+        )
 
+        sample_ids.append(ids[random_inds])
+        if extra_ids:
+            sample_extra_ids.append(extra_ids[random_inds])
+
+    if index.multi_id:
+        return np.concatenate(sample_ids), np.concatenate(sample_extra_ids)
+    else:
+        return np.concatenate(sample_ids)
