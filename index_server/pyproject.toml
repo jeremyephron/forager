@@ -11,6 +11,7 @@ scikit-learn = "^0.23.2"
 chest = "^0.2.3"
 knn = {path = "../mihir_run", develop = true}
 interactive-index = {path = "../interactive_index", develop = true}
+aiostream = "^0.4.1"
 
 [tool.poetry.dev-dependencies]
 

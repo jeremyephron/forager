@@ -29,7 +29,6 @@ const OptionsBar = (props) => {
       <input type="text" list="users" id="labelUser" onChange={props.onUser} placeholder="LabelUser" />
       <input type="text" list="categories" id="labelCategory" onChange={props.onCategory} placeholder="LabelCategory" />
       <OptionsSelect alt="true" id="select_annotation_mode">
-        <option value="per_frame">Per Frame</option>
         <option value="box_extreme_points">Box (via extreme points)</option>
         <option value="box_two_points">Box (via two corner clicks)</option>
         <option value="point">Point</option>
