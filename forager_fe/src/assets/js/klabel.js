@@ -303,6 +303,19 @@ export class ImageLabeler {
 		this.zoom_corner_points = [];
 	}
 
+    has_per_frame_category_annotation() {
+		var cur_frame = this.get_current_frame();
+
+		// if a per-frame annotation exists, remove it
+		for (var i=0; i<cur_frame.data.annotations.length; i++) {
+			if (cur_frame.data.annotations[i].type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
+                return true;
+			}
+		}
+
+        return false;
+    }
+
 	// FIXME(kayvonf): unify this with add_annotation() just like there's a common
 	// interface for delete_annotation()
 	set_per_frame_category_annotation(cat_idx) {
@@ -669,10 +682,13 @@ export class ImageLabeler {
 				}	
 			} else if (ann.type === Annotation.ANNOTATION_MODE_PER_FRAME_CATEGORY) {
 
+                var line_width = 14;
 				// draw box around the display in the appropriate color to indicate the per-frame label
 				ctx.strokeStyle = this.category_to_color[ann.value];
-				ctx.lineWidth = 24;
-				ctx.strokeRect(12, 12, this.main_canvas_el.width-24, this.main_canvas_el.height-22);
+				ctx.lineWidth = line_width;
+			    ctx.strokeRect(line_width/2, line_width/2,
+                               this.main_canvas_el.width-line_width,
+                               this.main_canvas_el.height-line_width);
 
 				ctx.fillStyle = this.color_category_text_fill;
 				ctx.font = this.category_text_font; 
