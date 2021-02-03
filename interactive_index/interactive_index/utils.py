@@ -175,13 +175,11 @@ def sample_farthest_vectors(
         if total > index.n_vectors * percent:
             break
 
-    cluster_pcts = cluster_sizes.astype(np.float) / total
-
     samples = []
     for i in range(n_clusters):
         vec_ids = index.get_cluster_ids(farthest_centroid_inds[i])
         samples.append(np.random.choice(
-            vec_ids, size=int(n_samples * cluster_pcts[i]), replace=False
+            vec_ids, size=int(n_samples * cluster_sizes[i] / total), replace=False
         ))
 
     return np.concatenate(samples)

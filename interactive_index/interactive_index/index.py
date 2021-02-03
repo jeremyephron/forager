@@ -393,7 +393,7 @@ class InteractiveIndex:
         centroids = index_ivf.quantizer.reconstruct_n(0, index_ivf.nlist)
         return centroids
 
-    def get_cluster_sizes(self) -> np.ndarray:
+    def get_cluster_sizes(self) -> List[int]:
         """Returns the number of vectors assigned to each cluster."""
 
         # TODO: assert IVF
