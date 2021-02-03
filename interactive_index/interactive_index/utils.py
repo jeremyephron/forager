@@ -1,7 +1,7 @@
 """
 File: utils.py
 --------------
-This module contains utility functions for the interactive index. These 
+This module contains utility functions for the interactive index. These
 functions should likely not be called manually.
 
 """
@@ -25,14 +25,14 @@ TERABYTE = TERABYTES = 2**40
 def round_down_to_pow2(x: int) -> int:
     if x == 0:
         return 0
-    
+
     return 1 << (x.bit_length() - 1)
 
 
 def round_up_to_pow2(x: int) -> int:
     if x == 0:
         return 0
-    
+
     return 1 << ((x - 1).bit_length())
 
 
@@ -57,13 +57,13 @@ def merge_on_disk(
         trained_index: The trained index to add the data to.
         shard_fnames: A list of the partial index filenames.
         ivfdata_fname: The filename for the on-disk extracted data.
-	
+
 	"""
 
     # Load the inverted lists
     ivfs = []
     for fname in shard_fnames:
-        # The IO_FLAG_MMAP is to avoid actually loading the data, and thus the 
+        # The IO_FLAG_MMAP is to avoid actually loading the data, and thus the
         # total size of the inverted lists can exceed the available RAM
         index = faiss.read_index(fname, faiss.IO_FLAG_MMAP)
         index_ivf = faiss.extract_index_ivf(index)
@@ -149,7 +149,7 @@ def sample_farthest_vectors(
         xq: The query vector.
         percent: The bottom percentage of vectors to sample from.
         n_samples: The maximum number of vectors to sample.
-    
+
     Returns:
         The IDs of the vectors.
 
@@ -168,8 +168,9 @@ def sample_farthest_vectors(
         )
 
     total = 0
-    cluster_sizes = index.get_cluster_sizes() 
-    for n_clusters in range(len(cluster_sizes)):
+    cluster_sizes = index.get_cluster_sizes()
+    n_clusters = len(cluster_sizes)
+    for i in range(n_clusters):
         total += cluster_sizes[i]
         if total > index.n_vectors * percent:
             break
