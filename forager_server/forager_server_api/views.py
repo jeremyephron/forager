@@ -26,7 +26,7 @@ POST_HEADERS = {
     "Accept": "application/json",
 }
 
-class LabelCategory:
+class LabelCategory(Enum):
     positive = 1
     negative = 2
     hard_negative = 3
