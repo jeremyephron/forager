@@ -170,9 +170,7 @@ def sample_farthest_vectors(
     total = 0
     cluster_inds_to_use = []
     cluster_sizes = index.get_cluster_sizes()
-    print(farthest_centroid_inds)
     for i in farthest_centroid_inds:
-        print(i)
         total += cluster_sizes[i]
         cluster_inds_to_use.append(i)
         if total >= index.n_vectors * percent:
@@ -187,7 +185,6 @@ def sample_farthest_vectors(
         else:
             extra_ids = None
 
-        print(len(ids))
         random_inds = np.random.choice(
             len(ids),
             size=min(len(ids), int(n_samples * cluster_sizes[i] / total)),
