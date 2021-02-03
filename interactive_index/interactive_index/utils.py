@@ -168,16 +168,17 @@ def sample_farthest_vectors(
         )
 
     total = 0
+    cluster_inds_to_use = []
     cluster_sizes = index.get_cluster_sizes()
-    n_clusters = len(cluster_sizes)
-    for i in range(n_clusters):
+    for i in farthest_centroid_inds:
         total += cluster_sizes[i]
-        if total > index.n_vectors * percent:
+        cluster_inds_to_use.append(i)
+        if total >= index.n_vectors * percent:
             break
 
     sample_ids = []
     sample_extra_ids = []
-    for i in range(n_clusters):
+    for i in cluster_inds_to_use:
         ids = index.get_cluster_ids(farthest_centroid_inds[i])
         if index.multi_id:
             ids, extra_ids = ids
