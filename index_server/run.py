@@ -917,7 +917,9 @@ async def query_svm(request):
     # bottom `autolabel_percent`% of the previous SVM's results as negative
     index = current_indexes[index_id]
 
-    prev_svm_vector = utils.base64_to_numpy(request.form["prev_svm_vector"][0])
+    prev_svm_vector = utils.base64_to_numpy(
+        request.form.get("prev_svm_vector", [""])[0]
+    )
     autolabel_percent = float(request.form["autolabel_percent"][0])
     autolabel_max_vectors = int(request.form["autolabel_max_vectors"][0])
 
