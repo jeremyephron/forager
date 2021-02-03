@@ -1013,7 +1013,7 @@ function LabelingPage() {
                 <RowContainer>
                   <LabelContainer>
                     <label>Autolabel () images...</label><br/>
-                    <TextInput type="number" value={autolabelMaxVectors} onChange={(e) => setAutolabelMaxVectors(e.target.value)} ></Slider>
+                    <TextInput type="number" value={autolabelMaxVectors} onChange={(e) => setAutolabelMaxVectors(e.target.value)} ></TextInput>
                   </LabelContainer>
                   <LabelContainer>
                     <label>...sampled from bottom ()%</label><br/>
