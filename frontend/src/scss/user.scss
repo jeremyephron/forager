@@ -1,0 +1,94 @@
+//
+//
+// user.scss
+//
+// Place your own custom CSS or SCSS rules below this line, these rules will override any Bootstrap and theme variables.
+
+$primary-alt: mix($primary,$white,6%);
+$primary-alt-lighter: mix($primary,$white,2%);
+$primary-alt-darker: mix($primary,$white,8%);
+
+body {
+  font-family: proxima-nova, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.app {
+  position: relative;
+  padding-bottom: 2rem;
+}
+
+.typeahead-bar {
+  width: 100%;
+}
+
+.query-container {
+  padding-top: 1.5rem;
+  padding-bottom: 2rem;
+  position: sticky;
+  top: 0;
+  background: linear-gradient($primary-alt-lighter 75%, rgba($primary-alt-lighter, 0));
+  z-index: 1000;
+  width: 100%;
+
+  select {
+    width: 9rem;
+  }
+}
+
+.stack-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 215px);
+  grid-gap: 1rem;
+  justify-content: space-between;
+}
+
+.stack {
+  width: 215px;
+  height: 180px;
+  transition: transform 0.2s;
+  display: block;
+
+  cursor: pointer;
+  position: relative;
+
+  .thumb {
+    @extend .border;
+    border-radius: 4px;
+    width: 200px;
+    position: absolute;
+  }
+
+  @for $i from 1 through 4 {
+    .thumb:nth-child(#{$i}) {
+      left: ($i - 1) * 5px;
+      top: (4 - $i) * 5px;
+      opacity: 1 - ($i - 1) * 0.25;
+      z-index: 1000 - $i;
+    }
+  }
+
+  .label {
+    position: absolute;
+    bottom: 0;
+    width: 200px;
+    text-align: center;
+    font-size: 0.9rem;
+    font-weight: normal;
+  }
+
+  &:hover {
+    transform: translateY(-0.5rem);
+  }
+}
+
+// .panel {
+//   width: 40%;
+//   background: $primary-alt-darker;
+//   position: absolute;
+//   right: 0;
+//   top: 0;
+//   padding-top: 5rem;
+//   height: 600rem;
+// }
