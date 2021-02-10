@@ -135,6 +135,8 @@ const App = () => {
     <div>
       <Modal isOpen={isOpen} toggle={toggle} size="lg">
         {selection.cluster !== undefined && selection.image !== undefined &&
+          selection.cluster < clusters.length &&
+          selection.image < clusters[selection.cluster].length &&
           <>
             <ModalHeader toggle={toggle}>
               {(clusteringStrength > 0) ?
