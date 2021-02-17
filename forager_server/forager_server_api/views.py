@@ -5,7 +5,6 @@ import json
 import os
 import requests
 import urllib.request
-import numpy as np
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.db.models import Q

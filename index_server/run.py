@@ -225,22 +225,37 @@ class LabeledIndex:
             result.label = self.labels[result.id]
         return results
 
-    def cluster_identifiers(self, identifiers: List[str]) -> np.ndarray:
-        # TODO(mihirg): Consider performing hierarchical clustering once over the
-        # entire dataset during index build time
+    def get_embeddings(self, identifiers: List[str]) -> np.ndarray:
         assert (
             self.identifiers
             and self.local_flat_index
-            and self.local_flat_index.distance_matrix is not None
+            and self.local_flat_index.index is not None
+        )
+        inds = [self.identifiers[id] for id in identifiers]
+        return self.local_flat_index.index[inds]
+
+    def cluster_identifiers(self, identifiers: List[str]) -> List[List[float]]:
+        assert self.identifiers
+        inds = [self.identifiers[id] for id in identifiers]
+        return self._cluster(inds)
+
+    def cluster_results(self, results: List[QueryResult]) -> List[List[float]]:
+        inds = [result.id for result in results]
+        return self._cluster(inds)
+
+    def _cluster(self, inds: List[int]) -> List[List[float]]:
+        # TODO(mihirg): Consider performing hierarchical clustering once over the entire
+        # dataset during index build time
+        assert (
+            self.local_flat_index and self.local_flat_index.distance_matrix is not None
         )
 
         # Construct condensed distance submatrix
-        inds = [self.identifiers[id] for id in identifiers]
         dists = self.local_flat_index.distance_matrix[np.ix_(inds, inds)]
         condensed = squareform(dists)
 
         # Perform hierarchical clustering and return dendogram matrix
-        return fastcluster.linkage(condensed, preserve_input=False)
+        return fastcluster.linkage(condensed, preserve_input=False).tolist()
 
     # CLEANUP
 
@@ -878,8 +893,8 @@ async def cluster_results(request):
     identifiers = request.json["identifiers"]
     index_id = request.json["index_id"]
     index = await get_index(index_id)
-    result = index.cluster_identifiers(identifiers)
-    return resp.json({"clustering": result.tolist()})
+    clustering = index.cluster_identifiers(identifiers)
+    return resp.json({"clustering": clustering})
 
 
 def extract_embedding_from_mapper_output(output: str) -> np.ndarray:
@@ -914,6 +929,7 @@ class BestMapper:
 @app.route("/query_index", methods=["POST"])
 async def query_index(request):
     image_paths = request.json["paths"]
+    identifiers = request.json["identifiers"]
     cluster_id = request.json["cluster_id"]
     bucket = request.json["bucket"]
     patches = [
@@ -932,32 +948,38 @@ async def query_index(request):
 
     index = await get_index(index_id)
 
-    # Generate query vector as average of patch embeddings
-    async with BestMapper(cluster_id) as mapper:
-        job = MapReduceJob(
-            mapper,
-            VectorReducer(
-                VectorReducer.PoolingType.AVG,
-                extract_func=extract_embedding_from_mapper_output,
-            ),
-            {"input_bucket": bucket, "reduction": "average"},
-            n_retries=config.CLOUD_RUN_N_RETRIES,
-            chunk_size=1,
-        )
-        query_vector = await job.run_until_complete(
-            [
-                {
-                    "image": image_path,
-                    "patch": patch,
-                    "augmentations": augmentation_dict,
-                }
-                for image_path, patch in zip(image_paths, patches)
-            ]
-        )
+    if use_full_image:
+        query_vector = np.mean(index.get_embeddings(identifiers), axis=0)
+    else:
+        # Generate query vector as average of patch embeddings
+        async with BestMapper(cluster_id) as mapper:
+            job = MapReduceJob(
+                mapper,
+                VectorReducer(
+                    VectorReducer.PoolingType.AVG,
+                    extract_func=extract_embedding_from_mapper_output,
+                ),
+                {"input_bucket": bucket, "reduction": "average"},
+                n_retries=config.CLOUD_RUN_N_RETRIES,
+                chunk_size=1,
+            )
+            query_vector = await job.run_until_complete(
+                [
+                    {
+                        "image": image_path,
+                        "patch": patch,
+                        "augmentations": augmentation_dict,
+                    }
+                    for image_path, patch in zip(image_paths, patches)
+                ]
+            )
 
     # Run query and return results
     query_results = index.query(query_vector, num_results, None, use_full_image, False)
-    return resp.json({"results": [r.to_dict() for r in query_results]})
+    clustering = index.cluster_results(query_results)
+    return resp.json(
+        {"results": [r.to_dict() for r in query_results], "clustering": clustering}
+    )
 
 
 @app.route("/active_batch", methods=["POST"])
