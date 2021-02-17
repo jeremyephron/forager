@@ -118,7 +118,7 @@ const App = () => {
     console.log(results);
     setImages(results.paths.map(path => {
       let filename = path.substring(path.lastIndexOf("/") + 1);
-      let id = filename.substring(0, filename.firstIndexOf("."));
+      let id = filename.substring(0, filename.indexOf("."));
       return {
         name: filename,
         url: path,
