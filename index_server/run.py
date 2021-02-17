@@ -649,28 +649,30 @@ class LabeledIndex:
     # INDEX LOADING
 
     @classmethod
-    async def download(
+    async def load(
         cls,
         index_id: str,
+        download: bool = False,
         *args,
         **kwargs,
     ) -> "LabeledIndex":
         self = cls(index_id, *args, **kwargs)
 
-        # Download from Cloud Storage
-        config.INDEX_PARENT_DIR.mkdir(parents=True, exist_ok=True)
-        # TODO(mihirg): Speed up
-        # https://medium.com/@duhroach/gcs-read-performance-of-large-files-bd53cfca4410
-        proc = await asyncio.create_subprocess_exec(
-            "gsutil",
-            "-m",
-            "cp",
-            "-r",
-            "-n",
-            f"{config.INDEX_UPLOAD_GCS_PATH}{self.index_id}",
-            str(config.INDEX_PARENT_DIR),
-        )
-        await proc.wait()
+        if download:
+            # Download from Cloud Storage
+            config.INDEX_PARENT_DIR.mkdir(parents=True, exist_ok=True)
+            # TODO(mihirg): Speed up
+            # https://medium.com/@duhroach/gcs-read-performance-of-large-files-bd53cfca4410
+            proc = await asyncio.create_subprocess_exec(
+                "gsutil",
+                "-m",
+                "cp",
+                "-r",
+                "-n",
+                f"{config.INDEX_UPLOAD_GCS_PATH}{self.index_id}",
+                str(config.INDEX_PARENT_DIR),
+            )
+            await proc.wait()
 
         # Initialize indexes
         self.labels = json.load((self.index_dir / self.LABELS_FILENAME).open())
@@ -842,7 +844,7 @@ async def stop_job(request):
 
 async def _download_index(index_id):
     if index_id not in current_indexes:
-        current_indexes[index_id] = await LabeledIndex.download(index_id)
+        current_indexes[index_id] = await LabeledIndex.load(index_id, download=True)
 
 
 @app.route("/download_index", methods=["POST"])
@@ -865,11 +867,18 @@ async def delete_index(request):
 # TODO(all): Clean up this code
 
 
+async def get_index(index_id) -> LabeledIndex:
+    if index_id not in current_indexes:
+        current_indexes[index_id] = await LabeledIndex.load(index_id)
+    return current_indexes[index_id]
+
+
 @app.route("/cluster_results", method=["POST"])
 async def cluster_results(request):
     identifiers = request.json["identifiers"]
     index_id = request.json["index_id"]
-    result = current_indexes[index_id].cluster_identifiers(identifiers)
+    index = await get_index(index_id)
+    result = index.cluster_identifiers(identifiers)
     return resp.json({"clustering": result.tolist()})
 
 
@@ -921,6 +930,8 @@ async def query_index(request):
 
     use_full_image = bool(request.json.get("use_full_image", False))
 
+    index = await get_index(index_id)
+
     # Generate query vector as average of patch embeddings
     async with BestMapper(cluster_id) as mapper:
         job = MapReduceJob(
@@ -945,9 +956,7 @@ async def query_index(request):
         )
 
     # Run query and return results
-    query_results = current_indexes[index_id].query(
-        query_vector, num_results, None, use_full_image, False
-    )
+    query_results = index.query(query_vector, num_results, None, use_full_image, False)
     return resp.json({"results": [r.to_dict() for r in query_results]})
 
 
@@ -965,6 +974,8 @@ async def active_batch(request):
         augmentation_dict[augmentations[2 * i]] = float(augmentations[2 * i + 1])
 
     use_full_image = True
+
+    index = await get_index(index_id)
 
     # Generate query vector as average of patch embeddings
     async with BestMapper(cluster_id) as mapper:
@@ -987,7 +998,7 @@ async def active_batch(request):
     perVector = (int)(num_results / len(query_vectors)) + 2
     for vec in query_vectors:
         # Return nearby images
-        query_results = current_indexes[index_id].query(
+        query_results = index.query(
             np.float32(vec),
             perVector,
             None,
@@ -1041,7 +1052,7 @@ async def query_svm(request):
 
     # Automatically label `autolabel_max_vectors` vectors randomly sampled from the
     # bottom `autolabel_percent`% of the previous SVM's results as negative
-    index = current_indexes[index_id]
+    index = await get_index(index_id)
 
     prev_svm_vector = utils.base64_to_numpy(request.json["prev_svm_vector"])
     autolabel_percent = float(request.json["autolabel_percent"])
