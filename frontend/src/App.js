@@ -121,7 +121,7 @@ const App = () => {
       return {
         name: filename,
         url: path,
-        thumb: `https://storage.googleapis.com/foragerml/thumbnails/${index_id}/${id}.jpg`,
+        thumb: `https://storage.googleapis.com/foragerml/thumbnails/${indexId}/${id}.jpg`,
       };
     }));
     setClustering(results.clustering);
