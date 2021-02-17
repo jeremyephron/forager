@@ -873,7 +873,7 @@ async def get_index(index_id) -> LabeledIndex:
     return current_indexes[index_id]
 
 
-@app.route("/cluster_results", method=["POST"])
+@app.route("/cluster_results", methods=["POST"])
 async def cluster_results(request):
     identifiers = request.json["identifiers"]
     index_id = request.json["index_id"]
