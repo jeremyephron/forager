@@ -349,7 +349,7 @@ class LocalFlatIndex:
         self.distance_matrix = self._pdist(self.index)
 
     def save(self, dir: Path):
-        assert self.index and self.distance_matrix
+        assert self.index is not None and self.distance_matrix is not None
         np.save(self.INDEX_FILENAME, self.index)
         np.save(self.DISTANCE_MATRIX_FILENAME, self.distance_matrix)
 
