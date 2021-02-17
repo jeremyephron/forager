@@ -99,6 +99,8 @@ class LabeledIndex:
 
         # Will be filled by each individual constructor
         # TODO(mihirg): Deprecate self.labels in favor of self.identifiers
+        # TODO(mihirg): Consider using primary key, paths, etc. instead of
+        # arbitrarily-generated identifiers
         self.labels: List[str] = []
         self.identifiers: Optional[bidict[str, int]] = None
         self.indexes: Dict[IndexType, InteractiveIndex] = {}
@@ -888,8 +890,8 @@ async def get_index(index_id) -> LabeledIndex:
     return current_indexes[index_id]
 
 
-@app.route("/cluster_results", methods=["POST"])
-async def cluster_results(request):
+@app.route("/perform_clustering", methods=["POST"])
+async def perform_clustering(request):
     identifiers = request.json["identifiers"]
     index_id = request.json["index_id"]
     index = await get_index(index_id)

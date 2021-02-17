@@ -511,8 +511,8 @@ def get_users_and_categories(request, dataset_name):
     return JsonResponse(result)
 
 def filtered_images(request, dataset, path_filter=None):
-    label_function = request.GET['user']
-    category = request.GET['category']
+    label_function = request.GET.get('user', '')
+    category = request.GET.get('category', '')
     label_value = request.GET['filter']
 
     dataset_items = DatasetItem.objects.filter(dataset=dataset,google=False).order_by('pk')
@@ -582,12 +582,24 @@ def get_next_images(request, dataset_name, dataset=None):
     path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
     offset_to_return = int(request.GET.get('offset', 0))
     num_to_return = int(request.GET.get('num', 100))
+    index_id = request.GET.get('index_id')
 
     next_images = filtered_images(request, dataset)
-
     ret_images = next_images[offset_to_return:offset_to_return+num_to_return]
 
-    # Find all dataset items which do not have an annotation of the type
+    # Perform clustering on result set
+    if index_id:
+        identifiers = [di.identifier for di in ret_images]
+        params = {
+            "index_id": index_id,
+            "identifiers": identifiers,
+        }
+        r = requests.post(
+            settings.EMBEDDING_SERVER_ADDRESS + "/perform_clustering",
+            json=params,
+        )
+        clustering_data = r.json()
+
     dataset_item_paths = [(di.path if di.path.find("http") != -1 else path_template.format(di.path))
                           for di in ret_images]
     dataset_item_identifiers = [di.pk for di in ret_images]
@@ -596,25 +608,8 @@ def get_next_images(request, dataset_name, dataset=None):
         'paths': dataset_item_paths,
         'identifiers': dataset_item_identifiers,
         'num_total': len(next_images),
+        'clustering': clustering_data['clustering'],
     })
-
-
-@api_view(['GET'])
-@csrf_exempt
-def get_results(request, dataset_name):
-    # Placeholder
-    dataset = get_object_or_404(Dataset, name=dataset_name)
-    bucket_name = dataset.directory[len('gs://'):].split('/')[0]
-    path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
-    dataset_items = DatasetItem.objects.filter(dataset=dataset)[:100]
-    dataset_item_paths = [path_template.format(di.path) for di in dataset_items]
-    dataset_item_identifiers = [di.pk for di in dataset_items]
-
-    return JsonResponse([
-        {'path': p, 'idx': i}
-        for i, p in list(enumerate(dataset_item_paths))[50:100]
-    ], safe=False)
-
 
 @api_view(['GET'])
 @csrf_exempt
@@ -888,7 +883,9 @@ def delete_annotation(request, dataset_name, image_identifier, ann_identifier):
             safe=False,
             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-def process_image_query_results(request, dataset, ordered_results):
+def process_image_query_results(request, dataset, query_response):
+    ordered_results = query_response['results']
+
     data_directory = dataset.directory
     split_dir = data_directory[len('gs://'):].split('/')
     bucket_name = split_dir[0]
@@ -913,6 +910,8 @@ def process_image_query_results(request, dataset, ordered_results):
             response['all_spatial_dists'].append(result['spatial_dists'])
 
     response['num_total'] = len(response['paths'])
+    del query_response['results']
+    response.update(query_response)  # include any other keys from upstream response
 
     return response
 
@@ -959,7 +958,7 @@ def lookup_knn(request, dataset_name):
         json=params,
     )
     response_data = r.json()
-    response = process_image_query_results(request, dataset, response_data['results'])
+    response = process_image_query_results(request, dataset, response_data)
 
     # 4. Return knn results
     return JsonResponse(response)
@@ -1038,9 +1037,7 @@ def lookup_svm(request, dataset_name):
     )
     response_data = r.json()
 
-    response = process_image_query_results(request, dataset, response_data['results'])
-    del response_data['results']
-    response.update(response_data)  # include any other keys from upstream response
+    response = process_image_query_results(request, dataset, response_data)
 
     # 4. Return knn results
     return JsonResponse(response)
@@ -1081,7 +1078,7 @@ def active_batch(request, dataset_name):
     response_data = r.json()
 
     # Apply filtering to generated order
-    response = process_image_query_results(request, dataset, response_data['results'])
+    response = process_image_query_results(request, dataset, response_data)
 
     # 4. Return knn results
     return JsonResponse(response)
