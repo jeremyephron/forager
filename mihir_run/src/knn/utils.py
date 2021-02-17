@@ -121,7 +121,7 @@ async def as_completed_from_futures(
             yield done
 
 
-async def run_in_executor(self, f, *args, executor: concurrent.futures.Executor = None):
+async def run_in_executor(f, *args, executor: concurrent.futures.Executor = None):
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(executor, f, *args)
 
