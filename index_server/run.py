@@ -256,8 +256,18 @@ class LabeledIndex:
         dists = self.local_flat_index.distance_matrix[np.ix_(inds, inds)]
         condensed = squareform(dists)
 
-        # Perform hierarchical clustering and return dendogram matrix
-        return fastcluster.linkage(condensed, preserve_input=False).tolist()
+        # Perform hierarchical clustering
+        result = fastcluster.linkage(condensed, preserve_input=False)
+        max_dist = np.max(result[:, 2])
+
+        # Simplify dendogram matrix by using original cluster indexes
+        simplified = []
+        clusters = list(range(len(inds)))
+        for a, b, dist, _ in result:
+            a, b = int(a), int(b)
+            simplified.append([clusters[a], clusters[b], dist / max_dist])
+            clusters.append(clusters[a])
+        return simplified
 
     # CLEANUP
 

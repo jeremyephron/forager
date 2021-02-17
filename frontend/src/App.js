@@ -17,62 +17,41 @@ import { Typeahead } from "react-bootstrap-typeahead";
 import { ReactSVG } from "react-svg";
 import times from "lodash/times";
 
-import imageIds from "./data/waymo";
-
 import "react-bootstrap-typeahead/css/Typeahead.css";
 import "./scss/theme.scss";
 
-var performClustering = require("hierarchical-clustering");
-var computeSimilarity = require("compute-cosine-similarity");
+var disjointSet = require("disjoint-set");
 
 const sources = [
   {id: "dataset", label: "Dataset"},
-  {id: "google", label: "Google"},
+  // {id: "google", label: "Google"},
 ]
 
 const tags = [
   {id: "full_dataset", label: "full dataset", hide: true},
-  {id: "50_dataset", label: "50% dataset", hide: true},
-  {id: "10_dataset", label: "10% dataset", hide: true},
-  {id: "1_dataset", label: "1% dataset", hide: true},
-  {id: "pickup_truck", label: "pickup truck"},
-  {id: "house_flag", label: "house flag"},
-  {id: "pride_flag", label: "pride flag"},
-  {id: "pride_flag", label: "street flag"},
-  {id: "garbage_bin", label: "garbage bin"},
+  // {id: "50_dataset", label: "50% dataset", hide: true},
+  // {id: "10_dataset", label: "10% dataset", hide: true},
+  // {id: "1_dataset", label: "1% dataset", hide: true},
+  // {id: "pickup_truck", label: "pickup truck"},
+  // {id: "house_flag", label: "house flag"},
+  // {id: "pride_flag", label: "pride flag"},
+  // {id: "pride_flag", label: "street flag"},
+  // {id: "garbage_bin", label: "garbage bin"},
 ]
 
-const images = imageIds.slice(0, 1000).map(id => {
-  return {
-    name: `${id}_front.jpeg`,
-    url: `https://storage.googleapis.com/foragerml/waymo/train/${id}_front.jpeg`,
-    embedding: [...new Array(256)].map(() => Math.random() * 10 - 5)  // random for now
-  };
-})
-
-const imageSimilarity = (a, b) => computeSimilarity(a.embedding, b.embedding);
+const images = [];
 
 const ImageStack = ({ id, onClick, images, showLabel }) => {
   return (
     <a className="stack" onClick={onClick}>
       {times(Math.min(4, images.length), (i) =>
-        <img key={`stack-${i}`} className="thumb" src={images[i].url}></img>
+        <img key={`stack-${i}`} className="thumb" src={images[i].thumb}></img>
       )}
       {showLabel && <div className="label">
         <b>Cluster {id + 1}</b> ({images.length} image{images.length !== 1 && "s"})
       </div>}
     </a>
   );
-}
-
-// TEMPORARY until we have a real clustering algorithm in
-let initialClusters = [];
-for (let i = 0; i < 100; i++) {
-  let cluster = [];
-  for (let j = 0; j < 10; j++) {
-    cluster.push(images[i * 10 + j]);
-  }
-  initialClusters.push(cluster);
 }
 
 const App = () => {
@@ -83,6 +62,9 @@ const App = () => {
   const [selection, setSelection] = useState({});
   const [isOpen, setIsOpen] = useState(false);
   const [clusters, setClusters] = useState([]);
+  const [images, setImages] = useState([]);
+  const [clustering, setClustering] = useState([]);
+  const [indexId, setIndexId] = useState("2d2b13f9-3b30-4e51-8ab9-4e8a03ba1f03");
 
   const handleKeyDown = useCallback(e => {
     if (isOpen) {
@@ -114,20 +96,49 @@ const App = () => {
     if (clusteringStrength == 0) {
       setClusters(images.map(i => [i]));
     } else {
-      // TODO(mihirg): Figure out a way to do this that doesn't crash the browser
-      // TODO(mihirg): Cache distance matrix for faster re-clustering
-      setClusters(initialClusters);
-      // const levels = performClustering({
-      //   input: images,
-      //   distance: imageSimilarity,
-      //   linkage: "average",
-      //   maxLinkage: clusteringStrength / 100,
-      // });
-      // const clusterIndices = levels[levels.length - 1].clusters;
-      // setClusters(clusterIndices.map(cluster => cluster.map(index => images[index])));
+      let ds = disjointSet();
+      for (let image of images) {
+        ds.add(image);
+      }
+      for (let [a, b, dist] of clustering) {
+        if (dist > clusteringStrength / 100) break;
+        ds.union(images[a], images[b]);
+      }
+      const clusters = ds.extract();
+      ds.destroy();
+      setClusters(clusters);
     }
   };
-  useEffect(recluster, []);
+  useEffect(recluster, [images, clustering]);
+
+  const handleQueryResults = (results) => {
+    // TODO(mihirg): Generalize
+    setIsOpen(false);
+    setSelection({});
+    setImages(results.paths.map(path => {
+      let filename = path.substring(path.lastIndexOf("/") + 1);
+      let id = filename.substring(0, filename.firstIndexOf("."));
+      return {
+        name: filename,
+        url: path,
+        thumb: `https://storage.googleapis.com/foragerml/thumbnails/${index_id}/${id}.jpg`,
+      };
+    }));
+    setClustering(results.clustering);
+  }
+
+  const runQuery = () => {
+    var url = new URL(`${process.env.SERVER_URL}/api/get_next_images/waymo_train`);
+    url.search = new URLSearchParams({
+      num: 1000,
+      index_id: indexId,
+      filter: 'all',
+    }).toString();
+    fetch(url, {
+      method: "GET",
+    }).then(results => results.json()).then(handleQueryResults);
+  };
+  useEffect(runQuery, []);
 
   const toggle = () => setIsOpen(!isOpen);
 
@@ -173,7 +184,7 @@ const App = () => {
           </>}
       </Modal>
 
-      <Navbar color="primary" className="text-light" dark>
+      <Navbar color="primary" className="text-light mb-2" dark>
         <Container fluid>
           <span>
             <NavbarBrand href="/">Forager</NavbarBrand>
@@ -219,12 +230,12 @@ const App = () => {
               <FormGroup className="mb-0">
                 <select className="custom-select mx-2">
                   <option value="default" selected>Default order</option>
-                  <option value="random">Random order</option>
+                  {/* <option value="random">Random order</option> */}
                   <option value="knn" disabled>KNN</option>
                 </select>
                 <ReactSVG className="icon" src="assets/arrow-caret.svg" />
               </FormGroup>
-              <Button color="primary" className="mr-4">Run query</Button>
+              <Button color="primary" className="mr-4" onClick={runQuery}>Run query</Button>
               <div>
                 <span className="text-nowrap">Clustering strength:</span>
                 <input className="custom-range" type="range" min="0" max="100"

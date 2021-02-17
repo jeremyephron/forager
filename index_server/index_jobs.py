@@ -310,6 +310,8 @@ class TrainingJob:
 
 
 class LocalFlatIndex:
+    # TODO(mihirg): Don't store entire dataset in memory long-term
+
     INDEX_FILENAME = "embeddings.npy"
     DISTANCE_MATRIX_FILENAME = "distances.npy"
 

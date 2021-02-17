@@ -3457,32 +3457,6 @@ compression@^1.7.4:
     safe-buffer "5.1.2"
     vary "~1.1.2"
 
-compute-cosine-similarity@^1.0.0:
-  version "1.0.0"
-  resolved "https://registry.yarnpkg.com/compute-cosine-similarity/-/compute-cosine-similarity-1.0.0.tgz#29f2bf2e7baefa231caba40591a31c17b19a4e95"
-  integrity sha1-KfK/Lnuu+iMcq6QFkaMcF7GaTpU=
-  dependencies:
-    compute-dot "^1.1.0"
-    compute-l2norm "^1.1.0"
-    validate.io-array "^1.0.5"
-    validate.io-function "^1.0.2"
-
-compute-dot@^1.1.0:
-  version "1.1.0"
-  resolved "https://registry.yarnpkg.com/compute-dot/-/compute-dot-1.1.0.tgz#01a5ba2c7af73b99002acb258459c9576a8232dc"
-  integrity sha1-AaW6LHr3O5kAKsslhFnJV2qCMtw=
-  dependencies:
-    validate.io-array "^1.0.3"
-    validate.io-function "^1.0.2"
-
-compute-l2norm@^1.1.0:
-  version "1.1.0"
-  resolved "https://registry.yarnpkg.com/compute-l2norm/-/compute-l2norm-1.1.0.tgz#bd09131c6b36c8d70c68334e176009a4e0a989ac"
-  integrity sha1-vQkTHGs2yNcMaDNOF2AJpOCpiaw=
-  dependencies:
-    validate.io-array "^1.0.3"
-    validate.io-function "^1.0.2"
-
 compute-scroll-into-view@^1.0.16:
   version "1.0.16"
   resolved "https://registry.yarnpkg.com/compute-scroll-into-view/-/compute-scroll-into-view-1.0.16.tgz#5b7bf4f7127ea2c19b750353d7ce6776a90ee088"
@@ -4178,6 +4152,11 @@ dir-glob@^3.0.1:
   integrity sha512-WkrWp9GR4KXfKGYzOLmTuGVi1UWFfws377n9cc55/tb6DuqyF6pcQ5AbiHEshaDpY9v6oaSr2XCDidGmMwdzIA==
   dependencies:
     path-type "^4.0.0"
+
+disjoint-set@^1.1.8:
+  version "1.1.8"
+  resolved "https://registry.yarnpkg.com/disjoint-set/-/disjoint-set-1.1.8.tgz#0f9680fd6c4f460234ed0ea168b7a8050a1a8ff2"
+  integrity sha1-D5aA/WxPRgI07Q6haLeoBQoaj/I=
 
 dns-equal@^1.0.0:
   version "1.0.0"
@@ -5636,11 +5615,6 @@ hex-color-regex@^1.1.0:
   version "1.1.0"
   resolved "https://registry.yarnpkg.com/hex-color-regex/-/hex-color-regex-1.1.0.tgz#4c06fccb4602fe2602b3c93df82d7e7dbf1a8a8e"
   integrity sha512-l9sfDFsuqtOqKDsQdqrMRk0U85RZc0RtOR9yPI7mRVOa4FsR/BVnZ0shmQRM96Ji99kYZP/7hn1cedc1+ApsTQ==
-
-hierarchical-clustering@^1.1.0:
-  version "1.1.0"
-  resolved "https://registry.yarnpkg.com/hierarchical-clustering/-/hierarchical-clustering-1.1.0.tgz#316fca0005ed45fe310f40b2ce024851bf8157b2"
-  integrity sha1-MW/KAAXtRf4xD0CyzgJIUb+BV7I=
 
 hmac-drbg@^1.0.1:
   version "1.0.1"
@@ -11564,16 +11538,6 @@ validate-npm-package-license@^3.0.1:
   dependencies:
     spdx-correct "^3.0.0"
     spdx-expression-parse "^3.0.0"
-
-validate.io-array@^1.0.3, validate.io-array@^1.0.5:
-  version "1.0.6"
-  resolved "https://registry.yarnpkg.com/validate.io-array/-/validate.io-array-1.0.6.tgz#5b5a2cafd8f8b85abb2f886ba153f2d93a27774d"
-  integrity sha1-W1osr9j4uFq7L4hroVPy2Tond00=
-
-validate.io-function@^1.0.2:
-  version "1.0.2"
-  resolved "https://registry.yarnpkg.com/validate.io-function/-/validate.io-function-1.0.2.tgz#343a19802ed3b1968269c780e558e93411c0bad7"
-  integrity sha1-NDoZgC7TsZaCaceA5VjpNBHAutc=
 
 vary@~1.1.2:
   version "1.1.2"
