@@ -12,6 +12,7 @@ chest = "^0.2.3"
 knn = {path = "../mihir_run", develop = true}
 interactive-index = {path = "../interactive_index", develop = true}
 aiostream = "^0.4.1"
+bidict = "^0.21.2"
 
 [tool.poetry.dev-dependencies]
 
