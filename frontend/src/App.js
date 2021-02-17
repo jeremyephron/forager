@@ -128,15 +128,16 @@ const App = () => {
   }
 
   const runQuery = () => {
-    var url = new URL(`${process.env.SERVER_URL}/api/get_next_images/waymo_train`);
-    url.search = new URLSearchParams({
-      num: 1000,
-      index_id: indexId,
-      filter: 'all',
-    }).toString();
-    fetch(url, {
-      method: "GET",
-    }).then(results => results.json()).then(handleQueryResults);
+    console.log(process.env.SERVER_URL);
+    // var url = new URL(`${process.env.SERVER_URL}/api/get_next_images/waymo_train`);
+    // url.search = new URLSearchParams({
+    //   num: 1000,
+    //   index_id: indexId,
+    //   filter: 'all',
+    // }).toString();
+    // fetch(url, {
+    //   method: "GET",
+    // }).then(results => results.json()).then(handleQueryResults);
   };
   useEffect(runQuery, []);
 
