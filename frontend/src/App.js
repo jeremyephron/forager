@@ -102,6 +102,7 @@ const App = () => {
       }
       for (let [a, b, dist] of clustering) {
         if (dist > clusteringStrength / 100) break;
+        console.log(a, b, images[a], images[b]);
         ds.union(images[a], images[b]);
       }
       const clusters = ds.extract();
