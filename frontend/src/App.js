@@ -115,15 +115,16 @@ const App = () => {
     // TODO(mihirg): Generalize
     setIsOpen(false);
     setSelection({});
-    setImages(results.paths.map(path => {
-      let filename = path.substring(path.lastIndexOf("/") + 1);
-      let id = filename.substring(0, filename.firstIndexOf("."));
-      return {
-        name: filename,
-        url: path,
-        thumb: `https://storage.googleapis.com/foragerml/thumbnails/${indexId}/${id}.jpg`,
-      };
-    }));
+    console.log(results);
+    // setImages(results.paths.map(path => {
+    //   let filename = path.substring(path.lastIndexOf("/") + 1);
+    //   let id = filename.substring(0, filename.firstIndexOf("."));
+    //   return {
+    //     name: filename,
+    //     url: path,
+    //     thumb: `https://storage.googleapis.com/foragerml/thumbnails/${indexId}/${id}.jpg`,
+    //   };
+    // }));
     setClustering(results.clustering);
   }
 
