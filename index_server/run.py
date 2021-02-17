@@ -249,7 +249,8 @@ class LabeledIndex:
         # TODO(mihirg): Consider performing hierarchical clustering once over the entire
         # dataset during index build time
         assert (
-            self.local_flat_index and self.local_flat_index.distance_matrix is not None
+            self.local_flat_index is not None
+            and self.local_flat_index.distance_matrix is not None
         )
 
         # Construct condensed distance submatrix

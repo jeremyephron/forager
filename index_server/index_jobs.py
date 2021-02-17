@@ -320,6 +320,7 @@ class LocalFlatIndex:
         self = cls()
         self.index = np.load(dir / self.INDEX_FILENAME)
         self.distance_matrix = np.load(dir / self.DISTANCE_MATRIX_FILENAME)
+        print("Loaded!")
 
     @classmethod
     def create(cls, num_images: int, cluster_mount_parent_dir: Path):
