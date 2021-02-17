@@ -250,6 +250,10 @@ class LabeledIndex:
         if self.adder_job:
             await self.adder_job.stop()
 
+        # Resize
+        if self.resizer_job:
+            await self.resizer_job.stop()
+
         # Close network connections
         if self.http_session:
             await self.http_session.close()
@@ -641,7 +645,7 @@ class LabeledIndex:
 
         # Initialize indexes
         self.labels = json.load((self.index_dir / self.LABEL_FILENAME).open())
-        self.local_flat_index.load(self.index_dir)
+        self.local_flat_index = LocalFlatIndex.load(self.index_dir)
         self._load_local_indexes()
         self.logger.info(f"Finished loading index from {self.index_dir}")
 
@@ -764,7 +768,9 @@ async def start_job(request):
     cluster = current_clusters[cluster_id]
     lock_id = current_clusters.lock(cluster_id)
     cluster_unlock_fn = functools.partial(current_clusters.unlock, cluster_id, lock_id)
-    index = await LabeledIndex.start_building(cluster, cluster_unlock_fn, bucket, paths)
+    index = await LabeledIndex.start_building(
+        cluster, cluster_unlock_fn, bucket, paths, identifiers
+    )
 
     index_id = index.index_id
     current_indexes[index_id] = index
