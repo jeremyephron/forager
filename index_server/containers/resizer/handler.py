@@ -13,7 +13,7 @@ import config
 
 
 class ImageResizingMapper(Mapper):
-    async def initialize_mapper(self, cfg, weights_path):
+    def initialize_container(self):
         self.session = aiohttp.ClientSession()
         self.storage_client = Storage(session=self.session)
 
