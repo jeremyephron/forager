@@ -17,9 +17,11 @@ import uuid
 import aiohttp
 from bidict import bidict
 from dataclasses_json import dataclass_json
+import fastcluster
 import numpy as np
 from sanic import Sanic
 import sanic.response as resp
+from scipy.spatial.distance import squareform
 from sklearn import svm
 from sklearn.metrics import accuracy_score
 
@@ -222,6 +224,23 @@ class LabeledIndex:
         for result in results:
             result.label = self.labels[result.id]
         return results
+
+    def cluster_identifiers(self, identifiers: List[str]) -> np.ndarray:
+        # TODO(mihirg): Consider performing hierarchical clustering once over the
+        # entire dataset during index build time
+        assert (
+            self.identifiers
+            and self.local_flat_index
+            and self.local_flat_index.distance_matrix is not None
+        )
+
+        # Construct condensed distance submatrix
+        inds = [self.identifiers[id] for id in identifiers]
+        dists = self.local_flat_index.distance_matrix[np.ix_(inds, inds)]
+        condensed = squareform(dists)
+
+        # Perform hierarchical clustering and return dendogram matrix
+        return fastcluster.linkage(condensed, preserve_input=False)
 
     # CLEANUP
 
@@ -844,6 +863,14 @@ async def delete_index(request):
 # QUERY
 # TODO(mihirg): Change input from form encoding to JSON
 # TODO(all): Clean up this code
+
+
+@app.route("/cluster_results", method=["POST"])
+async def cluster_results(request):
+    identifiers = request.json["identifiers"]
+    index_id = request.json["index_id"]
+    result = current_indexes[index_id].cluster_identifiers(identifiers)
+    return resp.json({"clustering": result.tolist()})
 
 
 def extract_embedding_from_mapper_output(output: str) -> np.ndarray:

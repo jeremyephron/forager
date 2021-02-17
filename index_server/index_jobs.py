@@ -355,6 +355,7 @@ class LocalFlatIndex:
 
     @staticmethod
     def _pdist(M):
+        # TODO(mihirg): Consider using cosine similarity instead
         # Alternative to scipy's pdist that respects dtype; modified from
         # http://www.xavierdupre.fr/app/mlprodict/helpsphinx/notebooks/onnx_pdist.html
         n = M.shape[0]
