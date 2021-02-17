@@ -334,7 +334,7 @@ class LocalFlatIndex:
 
     def add_from_file(self, path_tmpl: str):
         # Each file is a np.save'd Dict[int, np.ndarray] where each value is 1 x D
-        assert self.index and self.cluster_mount_parent_dir
+        assert self.index is not None and self.cluster_mount_parent_dir
         embedding_dict = np.load(
             self.cluster_mount_parent_dir / path_tmpl.format("average"),
             allow_pickle=True,
