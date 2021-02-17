@@ -129,7 +129,7 @@ const App = () => {
   }
 
   const runQuery = () => {
-    var url = new URL(`${process.env.REACT_APP_SERVER_URL}/api/get_next_images/waymo_train`);
+    var url = new URL(`${process.env.REACT_APP_SERVER_URL}/api/get_next_images/waymo_train_central`);
     url.search = new URLSearchParams({
       num: 1000,
       index_id: indexId,
