@@ -102,7 +102,6 @@ const App = () => {
       }
       for (let [a, b, dist] of clustering) {
         if (dist > clusteringStrength / 100) break;
-        console.log(a, b, images[a], images[b]);
         ds.union(images[a], images[b]);
       }
       const clusters = ds.extract();
@@ -117,15 +116,15 @@ const App = () => {
     setIsOpen(false);
     setSelection({});
     console.log(results);
-    // setImages(results.paths.map(path => {
-    //   let filename = path.substring(path.lastIndexOf("/") + 1);
-    //   let id = filename.substring(0, filename.firstIndexOf("."));
-    //   return {
-    //     name: filename,
-    //     url: path,
-    //     thumb: `https://storage.googleapis.com/foragerml/thumbnails/${indexId}/${id}.jpg`,
-    //   };
-    // }));
+    setImages(results.paths.map(path => {
+      let filename = path.substring(path.lastIndexOf("/") + 1);
+      let id = filename.substring(0, filename.firstIndexOf("."));
+      return {
+        name: filename,
+        url: path,
+        thumb: `https://storage.googleapis.com/foragerml/thumbnails/${indexId}/${id}.jpg`,
+      };
+    }));
     setClustering(results.clustering);
   }
 
