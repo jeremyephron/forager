@@ -248,6 +248,8 @@ class LabeledIndex:
     def _cluster(self, inds: List[int]) -> List[List[float]]:
         # TODO(mihirg): Consider performing hierarchical clustering once over the entire
         # dataset during index build time
+        print(self.local_flat_index)
+        print(self.local_flat_index.distance_matrix)
         assert (
             self.local_flat_index is not None
             and self.local_flat_index.distance_matrix is not None
