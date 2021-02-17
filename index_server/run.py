@@ -15,6 +15,7 @@ import time
 import uuid
 
 import aiohttp
+from bidict import bidict
 from dataclasses_json import dataclass_json
 import numpy as np
 from sanic import Sanic
@@ -68,7 +69,8 @@ logger.addHandler(log_ch)
 
 
 class LabeledIndex:
-    LABEL_FILENAME = "labels.json"
+    LABELS_FILENAME = "labels.json"
+    IDENTIFIERS_FILENAME = "identifiers.json"
 
     @dataclass_json
     @dataclass
@@ -94,13 +96,14 @@ class LabeledIndex:
         self.ready = asyncio.Event()
 
         # Will be filled by each individual constructor
+        # TODO(mihirg): Deprecate self.labels in favor of self.identifiers
         self.labels: List[str] = []
+        self.identifiers: Optional[bidict[str, int]] = None
         self.indexes: Dict[IndexType, InteractiveIndex] = {}
         self.local_flat_index: Optional[LocalFlatIndex] = None
 
         # Will only be used by the start_building() pathway
         self.bucket: Optional[str] = None
-        self.identifiers: List[str] = []
         self.cluster: Optional[TerraformModule] = None
         self.http_session: Optional[aiohttp.ClientSession] = None
         self.mapper_job: Optional[MapReduceJob] = None
@@ -292,7 +295,7 @@ class LabeledIndex:
         inds = np.arange(len(paths))
         np.random.shuffle(inds)
         self.labels = [paths[i] for i in inds]
-        self.identifiers = [identifiers[i] for i in inds]
+        self.identifiers = bidict({identifiers[i]: i for i in inds})
         iterable = (
             {"id": i, "image": path, "augmentations": {}}
             for i, path in enumerate(self.labels)
@@ -509,7 +512,7 @@ class LabeledIndex:
         assert self.cluster  # just to silence type warnings
         iterable = (
             {"image": label, "identifier": identifier}
-            for label, identifier in zip(self.labels, self.identifiers)
+            for label, identifier in zip(self.labels, self.identifiers.keys())
         )
         nproc = self.cluster.output["resizer_nproc"]
         n_mappers = int(
@@ -587,8 +590,12 @@ class LabeledIndex:
         index.merge_partial_indexes(shard_paths)
 
     async def upload(self):
-        # Dump labels, full-image embeddings, and distance matrix
-        json.dump(self.labels, (self.index_dir / self.LABEL_FILENAME).open("w"))
+        # Dump labels, identifiers, full-image embeddings, and distance matrix
+        json.dump(self.labels, (self.index_dir / self.LABELS_FILENAME).open("w"))
+        json.dump(
+            dict(self.identifiers),
+            (self.index_dir / self.IDENTIFIERS_FILENAME).open("w"),
+        )
         self.local_flat_index.save(self.index_dir)
 
         # Upload to Cloud Storage
@@ -644,7 +651,10 @@ class LabeledIndex:
         await proc.wait()
 
         # Initialize indexes
-        self.labels = json.load((self.index_dir / self.LABEL_FILENAME).open())
+        self.labels = json.load((self.index_dir / self.LABELS_FILENAME).open())
+        self.identifiers = bidict(
+            json.load((self.index_dir / self.IDENTIFIERS_FILENAME).open())
+        )
         self.local_flat_index = LocalFlatIndex.load(self.index_dir)
         self._load_local_indexes()
         self.logger.info(f"Finished loading index from {self.index_dir}")
