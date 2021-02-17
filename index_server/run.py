@@ -235,7 +235,7 @@ class LabeledIndex:
         )
 
         # Construct condensed distance submatrix
-        inds = [self.identifiers[int(id)] for id in identifiers]
+        inds = [self.identifiers[id] for id in identifiers]
         dists = self.local_flat_index.distance_matrix[np.ix_(inds, inds)]
         condensed = squareform(dists)
 
@@ -314,7 +314,7 @@ class LabeledIndex:
         inds = np.arange(len(paths))
         np.random.shuffle(inds)
         self.labels = [paths[i] for i in inds]
-        self.identifiers = bidict({identifiers[i]: i for i in inds})
+        self.identifiers = bidict({identifiers[i]: int(i) for i in inds})
         iterable = (
             {"id": i, "image": path, "augmentations": {}}
             for i, path in enumerate(self.labels)
