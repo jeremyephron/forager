@@ -235,7 +235,7 @@ class LabeledIndex:
         )
 
         # Construct condensed distance submatrix
-        inds = [self.identifiers[id] for id in identifiers]
+        inds = [self.identifiers[int(id)] for id in identifiers]
         dists = self.local_flat_index.distance_matrix[np.ix_(inds, inds)]
         condensed = squareform(dists)
 
