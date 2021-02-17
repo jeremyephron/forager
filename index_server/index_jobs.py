@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent
 from dataclasses import dataclass
 from enum import IntEnum
+import numpy as np
 import os
 from pathlib import Path
 import time
@@ -306,3 +308,64 @@ class TrainingJob:
             ),
             "reduction": "average" if self.average else None,
         }
+
+
+class LocalFlatIndex:
+    INDEX_FILENAME = "embeddings.npy"
+    DISTANCE_MATRIX_FILENAME = "distances.npy"
+
+    @classmethod
+    def load(cls, dir: Path):
+        self = cls()
+        self.index = np.load(dir / self.INDEX_FILENAME)
+        self.distance_matrix = np.load(dir / self.DISTANCE_MATRIX_FILENAME)
+
+    @classmethod
+    def create(cls, num_images: int, cluster_mount_parent_dir: Path):
+        self = cls()
+        self.index = np.zeros((num_images, config.EMBEDDING_DIM), dtype=np.float32)
+        self.cluster_mount_parent_dir = cluster_mount_parent_dir
+        return self
+
+    # Don't use this directly - use a @classmethod constructor
+    def __init__(self):
+        self.index: Optional[np.ndarray] = None
+        self.distance_matrix: Optional[np.ndarray] = None
+        self.cluster_mount_parent_dir: Optional[Path] = None
+
+    def add_from_file(self, path_tmpl: str):
+        # Each file is a np.save'd Dict[int, np.ndarray] where each value is 1 x D
+        assert self.index and self.cluster_mount_parent_dir
+        embedding_dict = np.load(
+            self.cluster_mount_parent_dir / path_tmpl.format("average"),
+            allow_pickle=True,
+        ).item()  # type: Dict[int, np.ndarray]
+
+        # Populate local index
+        for id, embeddings in embedding_dict.items():
+            assert len(embeddings) == 1
+            self.index[int(id)] = embeddings[0]
+
+    def create_distance_matrix(self):
+        self.distance_matrix = self._pdist(self.index)
+
+    def save(self, dir: Path):
+        assert self.index and self.distance_matrix
+        np.save(self.INDEX_FILENAME, self.index)
+        np.save(self.DISTANCE_MATRIX_FILENAME, self.distance_matrix)
+
+    @staticmethod
+    def _pdist(M):
+        # Alternative to scipy's pdist that respects dtype; modified from
+        # http://www.xavierdupre.fr/app/mlprodict/helpsphinx/notebooks/onnx_pdist.html
+        n = M.shape[0]
+        res = np.zeros((n, n), dtype=M.dtype)
+        buffer = np.empty((M.shape[0] - 1, M.shape[1]), dtype=M.dtype)
+        a = np.empty(M.shape[0], dtype=M.dtype)
+        for i in range(1, n):
+            np.subtract(M[:i], M[i], out=buffer[:i])  # broadcasted substraction
+            np.square(buffer[:i], out=buffer[:i])
+            np.sum(buffer[:i], axis=1, out=a[:i])
+            res[:i, i] = a[:i]
+            res[i, :i] = a[:i]
+        return res

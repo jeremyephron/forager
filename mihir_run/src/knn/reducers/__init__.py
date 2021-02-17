@@ -1,2 +1,2 @@
 from .base import Reducer
-from .reducers import TopKReducer, VectorReducer, StatisticsReducer
+from .reducers import IsFinishedReducer, TopKReducer, VectorReducer, StatisticsReducer

@@ -2,7 +2,6 @@ import asyncio
 import concurrent
 from collections import defaultdict
 from dataclasses import dataclass
-from distutils.util import strtobool
 import functools
 import heapq
 import itertools
@@ -12,7 +11,6 @@ import operator
 import os
 from pathlib import Path
 import shutil
-import random
 import time
 import uuid
 
@@ -32,11 +30,18 @@ from interactive_index.utils import sample_farthest_vectors
 from knn import utils
 from knn.clusters import TerraformModule
 from knn.jobs import MapReduceJob, MapperSpec
-from knn.reducers import Reducer, VectorReducer
+from knn.reducers import Reducer, IsFinishedReducer, VectorReducer
 from knn.utils import JSONType
 
 import config
-from index_jobs import AdderReducer, IndexType, MapperReducer, Trainer, TrainingJob
+from index_jobs import (
+    AdderReducer,
+    IndexType,
+    MapperReducer,
+    Trainer,
+    TrainingJob,
+    LocalFlatIndex,
+)
 from utils import CleanupDict
 
 
@@ -91,16 +96,21 @@ class LabeledIndex:
         # Will be filled by each individual constructor
         self.labels: List[str] = []
         self.indexes: Dict[IndexType, InteractiveIndex] = {}
+        self.local_flat_index: Optional[LocalFlatIndex] = None
 
         # Will only be used by the start_building() pathway
+        self.bucket: Optional[str] = None
+        self.identifiers: List[str] = []
         self.cluster: Optional[TerraformModule] = None
         self.http_session: Optional[aiohttp.ClientSession] = None
         self.mapper_job: Optional[MapReduceJob] = None
+        self.build_local_flat_index_task: Optional[asyncio.Task] = None
         self.training_jobs: CleanupDict[IndexType, TrainingJob] = CleanupDict(
             lambda job: job.stop()
         )
         self.start_adding_eventually_task: Optional[asyncio.Task] = None
         self.adder_job: Optional[MapReduceJob] = None
+        self.resizer_job: Optional[MapReduceJob] = None
         self.merge_task: Optional[asyncio.Task] = None
         self.cluster_unlock_fn: Optional[Callable[[None], None]] = None
 
@@ -193,7 +203,7 @@ class LabeledIndex:
             # Gather spatial locations for each image
             locs_by_id: DefaultDict[int, List[int]] = defaultdict(list)
             for i, l in zip(ids, locs):
-                i, l = int(i), int(l)  # cast numpy types
+                i, l = int(i), int(l)  # cast numpy type  # noqa: E741
                 locs_by_id[i].append(l)
 
             # Return up to max_samples images with the highest number (but at least
@@ -220,6 +230,12 @@ class LabeledIndex:
         # Map
         if self.mapper_job:
             await self.mapper_job.stop()
+        if (
+            self.build_local_flat_index_task
+            and not self.build_local_flat_index_task.done()
+        ):
+            self.build_local_flat_index_task.cancel()
+            await self.build_local_flat_index_task
 
         # Train
         await self.training_jobs.clear_async()
@@ -260,14 +276,19 @@ class LabeledIndex:
         cluster_unlock_fn: Callable[[], None],
         bucket: str,
         paths: List[str],
+        identifiers: List[str],
         *args,
         **kwargs,
     ):
         self = cls(str(uuid.uuid4()), *args, **kwargs)
+        self.bucket = bucket
         self.http_session = utils.create_unlimited_aiohttp_session()
 
         # Randomly shuffle input images
-        self.labels = random.sample(paths, k=len(paths))
+        inds = np.arange(len(paths))
+        np.random.shuffle(inds)
+        self.labels = [paths[i] for i in inds]
+        self.identifiers = [identifiers[i] for i in inds]
         iterable = (
             {"id": i, "image": path, "augmentations": {}}
             for i, path in enumerate(self.labels)
@@ -292,7 +313,7 @@ class LabeledIndex:
             )
 
         # Step 1: "Map" input images to embedding files saved to shared disk
-        # TODO(mihirg): Fail gracefully if entire Map, Train, or Add jobs fail
+        # TODO(mihirg): Fail gracefully if entire Map, Train, Add, or Resize jobs fail
         notification_request_to_configure_indexes = MapperReducer.NotificationRequest(
             self.configure_indexes,
             on_num_images=config.NUM_IMAGES_TO_MAP_BEFORE_CONFIGURING_INDEX,
@@ -309,7 +330,7 @@ class LabeledIndex:
                 n_mappers=n_mappers,
             ),
             MapperReducer([notification_request_to_configure_indexes]),
-            {"input_bucket": bucket, "return_type": "save"},
+            {"input_bucket": self.bucket, "return_type": "save"},
             session=self.http_session,
             n_retries=config.MAPPER_NUM_RETRIES,
             chunk_size=chunk_size,
@@ -317,6 +338,13 @@ class LabeledIndex:
         )
         await self.mapper_job.start(iterable, self.start_training, len(paths))
         self.logger.info(f"Map: started with {len(paths)} images")
+
+        # Start a background task that consumes Map outputs as they're generated and
+        # builds a local flat index of full-image embeddings
+        self.local_flat_index = LocalFlatIndex.create(
+            len(self.labels), self.cluster.mount_parent_dir
+        )
+        self.build_local_flat_index_task = self.build_local_flat_index_in_background()
 
         # Start a background task that waits until the Train step (started automatically
         # per above) is done and then kicks off the Add step
@@ -347,6 +375,26 @@ class LabeledIndex:
                 )
             )
 
+    @utils.unasync_as_task
+    async def build_local_flat_index_in_background(self):
+        # Step 2: As the Map step runs, build a local flat index of the full-image
+        # embeddings it generates to facilitate fast SVM queries and a distance matrix
+        # to facilitate fast clustering
+        with concurrent.futures.ThreadPoolExecutor(
+            config.LOCAL_INDEX_BUILDING_NUM_THREADS
+        ) as pool:
+            coro_gen = (
+                utils.run_in_executor(
+                    self.local_flat_index.add_from_file, path_tmpl, executor=pool
+                )
+                async for path_tmpl in self.mapper_job.reducer.output_path_tmpl_gen()
+            )
+            async for task in utils.limited_as_completed_from_async_coro_gen(
+                coro_gen, config.LOCAL_INDEX_BUILDING_NUM_THREADS
+            ):
+                await task
+            await utils.run_in_executor(self.local_flat_index.build_distance_matrix)
+
     def start_training(
         self,
         mapper_result: MapperReducer.Result,
@@ -358,7 +406,7 @@ class LabeledIndex:
                 f"{mapper_result.num_images} images"
             )
 
-        # Step 2: "Train" each index once we have enough images/spatial embeddings (or
+        # Step 3: "Train" each index once we have enough images/spatial embeddings (or
         # when the Map step finishes, in which case index_type=None indicating that we
         # should train all remaining indexes)
         index_types = [index_type] if index_type else iter(IndexType)
@@ -419,7 +467,7 @@ class LabeledIndex:
         # then remove this line!
         await self.mapper_job.reducer.finished.wait()
 
-        # Step 3: As the Map step computes and saves embeddings, "Add" them into shards
+        # Step 4: As the Map step computes and saves embeddings, "Add" them into shards
         # of the newly trained indexes
         # TODO(mihirg): Consider adding to each index independently as training
         # finishes, then merging independently, then making indexes available on the
@@ -442,19 +490,56 @@ class LabeledIndex:
             request_timeout=config.ADDER_REQUEST_TIMEOUT,
         )
         await self.adder_job.start(
-            self.mapper_job.reducer.output_path_tmpl_gen(), self.start_merging
+            self.mapper_job.reducer.output_path_tmpl_gen(),
+            self.start_resizing_and_merging,
         )  # iterable is an async generator that yields as the Map step produces outputs
         self.logger.info("Add: started")
 
-    def start_merging(self, shard_patterns: Set[str]):
+    @utils.unasync_as_task
+    async def start_resizing_and_merging(self, shard_patterns: Set[str]):
         self.logger.info(f"Add: finished with {len(shard_patterns)} shard patterns")
         self.merge_task = self.merge_indexes_in_background(shard_patterns)
+
+        # Step 5: "Resize" images into small thumbnails so that the frontend can render
+        # faster
+        assert self.cluster  # just to silence type warnings
+        iterable = (
+            {"image": label, "identifier": identifier}
+            for label, identifier in zip(self.labels, self.identifiers)
+        )
+        nproc = self.cluster.output["resizer_nproc"]
+        n_mappers = int(
+            self.cluster.output["num_resizers"] * config.RESIZER_REQUEST_MULTIPLE(nproc)
+        )
+        chunk_size = config.RESIZER_CHUNK_SIZE(nproc)
+        self.resizer_job = MapReduceJob(
+            MapperSpec(
+                url=self.cluster.output["resizer_url"],
+                n_mappers=n_mappers,
+            ),
+            IsFinishedReducer(),
+            {
+                "input_bucket": self.bucket,
+                "output_bucket": config.RESIZER_OUTPUT_BUCKET,
+                "output_dir": config.RESIZER_OUTPUT_DIR_TMPL.format(self.index_id),
+                "resize_max_height": config.RESIZER_MAX_HEIGHT,
+            },
+            session=self.http_session,
+            n_retries=config.RESIZER_NUM_RETRIES,
+            chunk_size=chunk_size,
+            request_timeout=config.RESIZER_REQUEST_TIMEOUT,
+        )
+        await self.resizer_job.start(
+            iterable,
+            lambda: self.logger.info("Resize: finished"),
+        )
+        self.logger.info("Resize: started")
 
     @utils.unasync_as_task
     async def merge_indexes_in_background(self, shard_patterns: Set[str]):
         loop = asyncio.get_running_loop()
 
-        # Step 4: "Merge" shards from shared disk into final local index (in a thread
+        # Step 6: "Merge" shards from shared disk into final local index (in a thread
         # pool; because FAISS releases the GIL, this won't block the event loop)
         # TODO(mihirg): Consider deleting all unnecessary intermediates from NAS after
         self._load_local_indexes()
@@ -478,7 +563,11 @@ class LabeledIndex:
             await asyncio.gather(*futures)
 
         # Upload final index to Cloud Storage
+        await self.build_local_flat_index_task
         await self.upload()
+
+        # Wait for resizing to complete
+        await self.resizer_job.reducer.finished.wait()
 
         self.logger.info("Finished building index")
         self.ready.set()
@@ -494,8 +583,9 @@ class LabeledIndex:
         index.merge_partial_indexes(shard_paths)
 
     async def upload(self):
-        # Dump labels
+        # Dump labels, full-image embeddings, and distance matrix
         json.dump(self.labels, (self.index_dir / self.LABEL_FILENAME).open("w"))
+        self.local_flat_index.save(self.index_dir)
 
         # Upload to Cloud Storage
         # TODO(mihirg): Speed up
@@ -520,6 +610,7 @@ class LabeledIndex:
                 index_type.name: job.status
                 for index_type, job in self.training_jobs.items()
             },
+            "resize": self.resizer_job.status if self.resizer_job else {},
         }
 
     # INDEX LOADING
@@ -550,6 +641,7 @@ class LabeledIndex:
 
         # Initialize indexes
         self.labels = json.load((self.index_dir / self.LABEL_FILENAME).open())
+        self.local_flat_index.load(self.index_dir)
         self._load_local_indexes()
         self.logger.info(f"Finished loading index from {self.index_dir}")
 
@@ -667,6 +759,7 @@ async def start_job(request):
     cluster_id = request.json["cluster_id"]
     bucket = request.json["bucket"]
     paths = request.json["paths"]
+    identifiers = request.json["identifiers"]
 
     cluster = current_clusters[cluster_id]
     lock_id = current_clusters.lock(cluster_id)
@@ -958,8 +1051,12 @@ async def query_svm(request):
         training_features, training_labels = await job.run_until_complete(
             itertools.chain(pos_inputs, neg_inputs, auto_inputs)
         )
-        logger.info(f"{log_id_string} - Finished SVM vector computation in {job.elapsed_time:.3f}s")
-        logger.debug(f"{log_id_string} - Vector computation performance: {job.performance}")
+        logger.info(
+            f"{log_id_string} - Finished SVM vector computation in {job.elapsed_time:.3f}s"
+        )
+        logger.debug(
+            f"{log_id_string} - Vector computation performance: {job.performance}"
+        )
 
     # Train SVM
     logger.debug(f"{log_id_string} - Starting SVM training")
@@ -970,8 +1067,12 @@ async def query_svm(request):
     predicted = model.predict(training_features)
 
     end_time = time.perf_counter()
-    logger.info(f"{log_id_string} - Finished training SVM in {end_time - start_time:.3f}s")
-    logger.debug(f"{log_id_string} - SVM accuracy: {accuracy_score(training_labels, predicted)}")
+    logger.info(
+        f"{log_id_string} - Finished training SVM in {end_time - start_time:.3f}s"
+    )
+    logger.debug(
+        f"{log_id_string} - SVM accuracy: {accuracy_score(training_labels, predicted)}"
+    )
 
     if mode == "svmPos" or mode == "spatialSvmPos":
         # Evaluate the SVM by querying index

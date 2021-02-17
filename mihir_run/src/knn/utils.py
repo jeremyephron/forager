@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import concurrent
 from dataclasses import dataclass, field
 import functools
 import io
@@ -7,7 +8,6 @@ import textwrap
 import traceback
 
 import aiohttp
-import numpy as np
 
 from typing import (
     Any,
@@ -121,6 +121,11 @@ async def as_completed_from_futures(
             yield done
 
 
+async def run_in_executor(self, f, *args, executor: concurrent.futures.Executor = None):
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(executor, f, *args)
+
+
 def unasync(coro):
     @functools.wraps(coro)
     def wrapper(*args, **kwargs):
@@ -155,6 +160,8 @@ def log_exception_from_coro_but_return_none(coro):
 
 
 def numpy_to_base64(nda):
+    import numpy as np
+
     if nda is None:
         return ""
 
@@ -166,6 +173,8 @@ def numpy_to_base64(nda):
 
 
 def base64_to_numpy(nda_base64):
+    import numpy as np
+
     if not nda_base64:
         return None
 
