@@ -541,7 +541,7 @@ class LabeledIndex:
         )
         await self.resizer_job.start(
             iterable,
-            lambda: self.logger.info("Resize: finished"),
+            lambda _: self.logger.info("Resize: finished"),
         )
         self.logger.info("Resize: started")
 
