@@ -345,7 +345,7 @@ class LocalFlatIndex:
             assert len(embeddings) == 1
             self.index[int(id)] = embeddings[0]
 
-    def create_distance_matrix(self):
+    def build_distance_matrix(self):
         self.distance_matrix = self._pdist(self.index)
 
     def save(self, dir: Path):

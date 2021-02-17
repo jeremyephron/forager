@@ -400,7 +400,10 @@ class LabeledIndex:
                 coro_gen, config.LOCAL_INDEX_BUILDING_NUM_THREADS
             ):
                 await task
+
+            self.logger.info("Local flat index: finished consuming Map output")
             await utils.run_in_executor(self.local_flat_index.build_distance_matrix)
+            self.logger.info("Local flat index: finished building distance matrix")
 
     def start_training(
         self,
