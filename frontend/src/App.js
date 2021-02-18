@@ -161,7 +161,7 @@ const App = () => {
     } else if (source == "dataset" && orderingMode == "knn") {
       url = new URL(`${process.env.REACT_APP_SERVER_URL}/api/query_knn_v2/${datasetName}`);
       url.search = new URLSearchParams({
-        num: 1000,
+        num: 100,
         index_id: indexId,
         filter: 'all',
         image_ids: [knnImage.id],
