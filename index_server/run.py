@@ -902,15 +902,6 @@ async def get_index(index_id) -> LabeledIndex:
     return current_indexes[index_id]
 
 
-@app.route("/perform_clustering", methods=["POST"])
-async def perform_clustering(request):
-    identifiers = request.json["identifiers"]
-    index_id = request.json["index_id"]
-    index = await get_index(index_id)
-    clustering = index.cluster_identifiers(identifiers)
-    return resp.json({"clustering": clustering})
-
-
 def extract_embedding_from_mapper_output(output: str) -> np.ndarray:
     return np.squeeze(utils.base64_to_numpy(output), axis=0)
 
@@ -962,38 +953,32 @@ async def query_index(request):
 
     index = await get_index(index_id)
 
-    if use_full_image:
-        query_vector = np.mean(index.get_embeddings(identifiers), axis=0)
-    else:
-        # Generate query vector as average of patch embeddings
-        async with BestMapper(cluster_id) as mapper:
-            job = MapReduceJob(
-                mapper,
-                VectorReducer(
-                    VectorReducer.PoolingType.AVG,
-                    extract_func=extract_embedding_from_mapper_output,
-                ),
-                {"input_bucket": bucket, "reduction": "average"},
-                n_retries=config.CLOUD_RUN_N_RETRIES,
-                chunk_size=1,
-            )
-            query_vector = await job.run_until_complete(
-                [
-                    {
-                        "image": image_path,
-                        "patch": patch,
-                        "augmentations": augmentation_dict,
-                    }
-                    for image_path, patch in zip(image_paths, patches)
-                ]
-            )
+    # Generate query vector as average of patch embeddings
+    async with BestMapper(cluster_id) as mapper:
+        job = MapReduceJob(
+            mapper,
+            VectorReducer(
+                VectorReducer.PoolingType.AVG,
+                extract_func=extract_embedding_from_mapper_output,
+            ),
+            {"input_bucket": bucket, "reduction": "average"},
+            n_retries=config.CLOUD_RUN_N_RETRIES,
+            chunk_size=1,
+        )
+        query_vector = await job.run_until_complete(
+            [
+                {
+                    "image": image_path,
+                    "patch": patch,
+                    "augmentations": augmentation_dict,
+                }
+                for image_path, patch in zip(image_paths, patches)
+            ]
+        )
 
     # Run query and return results
     query_results = index.query(query_vector, num_results, None, use_full_image, False)
-    clustering = index.cluster_results(query_results)
-    return resp.json(
-        {"results": [r.to_dict() for r in query_results], "clustering": clustering}
-    )
+    return resp.json({"results": [r.to_dict() for r in query_results]})
 
 
 @app.route("/active_batch", methods=["POST"])
@@ -1220,6 +1205,37 @@ async def query_svm(request):
         )  # unordered by distance for now
     else:
         return resp.json({"results": []})
+
+
+# NEW FRONTEND
+
+
+@app.route("/perform_clustering", methods=["POST"])
+async def perform_clustering(request):
+    identifiers = request.json["identifiers"]
+    index_id = request.json["index_id"]
+    index = await get_index(index_id)
+    clustering = index.cluster_identifiers(identifiers)
+    return resp.json({"clustering": clustering})
+
+
+@app.route("/query_knn_v2", methods=["POST"])
+async def query_knn_v2(request):
+    identifiers = request.json["identifiers"]
+    index_id = request.json["index_id"]
+    num_results = int(request.json["num_results"])
+
+    index = await get_index(index_id)
+
+    # Get query vector from local flat index
+    query_vector = np.mean(index.get_embeddings(identifiers), axis=0)
+
+    # Run query and return results
+    query_results = index.query(query_vector, num_results, None, True, False)
+    clustering = index.cluster_results(query_results)
+    return resp.json(
+        {"results": [r.to_dict() for r in query_results], "clustering": clustering}
+    )
 
 
 # CLEANUP

@@ -14,6 +14,14 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+html, body, #root, .main {
+  height: 100%;
+}
+
+.loading {
+  cursor: wait;
+}
+
 .app {
   position: relative;
   padding-bottom: 2rem;

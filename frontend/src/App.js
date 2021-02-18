@@ -27,8 +27,14 @@ const sources = [
   // {id: "google", label: "Google"},
 ]
 
+const orderingModes = [
+  {id: "default", label: "Default"},
+  // {id: "random", label: "Random"},
+  {id: "knn", label: "KNN", disabled: true},
+]
+
 const tags = [
-  {id: "full_dataset", label: "full dataset", hide: true},
+  // {id: "full_dataset", label: "full dataset", hide: true},
   // {id: "50_dataset", label: "50% dataset", hide: true},
   // {id: "10_dataset", label: "10% dataset", hide: true},
   // {id: "1_dataset", label: "1% dataset", hide: true},
@@ -55,15 +61,29 @@ const ImageStack = ({ id, onClick, images, showLabel }) => {
 }
 
 const App = () => {
+  // Query
   const [source, setSource] = useState(sources[0].id);
-  const [datasetQuery, setDatasetQuery] = useState([tags[0]]);
+  const [datasetIncludeTags, setDatasetIncludeTags] = useState([]);
+  const [datasetExcludeTags, setDatasetExcludeTags] = useState([]);
   const [googleQuery, setGoogleQuery] = useState("");
+  const [orderingMode, setOrderingMode] = useState(orderingModes[0].id);
   const [clusteringStrength, setClusteringStrength] = useState(50);
+
+  // Query state
+  const [knnImage, setKnnImage] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Modal
   const [selection, setSelection] = useState({});
   const [isOpen, setIsOpen] = useState(false);
+
+  // Data
   const [clusters, setClusters] = useState([]);
   const [images, setImages] = useState([]);
   const [clustering, setClustering] = useState([]);
+
+  // Dataset
+  const [datasetName, setDatasetName] = useState("waymo_train_central");
   const [indexId, setIndexId] = useState("2d2b13f9-3b30-4e51-8ab9-4e8a03ba1f03");
 
   const handleKeyDown = useCallback(e => {
@@ -115,36 +135,52 @@ const App = () => {
     // TODO(mihirg): Generalize
     setIsOpen(false);
     setSelection({});
-    console.log(results);
-    setImages(results.paths.map(path => {
+    setImages(results.paths.map((path, i) => {
       let filename = path.substring(path.lastIndexOf("/") + 1);
       let id = filename.substring(0, filename.indexOf("."));
       return {
         name: filename,
         url: path,
+        id: results.identifiers[i],
         thumb: `https://storage.googleapis.com/foragerml/thumbnails/${indexId}/${id}.jpg`,
       };
     }));
     setClustering(results.clustering);
   }
 
-  const runQuery = () => {
-    var url = new URL(`${process.env.REACT_APP_SERVER_URL}/api/get_next_images/waymo_train_central`);
-    url.search = new URLSearchParams({
-      num: 1000,
-      index_id: indexId,
-      filter: 'all',
-    }).toString();
-    fetch(url, {
+  const runQuery = async () => {
+    let url;
+    if (source == "dataset" && orderingMode == "default") {
+      url = new URL(`${process.env.REACT_APP_SERVER_URL}/api/get_next_images/${datasetName}`);
+      url.search = new URLSearchParams({
+        num: 1000,
+        index_id: indexId,
+        filter: 'all',
+      }).toString();
+    } else if (source == "dataset" && orderingMode == "knn") {
+      url = ;
+    } else {
+      console.log(`Query type (${source}, ${orderingMode}) not implemented`);
+      return;
+    }
+    await fetch(url, {
       method: "GET",
     }).then(results => results.json()).then(handleQueryResults);
+    setIsLoading(false);
   };
-  useEffect(runQuery, []);
+  useEffect(() => {
+    if (isLoading) runQuery();
+  }, [isLoading]);
+
+  const findSimilar = () => {
+    setOrderingMode("knn");
+    setIsLoading(true);
+  }
 
   const toggle = () => setIsOpen(!isOpen);
 
   return (
-    <div>
+    <div className={`main ${isLoading ? "loading" : ""}`}>
       <Modal isOpen={isOpen} toggle={toggle} size="lg">
         {selection.cluster !== undefined && selection.image !== undefined &&
           selection.cluster < clusters.length &&
@@ -170,7 +206,7 @@ const App = () => {
               <img src={clusters[selection.cluster][selection.image].url} />
               <Form>
                 <FormGroup className="mt-2 mb-0 d-flex flex-row align-items-center">
-                  <Button color="warning" className="mr-2" onClick={() => {}}>Find similar images</Button>
+                  <Button color="warning" className="mr-2" onClick={findSimilar}>Find similar images</Button>
                   <Typeahead
                     multiple
                     allowNew
@@ -208,15 +244,27 @@ const App = () => {
               </FormGroup>
               {(() => {
                 if (source === "dataset") {
-                  return (<Typeahead
-                    multiple
-                    id="dataset-query-bar"
-                    className="typeahead-bar"
-                    placeholder="Query tags"
-                    options={tags}
-                    selected={datasetQuery}
-                    onChange={selected => setDatasetQuery(selected)}
-                  />)
+                  return (
+                    <>
+                      <Typeahead
+                        multiple
+                        id="dataset-include-bar"
+                        className="typeahead-bar mr-2"
+                        placeholder="Tags to include"
+                        options={tags}
+                        selected={datasetIncludeTags}
+                        onChange={selected => setDatasetIncludeTags(selected)}
+                      />
+                      <Typeahead
+                        multiple
+                        id="dataset-exclude-bar"
+                        className="typeahead-bar"
+                        placeholder="Tags to exclude"
+                        options={tags}
+                        selected={datasetExcludeTags}
+                        onChange={selected => setDatasetExcludeTags(selected)}
+                      />
+                    </>)
                 } else if (source === "google") {
                   return (
                     <Input
@@ -229,14 +277,12 @@ const App = () => {
                 }
               })()}
               <FormGroup className="mb-0">
-                <select className="custom-select mx-2">
-                  <option value="default" selected>Default order</option>
-                  {/* <option value="random">Random order</option> */}
-                  <option value="knn" disabled>KNN</option>
+                <select className="custom-select mx-2" onChange={e => setOrderingMode(e.target.value)}>
+                  {orderingModes.map((m) => <option value={m.id} selected={orderingMode === m.id} disabled={m.disabled}>{m.label}</option>)}
                 </select>
                 <ReactSVG className="icon" src="assets/arrow-caret.svg" />
               </FormGroup>
-              <Button color="primary" className="mr-4" onClick={runQuery}>Run query</Button>
+              <Button color="primary" className="mr-4" onClick={() => setIsLoading(true)}>Run query</Button>
               <div>
                 <span className="text-nowrap">Clustering strength:</span>
                 <input className="custom-range" type="range" min="0" max="100"
