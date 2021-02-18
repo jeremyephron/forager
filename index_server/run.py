@@ -98,9 +98,8 @@ class LabeledIndex:
         self.ready = asyncio.Event()
 
         # Will be filled by each individual constructor
-        # TODO(mihirg): Deprecate self.labels in favor of self.identifiers
-        # TODO(mihirg): Consider using primary key, paths, etc. instead of
-        # arbitrarily-generated identifiers
+        # TODO(mihirg): Deprecate self.identifiers in favor of self.lables
+        # TODO(mihirg): Consider using primary key for thumbnail filenames
         self.labels: List[str] = []
         self.identifiers: Optional[bidict[str, int]] = None
         self.indexes: Dict[IndexType, InteractiveIndex] = {}
@@ -238,6 +237,7 @@ class LabeledIndex:
 
     def cluster_identifiers(self, identifiers: List[str]) -> List[List[float]]:
         assert self.identifiers
+        print(identifiers)
         inds = [self.identifiers[id] for id in identifiers]
         return self._cluster(inds)
 
@@ -258,8 +258,8 @@ class LabeledIndex:
         condensed = squareform(dists)
 
         # Perform hierarchical clustering
-        result = fastcluster.linkage(condensed, method="complete", preserve_input=False)
-        max_dist = np.max(result[:, 2])
+        result = fastcluster.linkage(condensed, method="single", preserve_input=False)
+        max_dist = result[-1, 2]
 
         # Simplify dendogram matrix by using original cluster indexes
         simplified = []
