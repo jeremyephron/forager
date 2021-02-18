@@ -915,6 +915,30 @@ def process_image_query_results(request, dataset, query_response):
 
     return response
 
+@api_view(["GET"])
+@csrf_exempt
+def query_knn_v2(request, dataset_name):
+    index_id = request.GET["index_id"]
+    image_ids = request.GET["image_ids"].split(",")
+    num_results = int(request.GET.get("num", 100))
+
+    dataset = Dataset.objects.get(name=dataset_name)
+    dataset_items = DatasetItem.objects.filter(pk__in=image_ids)
+    dataset_item_identifiers = [di.identifier for di in dataset_items]
+
+    params = {
+        "index_id": index_id,
+        "num_results": num_results,
+        "identifiers": dataset_item_identifiers,
+    }
+    r = requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/query_index",
+        json=params,
+    )
+    response_data = r.json()
+    response = process_image_query_results(request, dataset, response_data)
+    return JsonResponse(response)
+
 @api_view(['GET'])
 @csrf_exempt
 def lookup_knn(request, dataset_name):

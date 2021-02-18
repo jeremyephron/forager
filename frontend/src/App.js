@@ -158,7 +158,13 @@ const App = () => {
         filter: 'all',
       }).toString();
     } else if (source == "dataset" && orderingMode == "knn") {
-      url = ;
+      url = new URL(`${process.env.REACT_APP_SERVER_URL}/api/query_knn_v2/${datasetName}`);
+      url.search = new URLSearchParams({
+        num: 1000,
+        index_id: indexId,
+        filter: 'all',
+        identifiers: [knnImage.id],
+      }).toString();
     } else {
       console.log(`Query type (${source}, ${orderingMode}) not implemented`);
       return;
@@ -173,6 +179,7 @@ const App = () => {
   }, [isLoading]);
 
   const findSimilar = () => {
+    setKnnImage(clusters[selection.cluster][selection.image]);
     setOrderingMode("knn");
     setIsLoading(true);
   }
