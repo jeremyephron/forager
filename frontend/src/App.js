@@ -163,7 +163,7 @@ const App = () => {
         num: 1000,
         index_id: indexId,
         filter: 'all',
-        identifiers: [knnImage.id],
+        identifiers: [knnImage.id].join(),
       }).toString();
     } else {
       console.log(`Query type (${source}, ${orderingMode}) not implemented`);
