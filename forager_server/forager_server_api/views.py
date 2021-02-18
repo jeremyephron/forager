@@ -932,7 +932,7 @@ def query_knn_v2(request, dataset_name):
         "identifiers": dataset_item_identifiers,
     }
     r = requests.post(
-        settings.EMBEDDING_SERVER_ADDRESS + "/query_index",
+        settings.EMBEDDING_SERVER_ADDRESS + "/query_knn_v2",
         json=params,
     )
     response_data = r.json()
