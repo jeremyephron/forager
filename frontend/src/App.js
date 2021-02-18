@@ -15,6 +15,7 @@ import {
 } from "reactstrap";
 import { Typeahead } from "react-bootstrap-typeahead";
 import { ReactSVG } from "react-svg";
+import ProgressiveImage from "react-progressive-image";
 import times from "lodash/times";
 
 import "react-bootstrap-typeahead/css/Typeahead.css";
@@ -210,7 +211,13 @@ const App = () => {
                 {(clusteringStrength > 0) ? " to move between clusters, " : " or "}
                 <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to move between images
               </p>
-              <img src={clusters[selection.cluster][selection.image].url} />
+              <ProgressiveImage
+                src={clusters[selection.cluster][selection.image].url}
+                placeholder={clusters[selection.cluster][selection.image].thumbnail}
+              >
+                {src => <img src={src} />}
+              </ProgressiveImage>
+              <img  />
               <Form>
                 <FormGroup className="mt-2 mb-0 d-flex flex-row align-items-center">
                   <Button color="warning" className="mr-2" onClick={findSimilar}>Find similar images</Button>
