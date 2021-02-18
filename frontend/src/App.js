@@ -213,9 +213,9 @@ const App = () => {
               </p>
               <ProgressiveImage
                 src={clusters[selection.cluster][selection.image].url}
-                placeholder={clusters[selection.cluster][selection.image].thumbnail}
+                placeholder={clusters[selection.cluster][selection.image].thumb}
               >
-                {src => <img src={src} />}
+                {src => <img className="w-100" src={src} />}
               </ProgressiveImage>
               <img  />
               <Form>
