@@ -237,7 +237,6 @@ class LabeledIndex:
 
     def cluster_identifiers(self, identifiers: List[str]) -> List[List[float]]:
         assert self.identifiers
-        print(identifiers)
         inds = [self.identifiers[id] for id in identifiers]
         return self._cluster(inds)
 
@@ -342,7 +341,9 @@ class LabeledIndex:
         inds = np.arange(len(paths))
         np.random.shuffle(inds)
         self.labels = [paths[i] for i in inds]
-        self.identifiers = bidict({identifiers[i]: int(i) for i in inds})
+        self.identifiers = bidict(
+            {identifiers[i]: new_i for new_i, i in enumerate(inds)}
+        )
         iterable = (
             {"id": i, "image": path, "augmentations": {}}
             for i, path in enumerate(self.labels)
