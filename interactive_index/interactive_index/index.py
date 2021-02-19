@@ -331,7 +331,7 @@ class InteractiveIndex:
             index, 'nprobe', n_probes if n_probes else self.n_probes
         )
         dists, inds = index.search(xq, k)
-        valid_inds = np.argwhere(inds != -1)
+        valid_inds = np.nonzero(inds != -1)
         dists, inds = dists[valid_inds], inds[valid_inds]
 
         if self.multi_id:
