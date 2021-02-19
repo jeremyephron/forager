@@ -120,7 +120,7 @@ const App = () => {
       }
       for (let [a, b, dist] of queryResultData.clustering) {
         if (dist > clusteringStrength / 100) break;
-        ds.union(images[a], images[b]);
+        ds.union(queryResultData.images[a], queryResultData.images[b]);
       }
       const clusters = ds.extract();
       ds.destroy();
