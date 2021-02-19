@@ -78,7 +78,7 @@ const App = () => {
 
   // Data
   const [clusters, setClusters] = useState([]);
-  const [queryResultData, setQueryResultData] = useState({});
+  const [queryResultData, setQueryResultData] = useState({images: [], clustering: []});
 
   // Dataset
   const [datasetName, setDatasetName] = useState("waymo_train_central");
