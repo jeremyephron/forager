@@ -330,6 +330,7 @@ class InteractiveIndex:
         ParameterSpace().set_index_parameter(
             index, 'nprobe', n_probes if n_probes else self.n_probes
         )
+        dists, inds = index.search(xq, k)
 
         if self.multi_id:
             inds = self._invert_cantor_pairing_vec(inds)
