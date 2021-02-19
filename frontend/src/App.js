@@ -46,8 +46,6 @@ const tags = [
   // {id: "garbage_bin", label: "garbage bin"},
 ]
 
-const images = [];
-
 const ImageStack = ({ id, onClick, images, showLabel }) => {
   return (
     <a className="stack" onClick={onClick}>
@@ -80,8 +78,7 @@ const App = () => {
 
   // Data
   const [clusters, setClusters] = useState([]);
-  const [images, setImages] = useState([]);
-  const [clustering, setClustering] = useState([]);
+  const [queryResultData, setQueryResultData] = useState({});
 
   // Dataset
   const [datasetName, setDatasetName] = useState("waymo_train_central");
@@ -115,13 +112,13 @@ const App = () => {
 
   const recluster = () => {
     if (clusteringStrength == 0) {
-      setClusters(images.map(i => [i]));
+      setClusters(queryResultData.images.map(i => [i]));
     } else {
       let ds = disjointSet();
-      for (let image of images) {
+      for (let image of queryResultData.images) {
         ds.add(image);
       }
-      for (let [a, b, dist] of clustering) {
+      for (let [a, b, dist] of queryResultData.clustering) {
         if (dist > clusteringStrength / 100) break;
         ds.union(images[a], images[b]);
       }
@@ -129,14 +126,15 @@ const App = () => {
       ds.destroy();
       setClusters(clusters);
     }
-  };
-  useEffect(recluster, [images, clustering]);
+  }
+  useEffect(recluster, [queryResultData]);
 
   const handleQueryResults = (results) => {
     // TODO(mihirg): Generalize
     setIsOpen(false);
     setSelection({});
-    setImages(results.paths.map((path, i) => {
+
+    const images = results.paths.map((path, i) => {
       let filename = path.substring(path.lastIndexOf("/") + 1);
       let id = filename.substring(0, filename.indexOf("."));
       return {
@@ -145,8 +143,11 @@ const App = () => {
         id: results.identifiers[i],
         thumb: `https://storage.googleapis.com/foragerml/thumbnails/${indexId}/${id}.jpg`,
       };
-    }));
-    setClustering(results.clustering);
+    });
+    setQueryResultData({
+      images,
+      clustering: results.clustering,
+    });
   }
 
   const runQuery = async () => {
@@ -161,7 +162,7 @@ const App = () => {
     } else if (source == "dataset" && orderingMode == "knn") {
       url = new URL(`${process.env.REACT_APP_SERVER_URL}/api/query_knn_v2/${datasetName}`);
       url.search = new URLSearchParams({
-        num: 100,
+        num: 1000,
         index_id: indexId,
         filter: 'all',
         image_ids: [knnImage.id],
