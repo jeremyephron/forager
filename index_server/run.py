@@ -257,7 +257,7 @@ class LabeledIndex:
         condensed = squareform(dists)
 
         # Perform hierarchical clustering
-        result = fastcluster.linkage(condensed, method="average", preserve_input=False)
+        result = fastcluster.linkage(condensed, method="single", preserve_input=False)
         max_dist = result[-1, 2]
 
         # Simplify dendogram matrix by using original cluster indexes
