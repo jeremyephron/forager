@@ -1111,11 +1111,11 @@ def filtered_images_v2(request, dataset, path_filter=None):
                 if label_value["value"] != LabelType.positive.value:
                     continue
 
-                if cat in include_categories:
-                    include = True
-                else:  # cat in exclude_categories
+                if cat in exclude_categories:
                     exclude = True
                     break
+                elif cat in include_categories:
+                    include = True
 
             if exclude:
                 break
