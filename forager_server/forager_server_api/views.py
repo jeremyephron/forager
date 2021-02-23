@@ -1105,7 +1105,7 @@ def filtered_images_v2(request, dataset, path_filter=None):
     include_categories = set(include_categories)
     exclude_categories = set(exclude_categories)
     for di_pk, anns_by_cat in anns.items():
-        include = False
+        include = not include_categories  # include everything if no explicit filter
         exclude = False
         for cat, ann_list in anns_by_cat.items():
             for ann in ann_list:
