@@ -98,7 +98,7 @@ urlpatterns = [
     path('api/get_dataset_info_v2/<slug:dataset_name>',
          views.get_dataset_info_v2,
          name='get_dataset_info_v2'),
-    path('api/get_annotations_v2/<slug:dataset_name>',
+    path('api/get_annotations_v2',
          views.get_annotations_v2,
          name='get_annotations_v2'),
 ]

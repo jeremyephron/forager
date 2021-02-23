@@ -1222,7 +1222,7 @@ def get_dataset_info_v2(request, dataset_name):
 
 @api_view(["GET"])
 @csrf_exempt
-def get_annotations_v2(request, dataset_name):
+def get_annotations_v2(request):
     identifiers = [i for i in request.GET["identifiers"].split(",") if i]
     if not identifiers:
         return JsonResponse({})
