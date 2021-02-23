@@ -126,6 +126,9 @@ def invert_cantor_pairing(z: int) -> Tuple[int, int]:
     TODO: docstring
 
     """
+    
+    if z < 0:
+        return z, z
 
     w = math.floor((math.sqrt(8 * z + 1) - 1) / 2)
     t = (w**2 + w) / 2
