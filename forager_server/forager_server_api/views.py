@@ -1139,7 +1139,7 @@ def query_knn_v2(request, dataset_name):
     image_ids = request.GET["image_ids"].split(",")
     num_results = int(request.GET.get("num", 1000))
 
-    dataset = Dataset.objects.get(name=dataset_name)
+    dataset = get_object_or_404(Dataset, name=dataset_name)
     dataset_items = DatasetItem.objects.filter(pk__in=image_ids)
     dataset_item_identifiers = [di.identifier for di in dataset_items]
 
@@ -1208,7 +1208,7 @@ def get_next_images_v2(request, dataset_name, dataset=None):
 @api_view(["GET"])
 @csrf_exempt
 def get_dataset_info_v2(request, dataset_name):
-    dataset = Dataset.objects.get(name=dataset_name)
+    dataset = get_object_or_404(Dataset, name=dataset_name)
 
     annotations = Annotation.objects.filter(
         dataset_item__in=dataset.datasetitem_set.filter()

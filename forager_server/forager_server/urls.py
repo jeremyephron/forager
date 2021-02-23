@@ -95,4 +95,7 @@ urlpatterns = [
     path('api/get_next_images_v2/<slug:dataset_name>',
          views.get_next_images_v2,
          name='get_next_images_v2'),
+    path('api/get_dataset_info_v2/<slug:dataset_name>',
+         views.get_dataset_info_v2,
+         name='get_dataset_info_v2'),
 ]
