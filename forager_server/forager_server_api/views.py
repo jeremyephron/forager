@@ -1108,8 +1108,8 @@ def filtered_images_v2(request, dataset, path_filter=None):
         exclude = False
         for cat, ann_list in anns[di.pk].items():
             for ann in ann_list:
-                label_value = json.loads(ann.label_data)
-                if label_value["value"] != LabelType.positive.value:
+                label_data = json.loads(ann.label_data)
+                if label_data["value"] != LabelType.positive.value:
                     continue
 
                 if cat in exclude_categories:
@@ -1228,12 +1228,15 @@ def get_annotations_v2(request, dataset_name):
         return JsonResponse([])
 
     anns = Annotation.objects.filter(
-        dataset_item__in=DatasetItem.objects.filter(pk__in=identifiers)
+        dataset_item__in=DatasetItem.objects.filter(pk__in=identifiers),
+        label_type="klabel_frame",
     )
 
     data = defaultdict(list)
     for ann in anns:
         label_data = json.loads(ann.label_data)
+        if label_data["value"] != LabelType.positive.value:
+            continue
         label_data["identifier"] = ann.pk
         data[ann.dataset_item.pk].append(label_data)
 
