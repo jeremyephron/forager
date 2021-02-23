@@ -122,7 +122,7 @@ const App = () => {
       url = new URL(`${endpoints.queryKnn}/${datasetName}`);
       url.search = new URLSearchParams({...params, image_ids: [knnImage.id]}).toString();
     } else {
-      console.log(`Query type (${source}, ${orderingMode}) not implemented`);
+      console.error(`Query type (${source}, ${orderingMode}) not implemented`);
       return;
     }
     const results = await fetch(url, {
@@ -164,6 +164,8 @@ const App = () => {
   const findSimilar = () => {
     setKnnImage(clusters[selection.cluster][selection.image]);
     setOrderingMode("knn");
+    setDatasetIncludeTags([]);
+    setDatasetExcludeTags([]);
     setIsLoading(true);
   }
 
@@ -228,8 +230,6 @@ const App = () => {
         method: "DELETE",
       });
     }
-
-    console.log(newTags);
 
     let newAnnotationData = {...queryAnnotationData};
     newAnnotationData[image.id] = newTags;
