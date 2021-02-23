@@ -1225,7 +1225,7 @@ def get_dataset_info_v2(request, dataset_name):
 def get_annotations_v2(request, dataset_name):
     identifiers = [i for i in request.GET["identifiers"].split(",") if i]
     if not identifiers:
-        return JsonResponse([])
+        return JsonResponse({})
 
     anns = Annotation.objects.filter(
         dataset_item__in=DatasetItem.objects.filter(pk__in=identifiers),
