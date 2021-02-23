@@ -1254,7 +1254,12 @@ def add_annotation_v2(request, image_identifier):
 
     user = payload['user']
     category = payload['category']
-    annotation = json.dumps({})  # TODO(mihirg): Fill in
+    annotation = json.dumps({
+        "type": 0,  # full-frame
+        "value": PerFrameLabelValue.positive.value,
+        "mode": "tag",
+        "version": "2.0.0",
+    })
 
     dataset_item = DatasetItem.objects.get(pk=image_identifier)
     ann = Annotation(
