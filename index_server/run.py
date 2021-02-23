@@ -1234,10 +1234,7 @@ async def query_knn_v2(request):
 
     # Run query and return results
     query_results = index.query(query_vector, num_results, None, True, False)
-    clustering = index.cluster_results(query_results)
-    return resp.json(
-        {"results": [r.to_dict() for r in query_results], "clustering": clustering}
-    )
+    return resp.json({"results": [r.to_dict() for r in query_results]})
 
 
 # CLEANUP
