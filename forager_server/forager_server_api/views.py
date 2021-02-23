@@ -1127,7 +1127,11 @@ def process_image_query_results_v2(request, dataset, query_response):
         request, dataset, [r["label"] for r in ordered_results]
     )
     dataset_items_by_path = {di.path: di for di in dataset_items}
-    return [dataset_items_by_path[r["label"]] for r in ordered_results]
+    return [
+        dataset_items_by_path[r["label"]]
+        for r in ordered_results
+        if r["label"] in dataset_items_by_path
+    ]
 
 
 def build_result_set_v2(request, dataset, dataset_items, num_total=None):
