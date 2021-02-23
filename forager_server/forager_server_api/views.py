@@ -1210,7 +1210,7 @@ def get_dataset_info_v2(request, dataset_name):
     categories = set()
     for ann in annotations:
         categories.add(ann.label_category)
-    categories = sorted(list(categories))
+    categories = sorted(list(filter(bool, categories)))
 
     return JsonResponse({
         "categories": categories,
@@ -1235,8 +1235,10 @@ def get_annotations_v2(request):
     data = defaultdict(list)
     for ann in anns:
         label_data = json.loads(ann.label_data)
-        if label_data["value"] != PerFrameLabelValue.positive.value:
-            continue
-        data[ann.dataset_item.pk].append(ann.label_category)
+        if (
+            label_data["value"] == PerFrameLabelValue.positive.value
+            and ann.label_category
+        ):
+            data[ann.dataset_item.pk].append(ann.label_category)
 
     return JsonResponse(data)
