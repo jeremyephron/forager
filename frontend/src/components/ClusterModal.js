@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   Button,
   Form,
@@ -23,6 +23,8 @@ const ClusterModal = ({
   annotations,
   onTagsChanged,
 }) => {
+  const typeaheadRef = useRef();
+
   const selectedImage = (
     selection.cluster !== undefined && selection.image !== undefined &&
     selection.cluster < clusters.length &&
@@ -31,6 +33,16 @@ const ClusterModal = ({
   const selectedTags = (selectedImage ? annotations[selectedImage.id] : undefined) || [];
 
   const parseNewTags = (newTags) => uniq(newTags.map(t => (t.label || t)));
+
+  const handleKeyDown = (e) => {
+    const { key } = e;
+    if (key === "ArrowDown" ||
+        key === "ArrowUp" ||
+        key === "ArrowLeft" ||
+        key === "ArrowRight") {
+      typeaheadRef.current.blur();
+    }
+  };
 
   return (
     <Modal
@@ -78,6 +90,8 @@ const ClusterModal = ({
                 options={tags}
                 selected={selectedTags.map(t => t.category)}
                 onChange={(newTags) => onTagsChanged(selectedImage, selectedTags, parseNewTags(newTags))}
+                onKeyDown={handleKeyDown}
+                ref={typeaheadRef}
               />
             </FormGroup>
           </Form>
