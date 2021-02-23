@@ -104,7 +104,7 @@ urlpatterns = [
     path('api/add_annotation_v2/<slug:image_identifier>',
          views.add_annotation_v2,
          name='add_annotation_v2'),
-    path('api/delete_annotation/<slug:ann_identifier>',
-         views.delete_annotation,
-         name='delete_annotation'),
+    path('api/delete_annotation_v2/<slug:ann_identifier>',
+         views.delete_annotation_v2,
+         name='delete_annotation_v2'),
 ]
