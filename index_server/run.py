@@ -251,7 +251,7 @@ class LabeledIndex:
             self.local_flat_index is not None
             and self.local_flat_index.distance_matrix is not None
         )
-        if not inds:
+        if len(inds) <= 1:
             return []
 
         # Construct condensed distance submatrix
