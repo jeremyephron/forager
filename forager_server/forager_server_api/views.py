@@ -1239,6 +1239,55 @@ def get_annotations_v2(request):
             label_data["value"] == PerFrameLabelValue.positive.value
             and ann.label_category
         ):
-            data[ann.dataset_item.pk].append(ann.label_category)
+            data[ann.dataset_item.pk].append({
+                "category": ann.label_category,
+                "identifier": ann.pk,
+            })
 
     return JsonResponse(data)
+
+
+# @api_view(['POST'])
+# @csrf_exempt
+# def add_annotation_v2(request, dataset_name, image_identifier):
+#     # body is the JSON of a single annotation
+#     # {
+#     #   'type': 2,
+#     #   'bbox': {'bmin': {'x': 0.2, 'y': 0.5}, 'bmax': {'x': 0.5, 'y': 0.7}}
+#     # }
+#     body = json.loads(request.body) # request.body.decode('utf-8')
+#     label_function = body['user']
+#     category = body['category']
+#     label_type = body['label_type']
+
+#     annotation = json.dumps(body['annotation'])
+
+#     dataset_item = DatasetItem.objects.get(pk=image_identifier)
+#     ann = Annotation(
+#         dataset_item=dataset_item,
+#         label_function=label_function,
+#         label_category=category,
+#         label_type=label_type,
+#         label_data=annotation)
+#     ann.save()
+
+#     ann_identifier = ann.pk
+#     return HttpResponse(ann_identifier)
+
+
+# @api_view(['DELETE'])
+# @csrf_exempt
+# def delete_annotation_v2(request, dataset_name, image_identifier, ann_identifier):
+#     try:
+#         Annotation.objects.get(pk=ann_identifier).delete()
+#         return HttpResponse(status=status.HTTP_204_NO_CONTENT)
+#     except ObjectDoesNotExist as e:
+#         return JsonResponse(
+#             {'error': str(e)},
+#             safe=False,
+#             status=status.HTTP_404_NOT_FOUND)
+#     except Exception as e:
+#         return JsonResponse(
+#             {'error': str(e)},
+#             safe=False,
+#             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
