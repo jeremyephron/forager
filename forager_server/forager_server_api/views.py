@@ -19,7 +19,7 @@ from pycocotools.coco import COCO
 
 from .models import Dataset, DatasetItem, Annotation
 
-class LabelType(Enum):
+class PerFrameLabelValue(Enum):
     positive = 1
     negative = 2
     hard_negative = 3
@@ -555,7 +555,7 @@ def filtered_images(request, dataset, path_filter=None):
         anns = filter_most_recent_anns(
             nest_anns(annotations, nest_category=False, nest_lf=False))
 
-        cat_value = LabelType[label_value].value
+        cat_value = PerFrameLabelValue[label_value].value
         images_with_label = set()
         for di_pk, ann_list in anns.items():
             for ann in ann_list:
@@ -998,8 +998,8 @@ def lookup_svm(request, dataset_name):
     for ann in frame_anns:
         label_value = json.loads(ann.label_data)['value']
         if label_value in (
-            LabelType.negative.value,
-            LabelType.hard_negative.value,
+            PerFrameLabelValue.negative.value,
+            PerFrameLabelValue.hard_negative.value,
         ):
             neg_paths.append(ann.dataset_item.path)
 
@@ -1109,7 +1109,7 @@ def filtered_images_v2(request, dataset, path_filter=None):
         for cat, ann_list in anns[di.pk].items():
             for ann in ann_list:
                 label_data = json.loads(ann.label_data)
-                if label_data["value"] != LabelType.positive.value:
+                if label_data["value"] != PerFrameLabelValue.positive.value:
                     continue
 
                 if cat in exclude_categories:
@@ -1235,9 +1235,8 @@ def get_annotations_v2(request):
     data = defaultdict(list)
     for ann in anns:
         label_data = json.loads(ann.label_data)
-        if label_data["value"] != LabelType.positive.value:
+        if label_data["value"] != PerFrameLabelValue.positive.value:
             continue
-        label_data["identifier"] = ann.pk
-        data[ann.dataset_item.pk].append(label_data)
+        data[ann.dataset_item.pk].append(ann.label_category)
 
     return JsonResponse(data)
