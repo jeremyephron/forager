@@ -1275,19 +1275,17 @@ def get_annotations_v2(request):
 #     return HttpResponse(ann_identifier)
 
 
-# @api_view(['DELETE'])
-# @csrf_exempt
-# def delete_annotation_v2(request, dataset_name, image_identifier, ann_identifier):
-#     try:
-#         Annotation.objects.get(pk=ann_identifier).delete()
-#         return HttpResponse(status=status.HTTP_204_NO_CONTENT)
-#     except ObjectDoesNotExist as e:
-#         return JsonResponse(
-#             {'error': str(e)},
-#             safe=False,
-#             status=status.HTTP_404_NOT_FOUND)
-#     except Exception as e:
-#         return JsonResponse(
-#             {'error': str(e)},
-#             safe=False,
-#             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+@api_view(['DELETE'])
+@csrf_exempt
+def delete_annotation_v2(request, ann_identifier):
+    try:
+        Annotation.objects.get(pk=ann_identifier).delete()
+        return HttpResponse(status=status.HTTP_204_NO_CONTENT)
+    except ObjectDoesNotExist as e:
+        return JsonResponse(
+            {"error": str(e)}, safe=False, status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        return JsonResponse(
+            {"error": str(e)}, safe=False, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
