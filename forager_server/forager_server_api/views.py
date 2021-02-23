@@ -1241,38 +1241,32 @@ def get_annotations_v2(request):
         ):
             data[ann.dataset_item.pk].append({
                 "category": ann.label_category,
-                "identifier": ann.pk,
+                "id": ann.pk,
             })
 
     return JsonResponse(data)
 
 
-# @api_view(['POST'])
-# @csrf_exempt
-# def add_annotation_v2(request, dataset_name, image_identifier):
-#     # body is the JSON of a single annotation
-#     # {
-#     #   'type': 2,
-#     #   'bbox': {'bmin': {'x': 0.2, 'y': 0.5}, 'bmax': {'x': 0.5, 'y': 0.7}}
-#     # }
-#     body = json.loads(request.body) # request.body.decode('utf-8')
-#     label_function = body['user']
-#     category = body['category']
-#     label_type = body['label_type']
+@api_view(['POST'])
+@csrf_exempt
+def add_annotation_v2(request, image_identifier):
+    payload = json.loads(request.body)
 
-#     annotation = json.dumps(body['annotation'])
+    user = payload['user']
+    category = payload['category']
+    annotation = json.dumps({})  # TODO(mihirg): Fill in
 
-#     dataset_item = DatasetItem.objects.get(pk=image_identifier)
-#     ann = Annotation(
-#         dataset_item=dataset_item,
-#         label_function=label_function,
-#         label_category=category,
-#         label_type=label_type,
-#         label_data=annotation)
-#     ann.save()
+    dataset_item = DatasetItem.objects.get(pk=image_identifier)
+    ann = Annotation(
+        dataset_item=dataset_item,
+        label_function=user,
+        label_category=category,
+        label_type="klabel_frame",
+        label_data=annotation)
+    ann.save()
 
-#     ann_identifier = ann.pk
-#     return HttpResponse(ann_identifier)
+    ann_identifier = ann.pk
+    return HttpResponse(ann_identifier)
 
 
 @api_view(['DELETE'])
