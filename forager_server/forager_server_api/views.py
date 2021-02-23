@@ -1247,13 +1247,13 @@ def get_annotations_v2(request):
     return JsonResponse(data)
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @csrf_exempt
 def add_annotation_v2(request, image_identifier):
     payload = json.loads(request.body)
 
-    user = payload['user']
-    category = payload['category']
+    user = payload["user"]
+    category = payload["category"]
     annotation = json.dumps({
         "type": 0,  # full-frame
         "value": PerFrameLabelValue.positive.value,
