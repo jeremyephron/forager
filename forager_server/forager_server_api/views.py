@@ -1081,8 +1081,8 @@ def active_batch(request, dataset_name):
 
 
 def filtered_images_v2(request, dataset, path_filter=None):
-    include_categories = {c for c in request.GET.get("include").split(",") if c}
-    exclude_categories = {c for c in request.GET.get("exclude").split(",") if c}
+    include_categories = {c for c in request.GET.get("include", "").split(",") if c}
+    exclude_categories = {c for c in request.GET.get("exclude", "").split(",") if c}
 
     path_filter_kwargs = {"path__in": path_filter} if path_filter else {}
     dataset_items = DatasetItem.objects.filter(
