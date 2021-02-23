@@ -880,7 +880,7 @@ def process_image_query_results(
     split_dir = data_directory[len('gs://'):].split('/')
     bucket_name = split_dir[0]
 
-    ditems = filtered_images(request, dataset, [r['label'] for r in ordered_results])
+    ditems = filter_func(request, dataset, [r['label'] for r in ordered_results])
 
     response = {
         'identifiers': [],
