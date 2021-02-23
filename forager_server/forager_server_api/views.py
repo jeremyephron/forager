@@ -1101,7 +1101,7 @@ def filtered_images_v2(request, dataset, path_filter=None):
         nest_anns(annotations, nest_lf=False)
     )  # [image][category][#]
 
-    pks_to_return = set()
+    pks_to_return = {di.pk for di in dataset_items}
     include_categories = set(include_categories)
     exclude_categories = set(exclude_categories)
     for di_pk, anns_by_cat in anns.items():
@@ -1122,8 +1122,8 @@ def filtered_images_v2(request, dataset, path_filter=None):
             if exclude:
                 break
 
-        if include and not exclude:
-            pks_to_return.add(di_pk)
+        if not include or exclude:
+            pks_to_return.remove(di_pk)
 
     return [di for di in dataset_items if di.pk in pks_to_return]
 
