@@ -1076,6 +1076,7 @@ def active_batch(request, dataset_name):
 
 #
 # V2 ENDPOINTS
+# TODO(mihirg): Make these faster
 #
 
 
@@ -1135,12 +1136,12 @@ def query_knn_v2(request, dataset_name):
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
     dataset_items = DatasetItem.objects.filter(pk__in=image_ids)
-    dataset_item_identifiers = [di.identifier for di in dataset_items]
+    dataset_item_internal_identifiers = [di.identifier for di in dataset_items]
 
     params = {
         "index_id": index_id,
         "num_results": num_results,
-        "identifiers": dataset_item_identifiers,
+        "identifiers": dataset_item_internal_identifiers,
     }
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/query_knn_v2",
@@ -1173,10 +1174,10 @@ def get_next_images_v2(request, dataset_name, dataset=None):
         offset_to_return : offset_to_return + num_to_return
     ]
 
-    identifiers = [di.identifier for di in ret_images]
+    internal_identifiers = [di.identifier for di in ret_images]
     params = {
         "index_id": index_id,
-        "identifiers": identifiers,
+        "identifiers": internal_identifiers,
     }
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/perform_clustering",
@@ -1198,7 +1199,6 @@ def get_next_images_v2(request, dataset_name, dataset=None):
     })
 
 
-# TODO(mihirg): Make this faster
 @api_view(["GET"])
 @csrf_exempt
 def get_dataset_info_v2(request, dataset_name):
@@ -1218,3 +1218,23 @@ def get_dataset_info_v2(request, dataset_name):
         "num_images": dataset.datasetitem_set.filter(google=False).count(),
         "num_google": dataset.datasetitem_set.filter(google=True).count()
     })
+
+
+@api_view(["GET"])
+@csrf_exempt
+def get_annotations_v2(request, dataset_name):
+    identifiers = [i for i in request.GET["identifiers"].split(",") if i]
+    if not identifiers:
+        return JsonResponse([])
+
+    anns = Annotation.objects.filter(
+        dataset_item__in=DatasetItem.objects.filter(pk__in=identifiers)
+    )
+
+    data = defaultdict(list)
+    for ann in anns:
+        label_data = json.loads(ann.label_data)
+        label_data["identifier"] = ann.pk
+        data[ann.dataset_item.pk].append(label_data)
+
+    return JsonResponse(data)
