@@ -1,7 +1,6 @@
 import distutils.util
 from google.cloud import storage
 from enum import Enum
-import itertools
 import json
 import os
 import requests
@@ -1096,9 +1095,6 @@ def filtered_images_v2(request, dataset, path_filter=None):
     # to json decode all annotations
     annotations = Annotation.objects.filter(
         dataset_item__in=dataset_items,
-        label_category__in=list(
-            itertools.chain(include_categories, exclude_categories)
-        ),
         label_type="klabel_frame"
     )
     anns = filter_most_recent_anns(
