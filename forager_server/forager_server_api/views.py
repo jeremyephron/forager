@@ -1,6 +1,7 @@
 import distutils.util
 from google.cloud import storage
 from enum import Enum
+import itertools
 import json
 import os
 import requests
@@ -19,7 +20,7 @@ from pycocotools.coco import COCO
 
 from .models import Dataset, DatasetItem, Annotation
 
-class LabelCategory(Enum):
+class LabelType(Enum):
     positive = 1
     negative = 2
     hard_negative = 3
@@ -555,7 +556,7 @@ def filtered_images(request, dataset, path_filter=None):
         anns = filter_most_recent_anns(
             nest_anns(annotations, nest_category=False, nest_lf=False))
 
-        cat_value = LabelCategory[label_value].value
+        cat_value = LabelType[label_value].value
         images_with_label = set()
         for di_pk, ann_list in anns.items():
             for ann in ann_list:
@@ -582,23 +583,9 @@ def get_next_images(request, dataset_name, dataset=None):
     path_template = 'https://storage.googleapis.com/{:s}/'.format(bucket_name) + '{:s}'
     offset_to_return = int(request.GET.get('offset', 0))
     num_to_return = int(request.GET.get('num', 100))
-    index_id = request.GET.get('index_id')
 
     next_images = filtered_images(request, dataset)
     ret_images = next_images[offset_to_return:offset_to_return+num_to_return]
-
-    # Perform clustering on result set
-    if index_id:
-        identifiers = [di.identifier for di in ret_images]
-        params = {
-            "index_id": index_id,
-            "identifiers": identifiers,
-        }
-        r = requests.post(
-            settings.EMBEDDING_SERVER_ADDRESS + "/perform_clustering",
-            json=params,
-        )
-        clustering_data = r.json()
 
     dataset_item_paths = [(di.path if di.path.find("http") != -1 else path_template.format(di.path))
                           for di in ret_images]
@@ -608,7 +595,6 @@ def get_next_images(request, dataset_name, dataset=None):
         'paths': dataset_item_paths,
         'identifiers': dataset_item_identifiers,
         'num_total': len(next_images),
-        'clustering': clustering_data['clustering'],
     })
 
 @api_view(['GET'])
@@ -883,7 +869,12 @@ def delete_annotation(request, dataset_name, image_identifier, ann_identifier):
             safe=False,
             status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-def process_image_query_results(request, dataset, query_response):
+def process_image_query_results(
+    request,
+    dataset,
+    query_response,
+    filter_func=filtered_images,
+):
     ordered_results = query_response['results']
 
     data_directory = dataset.directory
@@ -914,30 +905,6 @@ def process_image_query_results(request, dataset, query_response):
     response.update(query_response)  # include any other keys from upstream response
 
     return response
-
-@api_view(["GET"])
-@csrf_exempt
-def query_knn_v2(request, dataset_name):
-    index_id = request.GET["index_id"]
-    image_ids = request.GET["image_ids"].split(",")
-    num_results = int(request.GET.get("num", 100))
-
-    dataset = Dataset.objects.get(name=dataset_name)
-    dataset_items = DatasetItem.objects.filter(pk__in=image_ids)
-    dataset_item_identifiers = [di.identifier for di in dataset_items]
-
-    params = {
-        "index_id": index_id,
-        "num_results": num_results,
-        "identifiers": dataset_item_identifiers,
-    }
-    r = requests.post(
-        settings.EMBEDDING_SERVER_ADDRESS + "/query_knn_v2",
-        json=params,
-    )
-    response_data = r.json()
-    response = process_image_query_results(request, dataset, response_data)
-    return JsonResponse(response)
 
 @api_view(['GET'])
 @csrf_exempt
@@ -1032,8 +999,8 @@ def lookup_svm(request, dataset_name):
     for ann in frame_anns:
         label_value = json.loads(ann.label_data)['value']
         if label_value in (
-            LabelCategory.negative.value,
-            LabelCategory.hard_negative.value,
+            LabelType.negative.value,
+            LabelType.hard_negative.value,
         ):
             neg_paths.append(ann.dataset_item.path)
 
@@ -1106,3 +1073,154 @@ def active_batch(request, dataset_name):
 
     # 4. Return knn results
     return JsonResponse(response)
+
+
+#
+# V2 ENDPOINTS
+#
+
+
+def filtered_images_v2(request, dataset, path_filter=None):
+    include_categories = {c for c in request.GET.get("include").split(",") if c}
+    exclude_categories = {c for c in request.GET.get("exclude").split(",") if c}
+
+    path_filter_kwargs = {"path__in": path_filter} if path_filter else {}
+    dataset_items = DatasetItem.objects.filter(
+        dataset=dataset, google=False, **path_filter_kwargs
+    ).order_by("pk")
+
+    if not include_categories and not exclude_categories:
+        return dataset_items
+
+    # TODO(mihirg, fpoms): Speed up by filtering positive labels without having
+    # to json decode all annotations
+    annotations = Annotation.objects.filter(
+        dataset_item__in=dataset_items,
+        label_category__in=list(
+            itertools.chain(include_categories, exclude_categories)
+        ),
+        label_type="klabel_frame"
+    )
+    anns = filter_most_recent_anns(
+        nest_anns(annotations, nest_lf=False)
+    )  # [image][category][#]
+
+    pks_to_return = set()
+    include_categories = set(include_categories)
+    exclude_categories = set(exclude_categories)
+    for di_pk, anns_by_cat in anns.items():
+        include = False
+        exclude = False
+        for cat, ann_list in anns_by_cat.items():
+            for ann in ann_list:
+                label_value = json.loads(ann.label_data)
+                if label_value["value"] != LabelType.positive.value:
+                    continue
+
+                if cat in include_categories:
+                    include = True
+                else:  # cat in exclude_categories
+                    exclude = True
+                    break
+
+            if exclude:
+                break
+
+        if include and not exclude:
+            pks_to_return.add(di_pk)
+
+    return [di for di in dataset_items if di.pk in pks_to_return]
+
+
+@api_view(["GET"])
+@csrf_exempt
+def query_knn_v2(request, dataset_name):
+    index_id = request.GET["index_id"]
+    image_ids = request.GET["image_ids"].split(",")
+    num_results = int(request.GET.get("num", 1000))
+
+    dataset = Dataset.objects.get(name=dataset_name)
+    dataset_items = DatasetItem.objects.filter(pk__in=image_ids)
+    dataset_item_identifiers = [di.identifier for di in dataset_items]
+
+    params = {
+        "index_id": index_id,
+        "num_results": num_results,
+        "identifiers": dataset_item_identifiers,
+    }
+    r = requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/query_knn_v2",
+        json=params,
+    )
+    response_data = r.json()
+    response = process_image_query_results(
+        request,
+        dataset,
+        response_data,
+        filtered_images_v2
+    )
+    return JsonResponse(response)
+
+
+@api_view(["GET"])
+@csrf_exempt
+def get_next_images_v2(request, dataset_name, dataset=None):
+    if not dataset:
+        dataset = get_object_or_404(Dataset, name=dataset_name)
+
+    bucket_name = dataset.directory[len("gs://"):].split("/")[0]
+    path_template = "https://storage.googleapis.com/{:s}/".format(bucket_name) + "{:s}"
+    offset_to_return = int(request.GET.get("offset", 0))
+    num_to_return = int(request.GET.get("num", 1000))
+    index_id = request.GET["index_id"]
+
+    all_images = filtered_images_v2(request, dataset)
+    ret_images = all_images[
+        offset_to_return : offset_to_return + num_to_return
+    ]
+
+    identifiers = [di.identifier for di in ret_images]
+    params = {
+        "index_id": index_id,
+        "identifiers": identifiers,
+    }
+    r = requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/perform_clustering",
+        json=params,
+    )
+    clustering_data = r.json()
+
+    dataset_item_paths = [
+        (di.path if di.path.find("http") != -1 else path_template.format(di.path))
+        for di in ret_images
+    ]
+    dataset_item_identifiers = [di.pk for di in ret_images]
+
+    return JsonResponse({
+        "paths": dataset_item_paths,
+        "identifiers": dataset_item_identifiers,
+        "num_total": len(all_images),
+        "clustering": clustering_data["clustering"],
+    })
+
+
+# TODO(mihirg): Make this faster
+@api_view(["GET"])
+@csrf_exempt
+def get_dataset_info_v2(request, dataset_name):
+    dataset = Dataset.objects.get(name=dataset_name)
+
+    annotations = Annotation.objects.filter(
+        dataset_item__in=dataset.datasetitem_set.filter()
+    )
+    categories = set()
+    for ann in annotations:
+        categories.add(ann.label_category)
+    categories = sorted(list(categories))
+
+    return JsonResponse({
+        "categories": categories,
+        "index_id": dataset.index_id,
+        "num_images": dataset.datasetitem_set.filter(google=False).count(),
+        "num_google": dataset.datasetitem_set.filter(google=True).count()
+    })
