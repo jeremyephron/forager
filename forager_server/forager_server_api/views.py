@@ -65,8 +65,8 @@ def filter_most_recent_anns(nested_anns):
             if ann.label_type == 'klabel_frame':
                 if most_recent is None or ann.created > most_recent.created:
                     most_recent = ann
-                else:
-                    filt_anns.append(ann)
+            else:
+                filt_anns.append(ann)
         if most_recent:
             filt_anns.append(most_recent)
         return filt_anns
@@ -1075,6 +1075,28 @@ def active_batch(request, dataset_name):
 #
 
 
+def get_tags_from_annotations_v2(annotations):
+    anns = filter_most_recent_anns(
+        nest_anns(annotations, nest_lf=False)
+    )  # [image][category][#]
+
+    tag_anns_by_pk = defaultdict(list)
+    for di_pk, anns_by_cat in anns.items():
+        for cat, ann_list in anns_by_cat.items():
+            assert len(ann_list) == 1  # should only be one latest per-frame annotation
+            for ann in ann_list:
+                label_data = json.loads(ann.label_data)
+                if label_data["value"] != PerFrameLabelValue.positive.value:
+                    continue
+                tag_anns_by_pk[di_pk].append(ann)
+
+    tags_by_pk = {}
+    for pk, tag_anns in tags_by_pk.items():
+        sorted_tag_anns = sorted(tag_anns, key=lambda a: a.created)  # oldest first
+        tags_by_pk[pk] = [a.label_category for a in sorted_tag_anns]
+    return tags_by_pk
+
+
 def filtered_images_v2(request, dataset, path_filter=None):
     include_categories = {c for c in request.GET.get("include", "").split(",") if c}
     exclude_categories = {c for c in request.GET.get("exclude", "").split(",") if c}
@@ -1092,28 +1114,18 @@ def filtered_images_v2(request, dataset, path_filter=None):
     annotations = Annotation.objects.filter(
         dataset_item__in=dataset_items, label_type="klabel_frame"
     )
-    anns = filter_most_recent_anns(
-        nest_anns(annotations, nest_lf=False)
-    )  # [image][category][#]
+    tags_by_pk = get_tags_from_annotations_v2(annotations)
 
     filtered = []
     for di in dataset_items:
         include = not include_categories  # include everything if no explicit filter
         exclude = False
-        for cat, ann_list in anns[di.pk].items():
-            for ann in ann_list:
-                label_data = json.loads(ann.label_data)
-                if label_data["value"] != PerFrameLabelValue.positive.value:
-                    continue
-
-                if cat in exclude_categories:
-                    exclude = True
-                    break
-                elif cat in include_categories:
-                    include = True
-
-            if exclude:
+        for cat in tags_by_pk[di.pk]:
+            if cat in exclude_categories:
+                exclude = True
                 break
+            elif cat in include_categories:
+                include = True
 
         if include and not exclude:
             filtered.append(di)
@@ -1219,11 +1231,9 @@ def get_dataset_info_v2(request, dataset_name):
     annotations = Annotation.objects.filter(
         dataset_item__in=dataset.datasetitem_set.filter()
     )
-    categories = set()
-    for ann in annotations:
-        categories.add(ann.label_category)
-    categories = sorted(list(filter(bool, categories)))
-
+    categories = sorted(
+        list({ann.label_category for ann in annotations if ann.label_category})
+    )
     return JsonResponse(
         {
             "categories": categories,
@@ -1237,73 +1247,55 @@ def get_dataset_info_v2(request, dataset_name):
 @api_view(["GET"])
 @csrf_exempt
 def get_annotations_v2(request):
-    identifiers = [i for i in request.GET["identifiers"].split(",") if i]
-    if not identifiers:
+    image_identifiers = [i for i in request.GET["identifiers"].split(",") if i]
+    if not image_identifiers:
         return JsonResponse({})
 
-    anns = Annotation.objects.filter(
-        dataset_item__in=DatasetItem.objects.filter(pk__in=identifiers),
+    annotations = Annotation.objects.filter(
+        dataset_item__in=DatasetItem.objects.filter(pk__in=image_identifiers),
         label_type="klabel_frame",
     )
+    tags_by_pk = get_tags_from_annotations_v2(annotations)
+    return JsonResponse(tags_by_pk)
 
-    data = defaultdict(list)
-    for ann in anns:
-        label_data = json.loads(ann.label_data)
-        if (
-            label_data["value"] == PerFrameLabelValue.positive.value
-            and ann.label_category
-        ):
-            data[ann.dataset_item.pk].append(
-                {
-                    "category": ann.label_category,
-                    "id": ann.pk,
-                }
-            )
 
-    return JsonResponse(data)
+# TODO(mihirg): Consider filtering by, e.g., major version in methods that query
+# Annotations
+ANN_VERSION = "2.0.1"
 
 
 @api_view(["POST"])
 @csrf_exempt
-def add_annotation_v2(request, image_identifier):
+def add_annotations_v2(request):
     payload = json.loads(request.body)
+    image_identifiers = payload["identifiers"]
+    if not image_identifiers:
+        return JsonResponse({"created": 0})
 
     user = payload["user"]
     category = payload["category"]
+    value = PerFrameLabelValue[payload["value"]].value
     annotation = json.dumps(
         {
             "type": 0,  # full-frame
-            "value": PerFrameLabelValue.positive.value,
-            "mode": "tag",
-            "version": "2.0.0",
+            "value": value,
+            "mode": "tag" if len(image_identifiers) == 1 else "tag-bulk",
+            "version": ANN_VERSION,
         }
     )
 
-    dataset_item = DatasetItem.objects.get(pk=image_identifier)
-    ann = Annotation(
-        dataset_item=dataset_item,
-        label_function=user,
-        label_category=category,
-        label_type="klabel_frame",
-        label_data=annotation,
+    dataset_items = DatasetItem.objects.get(pk__in=image_identifiers)
+    Annotation.objects.bulk_create(
+        (
+            Annotation(
+                dataset_item=di,
+                label_function=user,
+                label_category=category,
+                label_type="klabel_frame",
+                label_data=annotation,
+            )
+            for di in dataset_items
+        )
     )
-    ann.save()
 
-    ann_identifier = ann.pk
-    return HttpResponse(ann_identifier)
-
-
-@api_view(["DELETE"])
-@csrf_exempt
-def delete_annotation_v2(request, ann_identifier):
-    try:
-        Annotation.objects.get(pk=ann_identifier).delete()
-        return HttpResponse(status=status.HTTP_204_NO_CONTENT)
-    except ObjectDoesNotExist as e:
-        return JsonResponse(
-            {"error": str(e)}, safe=False, status=status.HTTP_404_NOT_FOUND
-        )
-    except Exception as e:
-        return JsonResponse(
-            {"error": str(e)}, safe=False, status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+    return JsonResponse({"created": len(image_identifiers)})
