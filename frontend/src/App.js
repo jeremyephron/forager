@@ -17,6 +17,7 @@ import {
 } from "reactstrap";
 import { Typeahead } from "react-bootstrap-typeahead";
 import { ReactSVG } from "react-svg";
+
 import fromPairs from "lodash/fromPairs";
 import toPairs from "lodash/toPairs";
 
@@ -43,9 +44,6 @@ const endpoints = fromPairs(toPairs({
   getDatasetInfo: 'get_dataset_info_v2',
   getNextImages: 'get_next_images_v2',
   queryKnn: 'query_knn_v2',
-  getAnnotations: 'get_annotations_v2',
-  addAnnotation: 'add_annotation_v2',
-  deleteAnnotation: 'delete_annotation_v2',
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
 const App = () => {
@@ -70,6 +68,13 @@ const App = () => {
     setLoginIsOpen(false);
     e.preventDefault();
   }
+
+  //
+  // CLUSTER FOCUS MODAL
+  //
+
+  const [selection, setSelection] = useState({});
+  const [clusterIsOpen, setClusterIsOpen] = useState(false);
 
   //
   // DATA CONNECTIONS
@@ -104,7 +109,6 @@ const App = () => {
   const [knnImage, setKnnImage] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [queryResultData, setQueryResultData] = useState({images: [], clustering: []});
-  const [queryAnnotationData, setQueryAnnotationData] = useState({});
 
   const runQuery = async () => {
     let url;
@@ -134,9 +138,11 @@ const App = () => {
       let id = filename.substring(0, filename.indexOf("."));
       return {
         name: filename,
-        url: path,
+        fullResSrc: path,
         id: results.identifiers[i],
-        thumb: `https://storage.googleapis.com/foragerml/thumbnails/${datasetInfo.index_id}/${id}.jpg`,
+        src: `https://storage.googleapis.com/foragerml/thumbnails/${datasetInfo.index_id}/${id}.jpg`,
+        width: 300,
+        height: 200,
       };
     });
 
@@ -147,14 +153,6 @@ const App = () => {
       clustering: results.clustering,
     });
     setIsLoading(false);
-
-    let annotationsUrl = new URL(endpoints.getAnnotations);
-    annotationsUrl.search = new URLSearchParams({
-      identifiers: results.identifiers
-    }).toString();
-    setQueryAnnotationData(await fetch(annotationsUrl, {
-      method: "GET",
-    }).then(r => r.json()));
   };
   useEffect(() => {
     if (isLoading) runQuery();
@@ -192,82 +190,9 @@ const App = () => {
   }
   useEffect(recluster, [queryResultData, setClusters]);
 
-  // Add or delete tags whenever
-  const onTagsChanged = async (image, oldTags, newStringTags) => {
-    oldTags = fromPairs(oldTags.map(tagObj => [tagObj.category, tagObj]));
-    const newTags = await Promise.all(newStringTags.map(async t => {
-      const oldTagObj = oldTags[t];
-      if (oldTagObj) {
-        delete oldTags.t;
-        return oldTagObj;
-      }
-
-      // This tag must have been added
-      if (!datasetInfo.categories.includes(t)) {
-        setDatasetInfo({...datasetInfo, categories: [...datasetInfo.categories, t]});
-      }
-
-      const addUrl = new URL(`${endpoints.addAnnotation}/${image.id}`);
-      const body = {
-        user: username,
-        category: t,
-      }
-      const id = await fetch(addUrl, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(body),
-      }).then(response => response.text());
-      return {
-        id,
-        category: t,
-      };
-    }));
-
-    // Any remaining tags in oldTags must have been removed
-    for (const [_, {id}] of Object.entries(oldTags)) {
-      const deleteUrl = new URL(`${endpoints.deleteAnnotation}/${id}`);
-      fetch(deleteUrl, {
-        method: "DELETE",
-      });
-    }
-
-    let newAnnotationData = {...queryAnnotationData};
-    newAnnotationData[image.id] = newTags;
-    setQueryAnnotationData(newAnnotationData);
-  }
-
   //
-  // CLUSTER FOCUS MODAL
+  // RENDERING
   //
-
-  const [selection, setSelection] = useState({});
-  const [clusterIsOpen, setClusterIsOpen] = useState(false);
-
-  const handleKeyDown = useCallback(e => {
-    if (clusterIsOpen) {
-      const { key } = e;
-      let caught = true;
-      if (key === "ArrowDown" || (clusteringStrength == 0 && key === "ArrowRight")) {
-        setSelection({cluster: Math.min(selection.cluster + 1, clusters.length - 1), image: 0});
-      } else if (key === "ArrowUp" || (clusteringStrength == 0 && key === "ArrowLeft")) {
-        setSelection({cluster: Math.max(selection.cluster - 1, 0), image: 0});
-      } else if (key === "ArrowRight") {
-        setSelection({cluster: selection.cluster, image: Math.min(selection.image + 1, clusters[selection.cluster].length - 1)});
-      } else if (key === "ArrowLeft") {
-        setSelection({cluster: selection.cluster, image: Math.max(selection.image - 1, 0)});
-      } else {
-        caught = false;
-      }
-      if (caught) e.preventDefault();
-    }
-  }, [clusterIsOpen, clusteringStrength, setSelection, selection]);
-
-  useEffect(() => {
-    document.addEventListener("keydown", handleKeyDown)
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown)
-    }
-  }, [handleKeyDown]);
 
   return (
     <div className={`main ${isLoading ? "loading" : ""}`}>
@@ -313,11 +238,12 @@ const App = () => {
         isImageOnly={clusteringStrength == 0}
         isReadOnly={!!!(username)}
         selection={selection}
+        setSelection={setSelection}
         clusters={clusters}
         findSimilar={findSimilar}
         tags={datasetInfo.categories}
-        annotations={queryAnnotationData}
-        onTagsChanged={onTagsChanged}
+        setTags={(tags) => setDatasetInfo({...datasetInfo, categories: tags})}
+        username={username}
       />
       <Navbar color="primary" className="text-light mb-2" dark>
         <Container fluid>
@@ -422,7 +348,7 @@ const App = () => {
                 <ImageStack
                   id={i}
                   onClick={() => {
-                    setSelection({cluster: i, image: 0});
+                    setSelection({cluster: i});
                     setClusterIsOpen(true);
                   }}
                   images={images}
