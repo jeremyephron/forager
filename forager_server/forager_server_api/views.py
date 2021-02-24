@@ -1083,6 +1083,7 @@ def get_tags_from_annotations_v2(annotations):
     tag_anns_by_pk = defaultdict(list)
     for di_pk, anns_by_cat in anns.items():
         for cat, ann_list in anns_by_cat.items():
+            print(cat)
             assert len(ann_list) == 1  # should only be one latest per-frame annotation
             for ann in ann_list:
                 label_data = json.loads(ann.label_data)
