@@ -1093,10 +1093,9 @@ def get_tags_from_annotations_v2(annotations):
                 tag_anns_by_pk[di_pk].append(ann)
 
     tags_by_pk = {}
-    for pk, tag_anns in tags_by_pk.items():
+    for pk, tag_anns in tag_anns_by_pk.items():
         sorted_tag_anns = sorted(tag_anns, key=lambda a: a.created)  # oldest first
         tags_by_pk[pk] = [a.label_category for a in sorted_tag_anns]
-    print(tags_by_pk)
     return tags_by_pk
 
 
