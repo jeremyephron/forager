@@ -1286,7 +1286,7 @@ def add_annotations_v2(request):
         }
     )
 
-    dataset_items = DatasetItem.objects.get(pk__in=image_identifiers)
+    dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
     Annotation.objects.bulk_create(
         (
             Annotation(
