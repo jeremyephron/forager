@@ -1122,7 +1122,7 @@ def filtered_images_v2(request, dataset, path_filter=None):
     for di in dataset_items:
         include = not include_categories  # include everything if no explicit filter
         exclude = False
-        for cat in tags_by_pk[di.pk]:
+        for cat in tags_by_pk.get(di.pk, []):
             if cat in exclude_categories:
                 exclude = True
                 break
