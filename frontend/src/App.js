@@ -104,6 +104,7 @@ const App = () => {
   const [datasetExcludeTags, setDatasetExcludeTags] = useState([]);
   const [googleQuery, setGoogleQuery] = useState("");
   const [orderingMode, setOrderingMode] = useState(orderingModes[0].id);
+  const [orderByClusterSize, setOrderByClusterSize] = useState(false);
   const [clusteringStrength, setClusteringStrength] = useState(50);
 
   const [knnImage, setKnnImage] = useState({});
@@ -185,10 +186,11 @@ const App = () => {
       }
       const clusters = ds.extract();
       ds.destroy();
+      if (orderByClusterSize) clusters.sort((a, b) => b.length - a.length);
       setClusters(clusters);
     }
   }
-  useEffect(recluster, [queryResultData, setClusters]);
+  useEffect(recluster, [queryResultData, setClusters, orderByClusterSize]);
 
   //
   // RENDERING
@@ -330,14 +332,28 @@ const App = () => {
                 </select>
                 <ReactSVG className="icon" src="assets/arrow-caret.svg" />
               </FormGroup>
-              <Button color="primary" className="mr-4" onClick={() => setIsLoading(true)}>Run query</Button>
-              <div>
-                <span className="text-nowrap">Clustering strength:</span>
-                <input className="custom-range" type="range" min="0" max="100"
-                  value={clusteringStrength}
-                  onChange={e => setClusteringStrength(e.target.value)}
-                  onMouseUp={recluster} />
+              <Button color="primary" onClick={() => setIsLoading(true)}>Run query</Button>
+            </Form>
+            <Form className="mt-2 d-flex flex-row align-items-center">
+              <div className="custom-switch mr-5 ml-auto">
+                <Input type="checkbox" className="custom-control-input"
+                  id="order-by-cluster-size-switch"
+                  value={orderByClusterSize}
+                  onChange={(e) => setOrderByClusterSize(e.target.checked)}
+                />
+                <label className="custom-control-label text-nowrap" for="order-by-cluster-size-switch">
+                  Order by cluster size
+                </label>
               </div>
+              <label for="cluster-strength-slider" className="mb-0 mr-2 text-nowrap">
+                Clustering strength:
+              </label>
+              <input className="custom-range" type="range" min="0" max="100"
+                id="cluster-strength-slider"
+                value={clusteringStrength}
+                onChange={e => setClusteringStrength(e.target.value)}
+                onMouseUp={recluster}
+              />
             </Form>
           </Container>
         </div>

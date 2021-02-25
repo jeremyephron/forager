@@ -203,7 +203,7 @@ const ClusterModal = ({
       toggle={() => setIsOpen(false)}
       modalTransition={{ timeout: 25 }}
       backdropTransition={{ timeout: 75 }}
-      size="lg"
+      size="xl"
       className={isLoading ? "loading" : ""}
     >
       {(selectedCluster !== undefined) && <>

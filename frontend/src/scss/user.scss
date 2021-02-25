@@ -34,7 +34,7 @@ html, body, #root, .main {
 }
 
 .query-container {
-  padding-top: 0.25rem;
+  padding-top: 0.5rem;
   padding-bottom: 1.5rem;
   position: sticky;
   top: 0;
@@ -44,6 +44,10 @@ html, body, #root, .main {
 
   select {
     width: 9rem;
+  }
+
+  .custom-range {
+    width: 10rem;
   }
 }
 
