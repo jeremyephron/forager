@@ -1197,8 +1197,9 @@ def query_knn_v2(request, dataset_name):
     num_results = int(request.GET.get("num", 1000))
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
-    dataset_items = DatasetItem.objects.filter(pk__in=image_ids)
-    dataset_item_internal_identifiers = [di.identifier for di in dataset_items]
+    dataset_item_internal_identifiers = DatasetItem.objects.filter(
+        pk__in=image_ids
+    ).values_list("identifier", flat=True)
 
     params = {
         "index_id": index_id,
@@ -1238,7 +1239,7 @@ def get_next_images_v2(request, dataset_name, dataset=None):
         next_image_pks = random.sample(
             all_image_pks, min(len(all_image_pks), num_to_return)
         )
-        next_images = DatasetItem.objects.filter(pk__in=next_image_pks)
+        next_images = DatasetItem.objects.in_bulk(next_image_pks).values()
     else:
         next_images = all_images[offset_to_return : offset_to_return + num_to_return]
     return JsonResponse(
