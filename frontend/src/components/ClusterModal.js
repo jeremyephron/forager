@@ -190,7 +190,11 @@ const ClusterModal = ({
   let header;
   if (selectedCluster !== undefined) {
     header = `${isImageOnly ? "Image" : "Cluster"} ${selection.cluster + 1} of ${clusters.length}`;
-    if (!isImageOnly && !isClusterView) header += `, image ${selection.image + 1} of ${clusters[selection.cluster].length}`;
+    if (isClusterView) {
+      header += ` (${selectedCluster.length} image${selectedCluster.length !== 1 ? "s" : ""})`;
+    } else if (!isImageOnly) {
+      header += `, image ${selection.image + 1} of ${clusters[selection.cluster].length}`;
+    }
   }
 
   return (
@@ -233,7 +237,9 @@ const ClusterModal = ({
                 onBlur={() => typeaheadRef.current.hideMenu()}
               />
               {(selectedImage !== undefined) &&
-                <Button color="warning" className="ml-2" onClick={findSimilar}>Find similar images</Button>}
+                <Button color="warning" className="ml-2" onClick={() => findSimilar(selectedImage)}>
+                  Find similar images
+                </Button>}
             </FormGroup>
           </Form>
           {selectedImage !== undefined ?

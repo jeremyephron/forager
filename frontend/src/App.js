@@ -159,8 +159,8 @@ const App = () => {
   }, [isLoading]);
 
   // Run KNN queries whenever user clicks "find similar" button
-  const findSimilar = () => {
-    setKnnImage(clusters[selection.cluster][selection.image]);
+  const findSimilar = (image) => {
+    setKnnImage(image);
     setOrderingMode("knn");
     setDatasetIncludeTags([]);
     setDatasetExcludeTags([]);
