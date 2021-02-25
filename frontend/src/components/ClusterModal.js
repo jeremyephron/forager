@@ -245,8 +245,8 @@ const ClusterModal = ({
       toggle={() => setIsOpen(false)}
       modalTransition={{ timeout: 25 }}
       backdropTransition={{ timeout: 75 }}
-      size="xl"
-      className={isLoading ? "loading" : ""}
+      size="full"
+      className={`cluster-modal ${isLoading ? "loading" : ""}`}
     >
       {(selectedCluster !== undefined) && <>
         <ModalHeader toggle={() => setIsOpen(false)}>
@@ -291,7 +291,7 @@ const ClusterModal = ({
               src={selectedImage.src}
               placeholder={selectedImage.thumb}
             >
-              {src => <img className="w-100" src={src} />}
+              {src => <img className="main w-100" src={src} />}
             </ProgressiveImage> :
             <>
               <div className="mb-1">
