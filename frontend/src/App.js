@@ -163,8 +163,6 @@ const App = () => {
   const findSimilar = (image) => {
     setKnnImage(image);
     setOrderingMode("knn");
-    setDatasetIncludeTags([]);
-    setDatasetExcludeTags([]);
     setIsLoading(true);
   }
 
