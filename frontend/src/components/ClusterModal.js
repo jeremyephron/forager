@@ -54,6 +54,7 @@ const ClusterModal = ({
   const isClusterView = (!isImageOnly &&
                          selectedCluster !== undefined &&
                          selectedImage === undefined);
+  const isImageView = !isImageOnly && !isClusterView;
 
   //
   // DATA CONNECTIONS
@@ -139,29 +140,41 @@ const ClusterModal = ({
     if (!isOpen) return;
     const { key } = e;
     let caught = true;
-    if (key === "ArrowDown" || ((isImageOnly || isClusterView) && key === "ArrowRight")) {
+    if (isClusterView && key === "ArrowDown") {
+      // Switch to image view
       setSelection({
-        cluster: Math.min(selection.cluster + 1, clusters.length - 1),
-        image: selection.image && 0
+        cluster: selection.cluster,
+        image: 0
       });
-    } else if (key === "ArrowUp" || ((isImageOnly || isClusterView) && key === "ArrowLeft")) {
+    } else if (isImageView && key === "ArrowUp") {
+      // Switch to cluster view
       setSelection({
-        cluster: Math.max(selection.cluster - 1, 0),
-        image: selection.image && 0
+        cluster: selection.cluster,
       });
-    } else if (key === "ArrowRight") {
+    } else if (isImageView && key === "ArrowLeft") {
+      // Previous image
+      setSelection({
+        cluster: selection.cluster,
+        image: Math.max(selection.image - 1, 0)
+      });
+    } else if (isImageView && key === "ArrowRight") {
+      // Next image
       setSelection({
         cluster: selection.cluster,
         image: Math.min(selection.image + 1, clusters[selection.cluster].length - 1)
       });
     } else if (key === "ArrowLeft") {
+      // Previous cluster
       setSelection({
-        cluster: selection.cluster,
-        image: Math.max(selection.image - 1, 0)
+        cluster: Math.max(selection.cluster - 1, 0),
+        image: selection.image && 0
       });
-    } else if (key === "c" && !isImageOnly && !isClusterView) {
-      clearImageSelection();
-    } else {
+    } else if (key === "ArrowRight") {
+      // Next cluster
+      setSelection({
+        cluster: Math.min(selection.cluster + 1, clusters.length - 1),
+      });
+    } else if (key !== "ArrowDown" && key !== "ArrowUp") {
       caught = false;
     }
     if (caught) {
@@ -170,12 +183,6 @@ const ClusterModal = ({
       typeaheadRef.current.hideMenu();
     }
   }, [isOpen, isImageOnly, isClusterView, clusters, selection, setSelection, typeaheadRef]);
-
-  const handleTypeaheadKeyDown = (e) => {
-    if (!isOpen) return;
-    const { key } = e;
-    if (key === "c") e.stopPropagation();
-  }
 
   useEffect(() => {
     document.addEventListener("keydown", handleKeyDown)
@@ -214,15 +221,15 @@ const ClusterModal = ({
 
         <ModalBody>
           <p>
-            <b>Key bindings: </b> <kbd>&uarr;</kbd> <kbd>&darr;</kbd>
-            {(isImageOnly || isClusterView) ? " or " : " between clusters, "}
-            <kbd>&larr;</kbd> <kbd>&rarr;</kbd> between
-            {isClusterView ? " clusters" : " images"}
-            {!isImageOnly && !isClusterView &&
-              <>, <kbd>c</kbd> to go <a href="#" onClick={clearImageSelection}>back to cluster view</a></>}
+            <b>Key bindings: </b>
+            <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to move between {isClusterView ? "clusters" : "images"}
+            {isClusterView && <>,{" "}
+              <kbd>&darr;</kbd> to go into image view</>}
+            {isImageView && <>,{" "}
+              <kbd>&uarr;</kbd> to go back to cluster view</>}
           </p>
           <Form>
-            <FormGroup className="d-flex flex-row align-items-center">
+            <FormGroup className="d-flex flex-row align-items-center mb-2">
               <Typeahead
                 multiple
                 allowNew
@@ -234,7 +241,6 @@ const ClusterModal = ({
                 selected={selectedTags}
                 onChange={onTagsChanged}
                 ref={typeaheadRef}
-                onKeyDown={handleTypeaheadKeyDown}
                 onBlur={() => typeaheadRef.current.hideMenu()}
               />
               {(isClusterView) ?
@@ -253,12 +259,20 @@ const ClusterModal = ({
             >
               {src => <img className="w-100" src={src} />}
             </ProgressiveImage> :
-            <Gallery
-              photos={selectedCluster}
-              targetRowHeight={140}
-              margin={1}
-              onClick={(_, {index}) => setSelection({...selection, image: index})}
-            />  // TODO(mihirg): Make images lazy load
+            <>
+              {/* <div className="mb-1"> */}
+              {/*   <span className="text-small font-weight-normal">Selected {selectedCluster.length} images</span> ( */}
+              {/*   <a href="#" className="text-small text-secondary">select all</a>, */}
+              {/*   <a href="#" className="text-small text-secondary"> deselect all</a>) */}
+              {/* </div> */}
+              <Gallery
+                photos={selectedCluster}
+                targetRowHeight={140}
+                margin={1}
+                onClick={(_, {index}) => setSelection({...selection, image: index})}
+              />
+              {/*TODO(mihirg): Make images lazy load */}
+            </>
           }
         </ModalBody>
       </>}
