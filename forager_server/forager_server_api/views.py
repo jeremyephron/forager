@@ -1102,10 +1102,15 @@ def get_tags_from_annotations_v2(annotations):
 def filtered_images_v2(request, dataset, path_filter=None):
     include_categories = {c for c in request.GET.get("include", "").split(",") if c}
     exclude_categories = {c for c in request.GET.get("exclude", "").split(",") if c}
+    subset_ids = [i for i in request.GET.get("subset", "").split(",") if i]
 
-    path_filter_kwargs = {"path__in": path_filter} if path_filter else {}
+    filter_kwargs = {}
+    if path_filter:
+        filter_kwargs["path__in"] = path_filter
+    if subset_ids:
+        filter_kwargs["pk__in"] = subset_ids
     dataset_items = DatasetItem.objects.filter(
-        dataset=dataset, google=False, **path_filter_kwargs
+        dataset=dataset, google=False, **filter_kwargs
     ).order_by("pk")
 
     if not include_categories and not exclude_categories:
