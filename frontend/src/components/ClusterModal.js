@@ -42,8 +42,11 @@ const ClusterModal = ({
   const selectedCluster = (selection.cluster !== undefined &&
                            selection.cluster < clusters.length) ?
                           clusters[selection.cluster] : undefined;
+  const isSingletonCluster = (selectedCluster !== undefined &&
+                              selectedCluster.length === 1);
+
   let selectedImage;
-  if (isImageOnly) {
+  if (isSingletonCluster) {
     selectedImage = (selectedCluster !== undefined) ? selectedCluster[0] : undefined;
   } else {
     selectedImage = (selectedCluster !== undefined &&
@@ -51,10 +54,9 @@ const ClusterModal = ({
                      selection.image < selectedCluster.length) ?
                     selectedCluster[selection.image] : undefined;
   }
-  const isClusterView = (!isImageOnly &&
-                         selectedCluster !== undefined &&
+  const isClusterView = (selectedCluster !== undefined &&
                          selectedImage === undefined);
-  const isImageView = !isImageOnly && !isClusterView;
+  const isImageView = !isSingletonCluster && !isClusterView;
 
   //
   // DATA CONNECTIONS
@@ -182,7 +184,7 @@ const ClusterModal = ({
       typeaheadRef.current.blur();
       typeaheadRef.current.hideMenu();
     }
-  }, [isOpen, isImageOnly, isClusterView, clusters, selection, setSelection, typeaheadRef]);
+  }, [isOpen, isClusterView, isImageView, clusters, selection, setSelection, typeaheadRef]);
 
   useEffect(() => {
     document.addEventListener("keydown", handleKeyDown)
@@ -199,8 +201,10 @@ const ClusterModal = ({
   if (selectedCluster !== undefined) {
     header = `${isImageOnly ? "Image" : "Cluster"} ${selection.cluster + 1} of ${clusters.length}`;
     if (isClusterView) {
-      header += ` (${selectedCluster.length} image${selectedCluster.length !== 1 ? "s" : ""})`;
-    } else if (!isImageOnly) {
+      header += ` (${selectedCluster.length} images)`;
+    } else if (isSingletonCluster && !isImageOnly) {
+      header += " (1 image)";
+    } else if (isImageView) {
       header += `, image ${selection.image + 1} of ${clusters[selection.cluster].length}`;
     }
   }
@@ -222,7 +226,7 @@ const ClusterModal = ({
         <ModalBody>
           <p>
             <b>Key bindings: </b>
-            <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to move between {isClusterView ? "clusters" : "images"}
+            <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to move between {(isImageView || isImageOnly) ? "images" : "clusters"}
             {isClusterView && <>,{" "}
               <kbd>&darr;</kbd> to go into image view</>}
             {isImageView && <>,{" "}
