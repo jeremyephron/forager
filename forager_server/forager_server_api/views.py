@@ -7,8 +7,10 @@ import random
 import requests
 import urllib.request
 
+from typing import List, Union
+
 from django.http import HttpRequest, HttpResponse, JsonResponse
-from django.db.models import Q
+from django.db.models import Q, QuerySet
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
@@ -1100,7 +1102,9 @@ def get_tags_from_annotations_v2(annotations):
     return tags_by_pk
 
 
-def filtered_images_v2(request, dataset, path_filter=None):
+def filtered_images_v2(
+    request, dataset, path_filter=None
+) -> Union[List[DatasetItem], QuerySet]:
     include_categories = {c for c in request.GET.get("include", "").split(",") if c}
     exclude_categories = {c for c in request.GET.get("exclude", "").split(",") if c}
     subset_ids = [i for i in request.GET.get("subset", "").split(",") if i]
@@ -1226,10 +1230,13 @@ def get_next_images_v2(request, dataset_name, dataset=None):
     order = request.GET.get("order", "id")
 
     all_images = filtered_images_v2(request, dataset)
-    if order == "random":
-        all_image_pks = all_images.values_list("pk", flat=True)
+    if order == "random":  # TODO(mihirg): pagination (offset) for random
+        if isinstance(all_images, QuerySet):
+            all_image_pks = list(all_images.values_list("pk", flat=True))
+        else:
+            all_image_pks = [di.pk for di in all_images]
         next_image_pks = random.sample(
-            list(all_image_pks), min(len(all_image_pks), num_to_return)
+            all_image_pks, min(len(all_image_pks), num_to_return)
         )
         next_images = DatasetItem.objects.filter(pk__in=next_image_pks)
     else:

@@ -35,8 +35,8 @@ const sources = [
 ]
 
 const orderingModes = [
-  {id: "id", label: "Dataset order"},
   {id: "random", label: "Random order"},
+  {id: "id", label: "Dataset order"},
   {id: "knn", label: "KNN", disabled: true},
 ]
 
@@ -105,7 +105,7 @@ const App = () => {
   const [googleQuery, setGoogleQuery] = useState("");
   const [orderingMode, setOrderingMode] = useState(orderingModes[0].id);
   const [orderByClusterSize, setOrderByClusterSize] = useState(false);
-  const [clusteringStrength, setClusteringStrength] = useState(50);
+  const [clusteringStrength, setClusteringStrength] = useState(20);
 
   const [knnImage, setKnnImage] = useState({});
   const [subset, setSubset_] = useState([]);
