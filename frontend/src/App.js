@@ -35,8 +35,8 @@ const sources = [
 ]
 
 const orderingModes = [
-  {id: "default", label: "Default"},
-  // {id: "random", label: "Random"},
+  {id: "id", label: "Dataset order"},
+  {id: "random", label: "Random order"},
   {id: "knn", label: "KNN", disabled: true},
 ]
 
@@ -125,10 +125,10 @@ const App = () => {
       subset: subset.map(im => im.id),
     };
 
-    if (source == "dataset" && orderingMode == "default") {
+    if (source === "dataset" && (orderingMode === "id" || orderingMode === "random")) {
       url = new URL(`${endpoints.getNextImages}/${datasetName}`);
-      url.search = new URLSearchParams(params).toString();
-    } else if (source == "dataset" && orderingMode == "knn") {
+      url.search = new URLSearchParams({...params, order: orderingMode}).toString();
+    } else if (source === "dataset" && orderingMode === "knn") {
       url = new URL(`${endpoints.queryKnn}/${datasetName}`);
       url.search = new URLSearchParams({...params, image_ids: [knnImage.id]}).toString();
     } else {

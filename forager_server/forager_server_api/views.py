@@ -3,6 +3,7 @@ from google.cloud import storage
 from enum import Enum
 import json
 import os
+import random
 import requests
 import urllib.request
 
@@ -1222,9 +1223,13 @@ def get_next_images_v2(request, dataset_name, dataset=None):
 
     offset_to_return = int(request.GET.get("offset", 0))
     num_to_return = int(request.GET.get("num", 1000))
+    order = request.GET.get("order", "id")
 
     all_images = filtered_images_v2(request, dataset)
-    next_images = all_images[offset_to_return : offset_to_return + num_to_return]
+    if order == "random":
+        next_images = random.sample(all_images, num_to_return)
+    else:
+        next_images = all_images[offset_to_return : offset_to_return + num_to_return]
     return JsonResponse(
         build_result_set_v2(request, dataset, next_images, len(all_images))
     )
