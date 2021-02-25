@@ -296,7 +296,8 @@ const ClusterModal = ({
             <>
               <div className="mb-1">
                 <span className="text-small font-weight-normal">
-                  Selected {selectedCluster.length - Object.values(excludedImageIndexes).filter(Boolean).length} images
+                  Selected {selectedCluster.length - Object.values(excludedImageIndexes).filter(Boolean).length}{" "}
+                  of {selectedCluster.length} images
                 </span> (
                 <a href="#" className="text-small text-secondary" onClick={excludeNone}>select all</a>,
                 <a href="#" className="text-small text-secondary" onClick={excludeAll}> deselect all</a>)
