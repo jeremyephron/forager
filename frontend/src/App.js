@@ -180,12 +180,13 @@ const App = () => {
     if (clusteringStrength == 0) {
       setClusters(queryResultData.images.map(i => [i]));
     } else {
+      const thresh = Math.pow(clusteringStrength / 100, 2);
       let ds = disjointSet();
       for (let image of queryResultData.images) {
         ds.add(image);
       }
       for (let [a, b, dist] of queryResultData.clustering) {
-        if (dist > clusteringStrength / 100) break;
+        if (dist > thresh) break;
         ds.union(queryResultData.images[a], queryResultData.images[b]);
       }
       const clusters = ds.extract();
