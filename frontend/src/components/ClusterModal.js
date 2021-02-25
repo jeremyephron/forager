@@ -9,7 +9,8 @@ import {
 } from "reactstrap";
 import { Typeahead } from "react-bootstrap-typeahead";
 import ProgressiveImage from "react-progressive-image";
-import Gallery from "react-photo-gallery";
+import { faMousePointer } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
 import fromPairs from "lodash/fromPairs";
 import toPairs from "lodash/toPairs";
@@ -17,6 +18,8 @@ import difference from "lodash/difference";
 import intersection from "lodash/intersection";
 import uniq from "lodash/uniq";
 import union from "lodash/union";
+
+import ImageGrid from "./ImageGrid";
 
 const endpoints = fromPairs(toPairs({
   getAnnotations: 'get_annotations_v2',
@@ -76,7 +79,38 @@ const ClusterModal = ({
     }).then(r => r.json()));
   }, [clusters]);
 
-  useEffect(() => console.log(annotations), [annotations]);
+  //
+  // IMAGE SELECTION
+  //
+
+  const [excludedImageIndexes, setExcludedImageIndexes] = useState({});
+
+  const excludeNone = (e) => {
+    setExcludedImageIndexes({});
+    if (e) e.preventDefault();
+  };
+
+  const excludeAll = (e) => {
+    setExcludedImageIndexes(fromPairs(selectedCluster.map((_, i) => [i, true])));
+    if (e) e.preventDefault();
+  };
+
+  useEffect(() => {
+    excludeNone();
+  }, [selectedCluster]);
+
+  const handleGalleryClick = (e, i) => {
+    if (e.shiftKey) {
+      let newExcludedImageIndexes = {...excludedImageIndexes};
+      newExcludedImageIndexes[i] = !!!(newExcludedImageIndexes[i]);  // toggle
+      setExcludedImageIndexes(newExcludedImageIndexes);
+    } else {
+      setSelection({
+        cluster: selection.cluster,
+        image: i
+      });
+    }
+  };
 
   //
   // TAGGING
@@ -89,7 +123,8 @@ const ClusterModal = ({
   if (selectedImage !== undefined) {
     selectedTags = getImageTags(selectedImage);
   } else if (selectedCluster !== undefined) {
-    selectedTags = intersection(...(selectedCluster.map(getImageTags)));
+    selectedTags = intersection(...(selectedCluster.flatMap((im, i) =>
+      excludedImageIndexes[i] ? [] : [getImageTags(im)])));
   }
 
   // Add or remove tags whenever the typeahead value changes
@@ -112,7 +147,7 @@ const ClusterModal = ({
     const added = difference(newTags, selectedTags);
     const deleted = difference(selectedTags, newTags);
     const imageIds = (selectedImage !== undefined) ? [selectedImage.id] :
-                                                     selectedCluster.map(im => im.id);
+      selectedCluster.flatMap((im, i) => excludedImageIndexes[i] ? [] : [im.id]);
 
     let newAnnotations = {...annotations};
     for (const id of imageIds) {
@@ -127,11 +162,6 @@ const ClusterModal = ({
     await Promise.all([...addPromises, ...deletePromises]);
 
     setIsLoading(false);
-  }
-
-  const clearImageSelection = (e) => {
-    setSelection({cluster: selection.cluster});
-    if (e) e.preventDefault();
   }
 
   //
@@ -228,7 +258,7 @@ const ClusterModal = ({
             <b>Key bindings: </b>
             <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to move between {(isImageView || isImageOnly) ? "images" : "clusters"}
             {isClusterView && <>,{" "}
-              <kbd>&darr;</kbd> to go into image view</>}
+              <kbd>&darr;</kbd> to go into image view, <kbd>shift</kbd> <FontAwesomeIcon icon={faMousePointer} /> to toggle image selection</>}
             {isImageView && <>,{" "}
               <kbd>&uarr;</kbd> to go back to cluster view</>}
           </p>
@@ -240,7 +270,7 @@ const ClusterModal = ({
                 id="image-tag-bar"
                 className="typeahead-bar"
                 placeholder="Image tags"
-                disabled={isReadOnly}
+                disabled={isReadOnly || (isClusterView && selectedCluster.length === Object.values(excludedImageIndexes).filter(Boolean).length)}
                 options={tags}
                 selected={selectedTags}
                 onChange={onTagsChanged}
@@ -258,24 +288,26 @@ const ClusterModal = ({
           </Form>
           {selectedImage !== undefined ?
             <ProgressiveImage
-              src={selectedImage.fullResSrc}
-              placeholder={selectedImage.src}
+              src={selectedImage.src}
+              placeholder={selectedImage.thumb}
             >
               {src => <img className="w-100" src={src} />}
             </ProgressiveImage> :
             <>
-              {/* <div className="mb-1"> */}
-              {/*   <span className="text-small font-weight-normal">Selected {selectedCluster.length} images</span> ( */}
-              {/*   <a href="#" className="text-small text-secondary">select all</a>, */}
-              {/*   <a href="#" className="text-small text-secondary"> deselect all</a>) */}
-              {/* </div> */}
-              <Gallery
-                photos={selectedCluster}
-                targetRowHeight={140}
-                margin={1}
-                onClick={(_, {index}) => setSelection({...selection, image: index})}
+              <div className="mb-1">
+                <span className="text-small font-weight-normal">
+                  Selected {selectedCluster.length - Object.values(excludedImageIndexes).filter(Boolean).length} images
+                </span> (
+                <a href="#" className="text-small text-secondary" onClick={excludeNone}>select all</a>,
+                <a href="#" className="text-small text-secondary" onClick={excludeAll}> deselect all</a>)
+              </div>
+              <ImageGrid
+                images={selectedCluster}
+                onClick={handleGalleryClick}
+                selectedPred={i => !!!(excludedImageIndexes[i])}
+                minRowHeight={130}
+                imageAspectRatio={3/2}
               />
-              {/*TODO(mihirg): Make images lazy load */}
             </>
           }
         </ModalBody>

@@ -51,6 +51,21 @@ html, body, #root, .main {
   }
 }
 
+.image-grid {
+  img {
+    transition: opacity 0.2s;
+    opacity: 0.5;
+
+    &.selected {
+      opacity: 1.0;
+    }
+  }
+
+  a {
+    display: inline-block;
+  }
+}
+
 .stack-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, 215px);

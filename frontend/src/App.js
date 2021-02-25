@@ -144,11 +144,9 @@ const App = () => {
       let id = filename.substring(0, filename.indexOf("."));
       return {
         name: filename,
-        fullResSrc: path,
+        src: path,
         id: results.identifiers[i],
-        src: `https://storage.googleapis.com/foragerml/thumbnails/${datasetInfo.index_id}/${id}.jpg`,
-        width: 300,
-        height: 200,
+        thumb: `https://storage.googleapis.com/foragerml/thumbnails/${datasetInfo.index_id}/${id}.jpg`,
       };
     });
 
