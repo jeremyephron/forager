@@ -13,7 +13,8 @@ const ImageGrid = ({ images, onClick, minRowHeight, imageAspectRatio, selectedPr
 
   const imagesPerRowFloat = width / (minRowHeight * imageAspectRatio + MARGIN);
   const imagesPerRow = Math.floor(imagesPerRowFloat);
-  const imageWidth = Math.floor(imageAspectRatio * minRowHeight * imagesPerRowFloat / imagesPerRow);
+  const imageHeight = Math.floor(minRowHeight * imagesPerRowFloat / imagesPerRow);
+  const imageWidth = Math.floor(imageAspectRatio * imageHeight);
 
   useEffect(forceCheck, [images]);
 
@@ -21,7 +22,7 @@ const ImageGrid = ({ images, onClick, minRowHeight, imageAspectRatio, selectedPr
     <div className="image-grid w-100" ref={ref}>
       {images.map((im, i) =>
         <a href="#" onClick={(e) => handleClick(e, i)} style={{width: imageWidth, marginBottom: MARGIN, marginRight: MARGIN}}>
-          <LazyLoad scrollContainer=".modal">
+          <LazyLoad scrollContainer=".modal" height={imageHeight}>
             <img src={im.thumb}
               className={selectedPred(i) ? "selected" : ""}
             />
