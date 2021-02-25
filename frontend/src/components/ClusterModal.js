@@ -35,6 +35,7 @@ const ClusterModal = ({
   tags,
   setTags,
   username,
+  setSubset,
 }) => {
   const typeaheadRef = useRef();
 
@@ -236,7 +237,10 @@ const ClusterModal = ({
                 onKeyDown={handleTypeaheadKeyDown}
                 onBlur={() => typeaheadRef.current.hideMenu()}
               />
-              {(selectedImage !== undefined) &&
+              {(isClusterView) ?
+                <Button color="light" className="ml-2" onClick={() => setSubset(selectedCluster)}>
+                  Descend into cluster
+                </Button> :
                 <Button color="warning" className="ml-2" onClick={() => findSimilar(selectedImage)}>
                   Find similar images
                 </Button>}

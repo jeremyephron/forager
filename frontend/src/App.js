@@ -108,17 +108,22 @@ const App = () => {
   const [clusteringStrength, setClusteringStrength] = useState(50);
 
   const [knnImage, setKnnImage] = useState({});
+  const [subset, setSubset_] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [queryResultData, setQueryResultData] = useState({images: [], clustering: []});
 
   const runQuery = async () => {
+    setClusterIsOpen(false);
+    setSelection({});
+
     let url;
     let params = {
       num: 1000,
       index_id: datasetInfo.index_id,
       include: datasetIncludeTags,
       exclude: datasetExcludeTags,
-    }
+      subset: subset.map(im => im.id),
+    };
 
     if (source == "dataset" && orderingMode == "default") {
       url = new URL(`${endpoints.getNextImages}/${datasetName}`);
@@ -147,8 +152,6 @@ const App = () => {
       };
     });
 
-    setClusterIsOpen(false);
-    setSelection({});
     setQueryResultData({
       images,
       clustering: results.clustering,
@@ -158,6 +161,11 @@ const App = () => {
   useEffect(() => {
     if (isLoading) runQuery();
   }, [isLoading]);
+
+  const setSubset = (subset) => {
+    setSubset_(subset);
+    setIsLoading(true);
+  }
 
   // Run KNN queries whenever user clicks "find similar" button
   const findSimilar = (image) => {
@@ -244,6 +252,7 @@ const App = () => {
         tags={datasetInfo.categories}
         setTags={(tags) => setDatasetInfo({...datasetInfo, categories: tags})}
         username={username}
+        setSubset={setSubset}
       />
       <Navbar color="primary" className="text-light mb-2" dark>
         <Container fluid>
@@ -332,7 +341,13 @@ const App = () => {
               </FormGroup>
               <Button color="primary" onClick={() => setIsLoading(true)}>Run query</Button>
             </Form>
-            <Form className="mt-2 d-flex flex-row align-items-center">
+            <Form className="mt-2 mb-1 d-flex flex-row align-items-center">
+              {subset.length > 0 && <div className="rbt-token rbt-token-removeable alert-secondary">
+                Limited to subset of {subset.length} image{subset.length !== 1 && "s"}
+                <button aria-label="Remove" className="close rbt-close rbt-token-remove-button" type="button" onClick={() => setSubset([])}>
+                  <span aria-hidden="true">×</span><span className="sr-only">Remove</span>
+                </button>
+              </div>}
               <div className="custom-switch mr-5 ml-auto">
                 <Input type="checkbox" className="custom-control-input"
                   id="order-by-cluster-size-switch"

@@ -20,7 +20,7 @@ html, body, #root, .main {
   height: 100%;
 }
 
-.loading, .loading input {
+.loading, .loading input, .loading .stack {
   cursor: wait !important;
 }
 
@@ -35,10 +35,10 @@ html, body, #root, .main {
 
 .query-container {
   padding-top: 0.5rem;
-  padding-bottom: 1.5rem;
+  padding-bottom: 1.25rem;
   position: sticky;
   top: 0;
-  background: linear-gradient($primary-alt-lighter 75%, rgba($primary-alt-lighter, 0));
+  background: linear-gradient($primary-alt-lighter 85%, rgba($primary-alt-lighter, 0));
   z-index: 10;
   width: 100%;
 
