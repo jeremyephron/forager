@@ -1229,7 +1229,7 @@ def get_next_images_v2(request, dataset_name, dataset=None):
     if order == "random":
         all_image_pks = all_images.values_list("pk", flat=True)
         next_image_pks = random.sample(
-            all_image_pks, min(len(all_image_pks, num_to_return))
+            all_image_pks, min(len(all_image_pks), num_to_return)
         )
         next_images = DatasetItem.objects.filter(pk__in=next_image_pks)
     else:
