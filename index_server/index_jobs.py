@@ -371,4 +371,4 @@ class LocalFlatIndex:
             np.sum(buffer[:i], axis=1, out=a[:i])
             res[:i, i] = a[:i]
             res[i, :i] = a[:i]
-        return res
+        return np.sqrt(res)
