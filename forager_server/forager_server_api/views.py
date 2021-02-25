@@ -1239,7 +1239,8 @@ def get_next_images_v2(request, dataset_name, dataset=None):
         next_image_pks = random.sample(
             all_image_pks, min(len(all_image_pks), num_to_return)
         )
-        next_images = DatasetItem.objects.in_bulk(next_image_pks).values()
+        next_images_dict = DatasetItem.objects.in_bulk(next_image_pks)
+        next_images = [next_images_dict[pk] for pk in next_image_pks]  # preserve order
     else:
         next_images = all_images[offset_to_return : offset_to_return + num_to_return]
     return JsonResponse(
