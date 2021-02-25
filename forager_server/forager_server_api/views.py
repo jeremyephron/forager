@@ -1197,9 +1197,11 @@ def query_knn_v2(request, dataset_name):
     num_results = int(request.GET.get("num", 1000))
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
-    dataset_item_internal_identifiers = DatasetItem.objects.filter(
-        pk__in=image_ids
-    ).values_list("identifier", flat=True)
+    dataset_item_internal_identifiers = list(
+        DatasetItem.objects.filter(pk__in=image_ids).values_list(
+            "identifier", flat=True
+        )
+    )
 
     params = {
         "index_id": index_id,
