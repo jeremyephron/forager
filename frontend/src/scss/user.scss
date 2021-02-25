@@ -30,7 +30,7 @@ html, body, #root, .main {
 }
 
 .modal-full {
-  max-width: 95%;
+  max-width: calc(100% - 2.5rem);
   margin-left: auto;
   margin-right: auto;
 }
