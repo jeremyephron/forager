@@ -1079,9 +1079,7 @@ def active_batch(request, dataset_name):
 
 
 def get_tags_from_annotations_v2(annotations):
-    anns = filter_most_recent_anns(
-        nest_anns(annotations, nest_lf=False)
-    )  # [image][category][#]
+    anns = nest_anns(annotations, nest_lf=False)  # [image][category][#]
 
     tag_anns_by_pk = defaultdict(list)
     for di_pk, anns_by_cat in anns.items():
@@ -1123,11 +1121,18 @@ def filtered_images_v2(
 
     # TODO(mihirg, fpoms): Speed up by filtering positive labels without having to json
     # decode all annotations
-    annotations = Annotation.objects.filter(
-        dataset_item__in=dataset_items, label_type="klabel_frame"
+    annotations = (
+        Annotation.objects.filter(
+            dataset_item__in=dataset_items,
+            label_category__in=(list(include_categories) + list(exclude_categories)),
+            label_type="klabel_frame",
+        ).order_by(
+            "dataset_item", "label_category", "created"
+        ).distinct("dataset_item", "label_category")
     )
     tags_by_pk = get_tags_from_annotations_v2(annotations)
 
+    # TODO(mihirg, fpoms): Move all logic here into SQL query
     filtered = []
     for di in dataset_items:
         include = not include_categories  # include everything if no explicit filter
@@ -1299,6 +1304,7 @@ def add_annotations_v2(request):
     if not image_identifiers:
         return JsonResponse({"created": 0})
 
+    # TODO(mihirg): handle deletion as deleted tag, not negative
     user = payload["user"]
     category = payload["category"]
     value = PerFrameLabelValue[payload["value"]].value
