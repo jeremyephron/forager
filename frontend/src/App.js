@@ -351,7 +351,7 @@ const App = () => {
               <div className="custom-switch mr-5 ml-auto">
                 <Input type="checkbox" className="custom-control-input"
                   id="order-by-cluster-size-switch"
-                  value={orderByClusterSize}
+                  checked={orderByClusterSize}
                   onChange={(e) => setOrderByClusterSize(e.target.checked)}
                 />
                 <label className="custom-control-label text-nowrap" for="order-by-cluster-size-switch">
