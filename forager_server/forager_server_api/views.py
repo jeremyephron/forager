@@ -1127,7 +1127,7 @@ def filtered_images_v2(
             label_category__in=(list(include_categories) + list(exclude_categories)),
             label_type="klabel_frame",
         ).order_by(
-            "dataset_item", "label_category", "created"
+            "dataset_item", "label_category", "-created"
         ).distinct("dataset_item", "label_category")
     )
     tags_by_pk = get_tags_from_annotations_v2(annotations)
@@ -1287,7 +1287,7 @@ def get_annotations_v2(request):
         dataset_item__in=DatasetItem.objects.filter(pk__in=image_identifiers),
         label_type="klabel_frame",
     ).order_by(
-        "dataset_item", "label_category", "created"
+        "dataset_item", "label_category", "-created"
     ).distinct("dataset_item", "label_category")
     tags_by_pk = get_tags_from_annotations_v2(annotations)
     return JsonResponse(tags_by_pk)
