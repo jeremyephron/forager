@@ -280,10 +280,9 @@ const ClusterModal = ({
 
         <ModalBody>
           <p>
-            <b>Key bindings: </b>
             <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to move between {(isImageView || isImageOnly) ? "images" : "clusters"}
             {isClusterView && <>,{" "}
-              <kbd>&darr;</kbd> to go into image view, <kbd>shift</kbd> <FontAwesomeIcon icon={faMousePointer} /> to toggle image selection</>}
+              <kbd>&darr;</kbd> or <FontAwesomeIcon icon={faMousePointer} /> to go into image view, <kbd>shift</kbd> <FontAwesomeIcon icon={faMousePointer} /> to toggle image selection</>}
             {isImageView && <>,{" "}
               <kbd>&uarr;</kbd> to go back to cluster view, <kbd>s</kbd> or <FontAwesomeIcon icon={faMousePointer} /> to toggle image selection</>}
           </p>
