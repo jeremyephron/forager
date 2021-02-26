@@ -26,6 +26,12 @@ const endpoints = fromPairs(toPairs({
   addAnnotations: 'add_annotations_v2',
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
+const imageGridSizes = [
+  {label: "small", size: 125},
+  {label: "medium", size: 250},
+  {label: "large", size: 375},
+];
+
 const ClusterModal = ({
   isOpen,
   setIsOpen,
@@ -84,6 +90,7 @@ const ClusterModal = ({
   //
 
   const [excludedImageIndexes, setExcludedImageIndexes] = useState({});
+  const [imageGridSize, setImageGridSize_] = useState(imageGridSizes[0]);
 
   const excludeNone = (e) => {
     setExcludedImageIndexes({});
@@ -110,6 +117,11 @@ const ClusterModal = ({
         image: i
       });
     }
+  };
+
+  const setImageGridSize = (size, e) => {
+    setImageGridSize_(size);
+    e.preventDefault();
   };
 
   //
@@ -294,19 +306,23 @@ const ClusterModal = ({
               {src => <img className="main w-100" src={src} />}
             </ProgressiveImage> :
             <>
-              <div className="mb-1">
-                <span className="text-small font-weight-normal">
-                  Selected {selectedCluster.length - Object.values(excludedImageIndexes).filter(Boolean).length}{" "}
-                  of {selectedCluster.length} images
-                </span> (
-                <a href="#" className="text-small text-secondary" onClick={excludeNone}>select all</a>,
-                <a href="#" className="text-small text-secondary" onClick={excludeAll}> deselect all</a>)
+              <div className="mb-1 text-small text-secondary font-weight-normal">
+                Selected {selectedCluster.length - Object.values(excludedImageIndexes).filter(Boolean).length}{" "}
+                of {selectedCluster.length} images (
+                <a href="#" className="text-secondary" onClick={excludeNone}>select all</a>,{" "}
+                <a href="#" className="text-secondary" onClick={excludeAll}>deselect all</a>){" "}
+                (thumbnails: {imageGridSizes.map((size, i) =>
+                  <>
+                    <a href="#" className="text-secondary" onClick={(e) => setImageGridSize(size, e)}>{size.label}</a>
+                    {(i < imageGridSizes.length - 1) ? ", " : ""}
+                  </>
+                )})
               </div>
               <ImageGrid
                 images={selectedCluster}
                 onClick={handleGalleryClick}
                 selectedPred={i => !!!(excludedImageIndexes[i])}
-                minRowHeight={130}
+                minRowHeight={imageGridSize.size}
                 imageAspectRatio={3/2}
               />
             </>

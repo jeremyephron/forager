@@ -67,17 +67,21 @@ html, body, #root, .main {
 }
 
 .image-grid {
-  img {
-    transition: opacity 0.2s;
-    opacity: 0.5;
-
-    &.selected {
-      opacity: 1.0;
-    }
-  }
-
   a {
     display: inline-block;
+
+    img {
+      transition: opacity 0.2s;
+      opacity: 0.5;
+
+      &.selected {
+        opacity: 1.0;
+      }
+    }
+
+    &:hover img:not(.selected) {
+      opacity: 0.9;
+    }
   }
 }
 

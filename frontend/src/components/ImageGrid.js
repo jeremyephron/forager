@@ -3,6 +3,7 @@ import useResizeObserver from "use-resize-observer/polyfilled";
 import LazyLoad, {forceCheck} from "react-lazyload";
 
 const MARGIN = 3;
+const THUMBNAIL_HEIGHT = 200;
 
 const ImageGrid = ({ images, onClick, minRowHeight, imageAspectRatio, selectedPred }) => {
   const { width, height, ref } = useResizeObserver();
@@ -21,9 +22,11 @@ const ImageGrid = ({ images, onClick, minRowHeight, imageAspectRatio, selectedPr
   return (
     <div className="image-grid w-100" ref={ref}>
       {images.map((im, i) =>
-        <a href="#" onClick={(e) => handleClick(e, i)} style={{width: imageWidth, marginBottom: MARGIN, marginRight: MARGIN}}>
+        <a href="#" onClick={(e) => handleClick(e, i)}
+          style={{width: imageWidth, marginBottom: MARGIN, marginRight: MARGIN}}
+        >
           <LazyLoad scrollContainer=".modal" height={imageHeight}>
-            <img src={im.thumb}
+            <img src={imageHeight > THUMBNAIL_HEIGHT ? im.src : im.thumb}
               className={selectedPred(i) ? "selected" : ""}
             />
           </LazyLoad>
