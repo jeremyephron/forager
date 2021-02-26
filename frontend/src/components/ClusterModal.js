@@ -226,7 +226,10 @@ const ClusterModal = ({
     } else if (isImageView && key === "s") {
       // Toggle selection
       toggleImageSelection(selection.image);
-    } else if (key !== "ArrowDown" && key !== "ArrowUp") {
+    } else if (key === "ArrowUp") {
+      // Close modal
+      setIsOpen(false);
+    } else if (key !== "ArrowDown") {
       caught = false;
     }
     if (caught) {
@@ -282,9 +285,14 @@ const ClusterModal = ({
           <p>
             <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to move between {(isImageView || isImageOnly) ? "images" : "clusters"}
             {isClusterView && <>,{" "}
-              <kbd>&darr;</kbd> or <FontAwesomeIcon icon={faMousePointer} /> to go into image view, <kbd>shift</kbd> <FontAwesomeIcon icon={faMousePointer} /> to toggle image selection</>}
+              <kbd>&darr;</kbd> or <FontAwesomeIcon icon={faMousePointer} /> to go into image view,{" "}
+              <kbd>&uarr;</kbd> to go back to query results,{" "}
+              <kbd>shift</kbd> <FontAwesomeIcon icon={faMousePointer} /> to toggle image selection</>}
             {isImageView && <>,{" "}
-              <kbd>&uarr;</kbd> to go back to cluster view, <kbd>s</kbd> or <FontAwesomeIcon icon={faMousePointer} /> to toggle image selection</>}
+              <kbd>&uarr;</kbd> to go back to cluster view,{" "}
+              <kbd>s</kbd> or <FontAwesomeIcon icon={faMousePointer} /> to toggle image selection</>}
+            {isSingletonCluster && <>,{" "}
+              <kbd>&uarr;</kbd> to go back to query results</>}
           </p>
           <Form>
             <FormGroup className="d-flex flex-row align-items-center mb-2">

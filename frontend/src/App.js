@@ -83,6 +83,7 @@ const App = () => {
   // Load dataset info on initial page load
   const [datasetName, setDatasetName] = useState("waymo_train_central");
   const [datasetInfo, setDatasetInfo] = useState({
+    isNotLoaded: true,
     categories: [],
     index_id: null,
     num_images: 0,
@@ -104,7 +105,7 @@ const App = () => {
   const [datasetExcludeTags, setDatasetExcludeTags] = useState([]);
   const [googleQuery, setGoogleQuery] = useState("");
   const [orderingMode, setOrderingMode] = useState(orderingModes[0].id);
-  const [orderByClusterSize, setOrderByClusterSize] = useState(false);
+  const [orderByClusterSize, setOrderByClusterSize] = useState(true);
   const [clusteringStrength, setClusteringStrength] = useState(20);
 
   const [knnImage, setKnnImage] = useState({});
@@ -370,6 +371,8 @@ const App = () => {
           </Container>
         </div>
         <Container fluid>
+          {(!!!(datasetInfo.isNotLoaded) && !isLoading && queryResultData.images.length == 0) &&
+            <p className="text-center text-muted">No results match your query.</p>}
           <Row>
             <Col className="stack-grid">
               {clusters.map((images, i) =>
