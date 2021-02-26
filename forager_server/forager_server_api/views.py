@@ -1286,7 +1286,9 @@ def get_annotations_v2(request):
     annotations = Annotation.objects.filter(
         dataset_item__in=DatasetItem.objects.filter(pk__in=image_identifiers),
         label_type="klabel_frame",
-    )
+    ).order_by(
+        "dataset_item", "label_category", "created"
+    ).distinct("dataset_item", "label_category")
     tags_by_pk = get_tags_from_annotations_v2(annotations)
     return JsonResponse(tags_by_pk)
 
