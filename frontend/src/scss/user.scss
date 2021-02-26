@@ -36,11 +36,36 @@ html, body, #root, .main {
 }
 
 .cluster-modal {
-  img.main {
+  a.selectable-image, img.main {
     display: block;
+    max-width: 65%;
     margin-left: auto;
     margin-right: auto;
-    max-width: 65%;
+    position: relative;
+
+    .state {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+    }
+  }
+}
+
+.image-grid {
+  a {
+    display: inline-block;
+
+    img {
+      transition: opacity 0.2s;
+
+      &:not(.selected) {
+        opacity: 0.5;
+      }
+    }
+
+    &:hover img:not(.selected) {
+      opacity: 0.75;
+    }
   }
 }
 
@@ -63,25 +88,6 @@ html, body, #root, .main {
 
   .custom-range {
     width: 10rem;
-  }
-}
-
-.image-grid {
-  a {
-    display: inline-block;
-
-    img {
-      transition: opacity 0.2s;
-      opacity: 0.5;
-
-      &.selected {
-        opacity: 1.0;
-      }
-    }
-
-    &:hover img:not(.selected) {
-      opacity: 0.9;
-    }
   }
 }
 

@@ -108,9 +108,7 @@ const ClusterModal = ({
 
   const handleGalleryClick = (e, i) => {
     if (e.shiftKey) {
-      let newExcludedImageIndexes = {...excludedImageIndexes};
-      newExcludedImageIndexes[i] = !!!(newExcludedImageIndexes[i]);  // toggle
-      setExcludedImageIndexes(newExcludedImageIndexes);
+      toggleImageSelection(i);
     } else {
       setSelection({
         cluster: selection.cluster,
@@ -118,6 +116,13 @@ const ClusterModal = ({
       });
     }
   };
+
+  const toggleImageSelection = (i, e) => {
+    let newExcludedImageIndexes = {...excludedImageIndexes};
+    newExcludedImageIndexes[i] = !!!(newExcludedImageIndexes[i]);
+    setExcludedImageIndexes(newExcludedImageIndexes);
+    if (e) e.preventDefault();
+  }
 
   const setImageGridSize = (size, e) => {
     setImageGridSize_(size);
@@ -218,6 +223,9 @@ const ClusterModal = ({
       setSelection({
         cluster: Math.min(selection.cluster + 1, clusters.length - 1),
       });
+    } else if (isImageView && key === "s") {
+      // Toggle selection
+      toggleImageSelection(selection.image);
     } else if (key !== "ArrowDown" && key !== "ArrowUp") {
       caught = false;
     }
@@ -226,7 +234,12 @@ const ClusterModal = ({
       typeaheadRef.current.blur();
       typeaheadRef.current.hideMenu();
     }
-  }, [isOpen, isClusterView, isImageView, clusters, selection, setSelection, typeaheadRef]);
+  }, [isOpen, isClusterView, isImageView, clusters, selection, setSelection, typeaheadRef, excludedImageIndexes]);
+
+  const handleTypeaheadKeyDown = (e) => {
+    const { key } = e;
+    if (key === "s") e.stopPropagation();
+  }
 
   useEffect(() => {
     document.addEventListener("keydown", handleKeyDown)
@@ -272,7 +285,7 @@ const ClusterModal = ({
             {isClusterView && <>,{" "}
               <kbd>&darr;</kbd> to go into image view, <kbd>shift</kbd> <FontAwesomeIcon icon={faMousePointer} /> to toggle image selection</>}
             {isImageView && <>,{" "}
-              <kbd>&uarr;</kbd> to go back to cluster view</>}
+              <kbd>&uarr;</kbd> to go back to cluster view, <kbd>s</kbd> or <FontAwesomeIcon icon={faMousePointer} /> to toggle image selection</>}
           </p>
           <Form>
             <FormGroup className="d-flex flex-row align-items-center mb-2">
@@ -288,6 +301,7 @@ const ClusterModal = ({
                 onChange={onTagsChanged}
                 ref={typeaheadRef}
                 onBlur={() => typeaheadRef.current.hideMenu()}
+                onKeyDown={handleTypeaheadKeyDown}
               />
               {(isClusterView) ?
                 <Button color="light" className="ml-2" onClick={() => setSubset(selectedCluster)}>
@@ -303,7 +317,20 @@ const ClusterModal = ({
               src={selectedImage.src}
               placeholder={selectedImage.thumb}
             >
-              {src => <img className="main w-100" src={src} />}
+              {src => {
+                if (isImageView) {
+                  const selected = !!!(excludedImageIndexes[selection.image]);
+                  return (
+                    <a href="#" onClick={(e) => toggleImageSelection(selection.image, e)} className="selectable-image">
+                      <img className="w-100" src={src} />
+                      <div className={`state rbt-token alert-${selected ? "success": "secondary"}`}>
+                        {selected ? "S" : "Not s"}elected
+                      </div>
+                    </a>);
+                } else {
+                  return <img className="main w-100" src={src} />;
+                }
+              }}
             </ProgressiveImage> :
             <>
               <div className="mb-1 text-small text-secondary font-weight-normal">
