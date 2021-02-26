@@ -707,10 +707,13 @@ class LabeledIndex:
 
         # Initialize indexes
         self.labels = json.load((self.index_dir / self.LABELS_FILENAME).open())
-        self.identifiers = bidict(
-            json.load((self.index_dir / self.IDENTIFIERS_FILENAME).open())
-        )
-        self.local_flat_index = LocalFlatIndex.load(self.index_dir)
+        try:
+            self.identifiers = bidict(
+                json.load((self.index_dir / self.IDENTIFIERS_FILENAME).open())
+            )
+            self.local_flat_index = LocalFlatIndex.load(self.index_dir)
+        except Exception:
+            pass
         self._load_local_indexes()
         self.logger.info(f"Finished loading index from {self.index_dir}")
 
