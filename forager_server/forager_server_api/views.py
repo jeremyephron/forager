@@ -1079,7 +1079,8 @@ def active_batch(request, dataset_name):
 
 
 def get_tags_from_annotations_v2(annotations):
-    anns = nest_anns(annotations, nest_lf=False)  # [image][category][#]
+    # [image][category][#]
+    anns = filter_most_recent_anns(nest_anns(annotations, nest_lf=False))
 
     tag_anns_by_pk = defaultdict(list)
     for di_pk, anns_by_cat in anns.items():
@@ -1126,9 +1127,10 @@ def filtered_images_v2(
             dataset_item__in=dataset_items,
             label_category__in=(list(include_categories) + list(exclude_categories)),
             label_type="klabel_frame",
-        ).order_by(
-            "dataset_item", "label_category", "-created"
-        ).distinct("dataset_item", "label_category")
+        )
+        # ).order_by(
+        #     "dataset_item", "label_category", "-created"
+        # ).distinct("dataset_item", "label_category")
     )
     tags_by_pk = get_tags_from_annotations_v2(annotations)
 
@@ -1286,9 +1288,10 @@ def get_annotations_v2(request):
     annotations = Annotation.objects.filter(
         dataset_item__in=DatasetItem.objects.filter(pk__in=image_identifiers),
         label_type="klabel_frame",
-    ).order_by(
-        "dataset_item", "label_category", "-created"
-    ).distinct("dataset_item", "label_category")
+    )
+    # ).order_by(
+    #     "dataset_item", "label_category", "-created"
+    # ).distinct("dataset_item", "label_category")
     tags_by_pk = get_tags_from_annotations_v2(annotations)
     return JsonResponse(tags_by_pk)
 
