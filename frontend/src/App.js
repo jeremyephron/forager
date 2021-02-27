@@ -24,8 +24,12 @@ import toPairs from "lodash/toPairs";
 import "react-bootstrap-typeahead/css/Typeahead.css";
 import "./scss/theme.scss";
 
-import ImageStack from "./components/ImageStack";
-import ClusterModal from "./components/ClusterModal";
+import {
+  ClusterModal,
+  ImageStack,
+  SignInModal,
+  TagManagementModal
+} from "./components";
 
 var disjointSet = require("disjoint-set");
 
@@ -204,42 +208,20 @@ const App = () => {
 
   return (
     <div className={`main ${isLoading ? "loading" : ""}`}>
-      <Modal
+      <SignInModal
         isOpen={loginIsOpen}
         toggle={() => setLoginIsOpen(false)}
-        modalTransition={{ timeout: 25 }}
-        backdropTransition={{ timeout: 75 }}
-      >
-        <ModalBody>
-          <div className="m-xl-4 m-3">
-            <div className="text-center mb-4">
-              <h4 className="h3 mb-1">Welcome back</h4>
-              <span>Enter your account details below</span>
-            </div>
-            <Form>
-              <FormGroup>
-                <Input
-                  type="email"
-                  placeholder="Email Address"
-                  value={loginUsername}
-                  onChange={(e) => setLoginUsername(e.target.value)}
-                />
-              </FormGroup>
-              <FormGroup>
-                <Input
-                  type="password"
-                  placeholder="Password"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                />
-              </FormGroup>
-              <FormGroup>
-                <Button block color="primary" type="submit" onClick={login}>Sign in</Button>
-              </FormGroup>
-            </Form>
-          </div>
-        </ModalBody>
-      </Modal>
+        loginUsername={loginUsername}
+        loginPassword={loginPassword}
+        setLoginUsername={setLoginUsername}
+        setLoginPassword={setLoginPassword}
+        login={login}
+      />
+      <TagManagementModal
+        isOpen={true}
+        datasetInfo={datasetInfo}
+        setDatasetInfo={setDatasetInfo}
+      />
       <ClusterModal
         isOpen={clusterIsOpen}
         setIsOpen={setClusterIsOpen}

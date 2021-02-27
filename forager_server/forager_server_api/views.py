@@ -1326,3 +1326,34 @@ def add_annotations_v2(request):
     )
 
     return JsonResponse({"created": len(image_identifiers)})
+
+
+@api_view(["POST"])
+@csrf_exempt
+def delete_category_v2(request):
+    payload = json.loads(request.body)
+    user = payload["user"]
+    category = payload["category"]
+
+    n, _ = Annotation.objects.filter(
+        label_function__exact=user,
+        label_category__exact=category
+    ).delete()
+
+    return JsonResponse({"deleted": n})
+
+
+@api_view(["POST"])
+@csrf_exempt
+def update_category_v2(request):
+    payload = json.loads(request.body)
+    user = payload["user"]
+    old_category = payload["oldCategory"]
+    new_category = payload["newCategory"]
+
+    n = Annotation.objects.filter(
+        label_function_exact=user,
+        label_category__exact=old_category
+    ).update(label_category=new_category)
+    
+    return JsonResponse({"updated": n})
