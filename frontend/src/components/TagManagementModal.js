@@ -45,7 +45,7 @@ const TagManagementModal = ({
       user: username,
       categories: datasetInfo.categories,
     }
-    const res = fetch(url, {
+    const res = await fetch(url, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(body),
@@ -65,7 +65,7 @@ const TagManagementModal = ({
       newCategory: tag,
       oldCategory: datasetInfo.categories[idx],
     };
-    const res = fetch(url, {
+    const res = await fetch(url, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(body),
@@ -83,7 +83,7 @@ const TagManagementModal = ({
       user: username,
       category: datasetInfo.categories[idx],
     };
-    const res = fetch(url, {
+    const res = await fetch(url, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(body),
