@@ -31,9 +31,12 @@ const TagManagementModal = ({
   toggle,
   datasetInfo,
   setDatasetInfo,
-  username
+  username,
+  isReadOnly
 }) => {
   const setCategoryByIndex = (tag, idx) => {
+    if (isReadOnly) return;
+
     const url = new URL(endpoints.updateCategory);
     const body = {
       user: username,
@@ -51,6 +54,8 @@ const TagManagementModal = ({
   };
 
   const deleteCategoryByIndex = async (idx) => {
+    if (isReadOnly) return;
+    
     const url = new URL(endpoints.deleteCategory);
     const body = {
       user: username,
@@ -76,6 +81,7 @@ const TagManagementModal = ({
                 <input
                   type="text"
                   value={tag}
+                  disabled={isReadOnly}
                   onChange={(e) => setCategoryByIndex(e.target.value, i)}
                   onKeyDown={(e) => {
                     if (e.keyCode === 13) e.target.blur();
@@ -84,7 +90,7 @@ const TagManagementModal = ({
               </td>
               <td>0</td>
               <td>
-                <Button close onClick={(e) => {
+                <Button close disabled={isReadOnly} onClick={(e) => {
                     deleteCategoryByIndex(i);
                     document.activeElement.blur();
                   }}

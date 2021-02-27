@@ -229,6 +229,7 @@ const App = () => {
         datasetInfo={datasetInfo}
         setDatasetInfo={setDatasetInfo}
         username={username}
+        isReadOnly={!!!(username)}
       />
       <ClusterModal
         isOpen={clusterIsOpen}
