@@ -16,6 +16,8 @@ import styled from "styled-components";
 import fromPairs from "lodash/fromPairs";
 import toPairs from "lodash/toPairs";
 
+import { ConfirmModal } from "../components";
+
 const endpoints = fromPairs(toPairs({
   updateCategory: 'update_category_v2',
   deleteCategory: 'delete_category_v2',
@@ -37,7 +39,12 @@ const TagManagementModal = ({
   isReadOnly
 }) => {
   // TODO: store with redux
-  const [categoryCounts, setCategoryCounts] = useState([])
+  const [categoryCounts, setCategoryCounts] = useState([]);
+
+  const [confirmIsOpen, setConfirmIsOpen] = useState(false);
+  const [confirmCategory, setConfirmCategory] = useState(null);
+  const [confirmCategoryIdx, setConfirmCategoryIdx] = useState(null);
+  const toggleConfirmIsOpen = (category) => setConfirmIsOpen(!confirmIsOpen);
 
   useEffect(async () => {
     const url = new URL(endpoints.getCategoryCounts + `/${datasetName}`);
@@ -113,7 +120,9 @@ const TagManagementModal = ({
               <td>{categoryCounts[i]}</td>
               <td>
                 <Button close disabled={isReadOnly} onClick={(e) => {
-                    deleteCategoryByIndex(i);
+                    setConfirmCategory(datasetInfo.categories[i]);
+                    setConfirmCategoryIdx(i);
+                    toggleConfirmIsOpen();
                     document.activeElement.blur();
                   }}
                 />
@@ -144,6 +153,17 @@ const TagManagementModal = ({
             {tableBodyFromTags()}
           </Table>
         </TableContainer>
+
+        <ConfirmModal
+          isOpen={confirmIsOpen}
+          toggle={toggleConfirmIsOpen}
+          message={<span>Are you sure you want to delete the tag <strong>{confirmCategory}</strong>? This action cannot be undone.</span>}
+          confirmBtn={<Button color="danger" onClick={(e) => {
+            deleteCategoryByIndex(confirmCategoryIdx);
+            toggleConfirmIsOpen();
+          }}>Delete</Button>}
+          cancelBtn={<Button color="secondary" onClick={(e) => toggleConfirmIsOpen()}>Cancel</Button>}
+        />
       </ModalBody>
     </Modal>
   );
