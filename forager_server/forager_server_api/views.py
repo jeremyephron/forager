@@ -1383,7 +1383,7 @@ def get_category_counts_v2(request, dataset_name):
         anns = Annotation.objects.filter(
             dataset_item__in=dataset.datasetitem_set.filter(),
             label_category__exact=category,
-            label_type="klabel_frame",
+            label_type__exact="klabel_frame",
         ).order_by(
             "dataset_item", "label_category", "-created"
         ).distinct("dataset_item", "label_category")
