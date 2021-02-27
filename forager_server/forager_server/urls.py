@@ -104,4 +104,10 @@ urlpatterns = [
     path('api/add_annotations_v2',
          views.add_annotations_v2,
          name='add_annotations_v2'),
+    path('api/delete_category_v2',
+         views.delete_category_v2,
+         name='delete_category_v2'),
+    path('api/update_category_v2',
+         views.update_category_v2,
+         name='update_category_v2'),
 ]
