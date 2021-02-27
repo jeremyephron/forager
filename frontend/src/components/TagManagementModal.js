@@ -54,7 +54,7 @@ const TagManagementModal = ({
     if (res['numLabeled'] !== undefined) {
       setCategoryCounts(res['numLabeled']);
     }
-  });
+  }, [datasetInfo.categories]);
 
   const setCategoryByIndex = (tag, idx) => {
     if (isReadOnly) return;
@@ -110,7 +110,7 @@ const TagManagementModal = ({
                   }}
                 />
               </td>
-              <td>0</td>
+              <td>{categoryCounts[i]}</td>
               <td>
                 <Button close disabled={isReadOnly} onClick={(e) => {
                     deleteCategoryByIndex(i);
