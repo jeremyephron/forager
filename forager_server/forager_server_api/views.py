@@ -1347,8 +1347,8 @@ def delete_category_v2(request):
     category = payload["category"]
 
     n, _ = Annotation.objects.filter(
-        label_function__exact=user,
-        label_category__exact=category
+        # label_function__exact=user,
+        label_category__exact=category,
     ).delete()
 
     return JsonResponse({"deleted": n})
@@ -1363,8 +1363,8 @@ def update_category_v2(request):
     new_category = payload["newCategory"]
 
     n = Annotation.objects.filter(
-        label_function_exact=user,
-        label_category__exact=old_category
+        # label_function__exact=user,
+        label_category__exact=old_category,
     ).update(label_category=new_category)
     
     return JsonResponse({"updated": n})
