@@ -1388,9 +1388,9 @@ def get_category_counts_v2(request, dataset_name):
             "dataset_item", "label_category", "-created"
         ).distinct("dataset_item", "label_category")
 
-        n_labeled[i] = len(filter(
+        n_labeled[i] = len(list(filter(
             # TODO: refactor positive value enum
             lambda x: json.loads(x.label_data)['value'] == 1, anns
-        ))
+        )))
 
     return JsonResponse({"numLabeled": n_labeled})
