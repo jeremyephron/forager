@@ -49,7 +49,7 @@ const TagManagementModal = ({
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(body),
-    }).then(res => res.json()));
+    }).then(res => res.json());
 
     if (res['numLabeled'] !== undefined) {
       setCategoryCounts(res['numLabeled']);
@@ -69,7 +69,7 @@ const TagManagementModal = ({
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(body),
-    }).then(res => res.json()));
+    }).then(res => res.json());
 
     datasetInfo.categories[idx] = tag;
     setDatasetInfo({...datasetInfo, categories: datasetInfo.categories});
@@ -87,7 +87,7 @@ const TagManagementModal = ({
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(body),
-    }).then(res => res.json()));
+    }).then(res => res.json());
 
     datasetInfo.categories.splice(idx, 1);
     setDatasetInfo({...datasetInfo, categories: datasetInfo.categories});
