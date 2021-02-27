@@ -27,14 +27,14 @@ const TableContainer = styled.div`
 `;
 
 const TagManagementModal = ({
+  isOpen,
+  toggle,
   datasetInfo,
-  setDatasetInfo
+  setDatasetInfo,
+  username
 }) => {
-  const [modal, setModal] = useState(false);
-  const toggle = () => setModal(!modal);
-
   const setCategoryByIndex = (tag, idx) => {
-    const updateCategoryUrl = new URL(endpoints.updateCategory);
+    const url = new URL(endpoints.updateCategory);
     const body = {
       user: username,
       newCategory: tag,
@@ -51,10 +51,10 @@ const TagManagementModal = ({
   };
 
   const deleteCategoryByIndex = async (idx) => {
-    const deleteCategoryUrl = new URL(endpoints.deleteCategory);
+    const url = new URL(endpoints.deleteCategory);
     const body = {
       user: username,
-      category
+      category: datasetInfo.categories[idx]
     };
     const res = fetch(url, {
       method: "POST",
@@ -99,7 +99,7 @@ const TagManagementModal = ({
 
   return (
     <Modal
-      isOpen={modal}
+      isOpen={isOpen}
       modalTransition={{ timeout: 25 }}
       backdropTransition={{ timeout: 75 }}
     >

@@ -81,6 +81,12 @@ const App = () => {
   const [clusterIsOpen, setClusterIsOpen] = useState(false);
 
   //
+  // TAG MANAGEMENT MODAL
+  //
+  const [tagManagementIsOpen, setTagManagementIsOpen] = useState(false);
+  const toggleTagManagement = () => setTagManagementIsOpen(!tagManagementIsOpen);
+
+  //
   // DATA CONNECTIONS
   //
 
@@ -218,9 +224,11 @@ const App = () => {
         login={login}
       />
       <TagManagementModal
-        isOpen={true}
+        isOpen={tagManagementIsOpen}
+        toggle={toggleTagManagement}
         datasetInfo={datasetInfo}
         setDatasetInfo={setDatasetInfo}
+        username={username}
       />
       <ClusterModal
         isOpen={clusterIsOpen}
@@ -242,20 +250,25 @@ const App = () => {
             <NavbarBrand href="/">Forager</NavbarBrand>
             <NavbarBrand className="font-weight-normal" id="dataset-name">{datasetName}</NavbarBrand>
           </span>
-          <span>
-            {username ?
-              <>{username} (<a href="#" onClick={(e) => {
-                setUsername("");
-                e.preventDefault();
-              }}>Sign out</a>)</> :
-              <a href="#" onClick={(e) => {
-                setLoginUsername("");
-                setLoginPassword("");
-                setLoginIsOpen(true);
-                e.preventDefault();
-              }}>Sign in</a>
-            }
-          </span>
+          <div>
+            <span className="mr-4" onClick={toggleTagManagement} style={{cursor: "pointer"}}>
+              Manage Tags
+            </span>
+            <span>
+              {username ?
+                <>{username} (<a href="#" onClick={(e) => {
+                  setUsername("");
+                  e.preventDefault();
+                }}>Sign out</a>)</> :
+                <a href="#" onClick={(e) => {
+                  setLoginUsername("");
+                  setLoginPassword("");
+                  setLoginIsOpen(true);
+                  e.preventDefault();
+                }}>Sign in</a>
+              }
+            </span>
+          </div>
         </Container>
       </Navbar>
       <Popover
