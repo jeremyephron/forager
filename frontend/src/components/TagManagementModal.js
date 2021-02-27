@@ -44,7 +44,7 @@ const TagManagementModal = ({
     const body = {
       user: username,
       categories: datasetInfo.categories,
-    }
+    };
     const res = await fetch(url, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
@@ -56,7 +56,7 @@ const TagManagementModal = ({
     }
   }, [datasetInfo.categories]);
 
-  const setCategoryByIndex = (tag, idx) => {
+  const setCategoryByIndex = async (tag, idx) => {
     if (isReadOnly) return;
 
     const url = new URL(endpoints.updateCategory);
