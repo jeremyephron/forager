@@ -19,6 +19,7 @@ import toPairs from "lodash/toPairs";
 const endpoints = fromPairs(toPairs({
   updateCategory: 'update_category_v2',
   deleteCategory: 'delete_category_v2',
+  getCategoryCounts: 'get_category_counts_v2',
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
 const TableContainer = styled.div`
@@ -29,11 +30,32 @@ const TableContainer = styled.div`
 const TagManagementModal = ({
   isOpen,
   toggle,
+  datasetName,
   datasetInfo,
   setDatasetInfo,
   username,
   isReadOnly
 }) => {
+  // TODO: store with redux
+  const [categoryCounts, setCategoryCounts] = useState([])
+
+  useEffect(async () => {
+    const url = new URL(endpoints.getCategoryCounts + `/${datasetName}`);
+    const body = {
+      user: username,
+      categories: datasetInfo.categories,
+    }
+    const res = fetch(url, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body),
+    }).then(res => res.json()));
+
+    if (res['numLabeled'] !== undefined) {
+      setCategoryCounts(res['numLabeled']);
+    }
+  });
+
   const setCategoryByIndex = (tag, idx) => {
     if (isReadOnly) return;
 
@@ -41,13 +63,13 @@ const TagManagementModal = ({
     const body = {
       user: username,
       newCategory: tag,
-      oldCategory: datasetInfo.categories[idx]
+      oldCategory: datasetInfo.categories[idx],
     };
     const res = fetch(url, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(body),
-    });
+    }).then(res => res.json()));
 
     datasetInfo.categories[idx] = tag;
     setDatasetInfo({...datasetInfo, categories: datasetInfo.categories});
@@ -55,17 +77,17 @@ const TagManagementModal = ({
 
   const deleteCategoryByIndex = async (idx) => {
     if (isReadOnly) return;
-    
+
     const url = new URL(endpoints.deleteCategory);
     const body = {
       user: username,
-      category: datasetInfo.categories[idx]
+      category: datasetInfo.categories[idx],
     };
     const res = fetch(url, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(body),
-    });
+    }).then(res => res.json()));
 
     datasetInfo.categories.splice(idx, 1);
     setDatasetInfo({...datasetInfo, categories: datasetInfo.categories});

@@ -226,6 +226,7 @@ const App = () => {
       <TagManagementModal
         isOpen={tagManagementIsOpen}
         toggle={toggleTagManagement}
+        datasetName={datasetName}
         datasetInfo={datasetInfo}
         setDatasetInfo={setDatasetInfo}
         username={username}

@@ -110,4 +110,7 @@ urlpatterns = [
     path('api/update_category_v2',
          views.update_category_v2,
          name='update_category_v2'),
+    path('api/get_category_counts_v2/<slug:dataset_name>',
+         views.get_category_counts_v2,
+         name='get_category_counts_v2'),
 ]

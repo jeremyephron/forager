@@ -1368,3 +1368,29 @@ def update_category_v2(request):
     ).update(label_category=new_category)
     
     return JsonResponse({"updated": n})
+
+
+@api_view(["POST"])
+@csrf_exempt
+def get_category_counts_v2(request, dataset_name):
+    dataset = get_object_or_404(Dataset, name=dataset_name)
+    payload = json.loads(request.body)
+    user = payload["user"]
+    categories = payload["categories"]
+
+    n_labeled = [None] * len(categories)
+    for i, category in enumerate(categories):
+        anns = Annotation.objects.filter(
+            dataset_item__in=dataset.datasetitem_set.filter(),
+            label_category__exact=category,
+            label_type="klabel_frame",
+        ).order_by(
+            "dataset_item", "label_category", "-created"
+        ).distinct("dataset_item", "label_category")
+
+        n_labeled[i] = len(filter(
+            # TODO: refactor positive value enum
+            lambda x: json.loads(x.label_data)['value'] == 1, anns
+        ))
+
+    return JsonResponse({"numLabeled": n_labeled})
