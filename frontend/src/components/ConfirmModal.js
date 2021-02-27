@@ -29,7 +29,7 @@ const ConfirmModal = ({
       modalTransition={{ timeout: 25 }}
       backdropTransition={{ timeout: 75 }}
     >
-      <ModalHeader toggle={toggle}>Confirmation Required</ModalHeader>
+      <ModalHeader>Confirmation Required</ModalHeader>
       <ModalBody>{message}</ModalBody>
       <ModalFooter>
         {confirmBtn}{" "}

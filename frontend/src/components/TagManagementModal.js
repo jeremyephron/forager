@@ -137,10 +137,11 @@ const TagManagementModal = ({
   return (
     <Modal
       isOpen={isOpen}
+      toggle={toggle}
       modalTransition={{ timeout: 25 }}
       backdropTransition={{ timeout: 75 }}
     >
-      <ModalHeader toggle={toggle}>Manage Tags</ModalHeader>
+      <ModalHeader>Manage Tags</ModalHeader>
       <ModalBody>
         <TableContainer className="pr-2">
           <Table hover borderless size="sm">
