@@ -711,7 +711,9 @@ class LabeledIndex:
             self.identifiers = bidict(
                 json.load((self.index_dir / self.IDENTIFIERS_FILENAME).open())
             )
-            self.local_flat_index = LocalFlatIndex.load(self.index_dir)
+            self.local_flat_index = LocalFlatIndex.load(
+                self.index_dir, len(self.labels)
+            )
         except Exception:
             pass
         self._load_local_indexes()

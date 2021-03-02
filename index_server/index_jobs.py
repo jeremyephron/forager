@@ -316,16 +316,37 @@ class LocalFlatIndex:
     DISTANCE_MATRIX_FILENAME = "distances.npy"
 
     @classmethod
-    def load(cls, dir: Path):
+    def load(cls, dir: Path, num_images: int):
         self = cls()
-        self.index = np.load(dir / self.INDEX_FILENAME)
-        self.distance_matrix = np.load(dir / self.DISTANCE_MATRIX_FILENAME)
+        self.index = np.memmap(
+            dir / self.INDEX_FILENAME,
+            dtype=np.float32,
+            mode="r",
+            shape=(num_images, config.EMBEDDING_DIM),
+        )
+        self.distance_matrix = np.memmap(
+            dir / self.DISTANCE_MATRIX_FILENAME,
+            dtype=np.float32,
+            mode="r",
+            shape=(num_images, num_images),
+        )
         return self
 
     @classmethod
-    def create(cls, num_images: int, cluster_mount_parent_dir: Path):
+    def create(cls, dir: Path, num_images: int, cluster_mount_parent_dir: Path):
         self = cls()
-        self.index = np.zeros((num_images, config.EMBEDDING_DIM), dtype=np.float32)
+        self.index = np.memmap(
+            dir / self.INDEX_FILENAME,
+            dtype=np.float32,
+            mode="w+",
+            shape=(num_images, config.EMBEDDING_DIM),
+        )
+        self.distance_matrix = np.memmap(
+            dir / self.DISTANCE_MATRIX_FILENAME,
+            dtype=np.float32,
+            mode="w+",
+            shape=(num_images, num_images),
+        )
         self.cluster_mount_parent_dir = cluster_mount_parent_dir
         return self
 
@@ -349,26 +370,25 @@ class LocalFlatIndex:
             self.index[int(id)] = embeddings[0]
 
     def build_distance_matrix(self):
-        self.distance_matrix = self._pdist(self.index)
+        self._pdist(self.index, self.distance_matrix)
 
     def save(self, dir: Path):
         assert self.index is not None and self.distance_matrix is not None
-        np.save(dir / self.INDEX_FILENAME, self.index)
-        np.save(dir / self.DISTANCE_MATRIX_FILENAME, self.distance_matrix)
+        self.index.flush()
+        self.distance_matrix.flush()
 
     @staticmethod
-    def _pdist(M):
+    def _pdist(M, out):
         # TODO(mihirg): Consider using cosine similarity instead
         # Alternative to scipy's pdist that respects dtype; modified from
         # http://www.xavierdupre.fr/app/mlprodict/helpsphinx/notebooks/onnx_pdist.html
         n = M.shape[0]
-        res = np.zeros((n, n), dtype=M.dtype)
-        buffer = np.empty((M.shape[0] - 1, M.shape[1]), dtype=M.dtype)
-        a = np.empty(M.shape[0], dtype=M.dtype)
+        buffer = np.empty((n - 1, M.shape[1]), dtype=M.dtype)  # TODO(mihirg): Eliminate
+        a = np.empty(n, dtype=M.dtype)
         for i in range(1, n):
             np.subtract(M[:i], M[i], out=buffer[:i])  # broadcasted substraction
             np.square(buffer[:i], out=buffer[:i])
             np.sum(buffer[:i], axis=1, out=a[:i])
-            res[:i, i] = a[:i]
-            res[i, :i] = a[:i]
-        return np.sqrt(res)
+            np.sqrt(a[i], out=a[:i])
+            out[:i, i] = a[:i]
+            out[i, :i] = a[:i]
