@@ -1233,18 +1233,32 @@ def query_knn_v2(request, dataset_name):
 @csrf_exempt
 def query_svm_v2(request, dataset_name):
     index_id = request.GET["index_id"]
-    pos_ids = request.GET["pos_ids"].split(",")
-    neg_ids = request.GET["neg_ids"].split(",")
+    pos_tags = set(request.GET["pos_tags"].split(","))
+    neg_tags = set(request.GET["neg_tags"].split(","))
     num_results = int(request.GET.get("num", 1000))
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
+    annotations = Annotation.objects.filter(
+        label_category__in=(list(pos_tags) + list(neg_tags)),
+        label_type="klabel_frame",
+    )
+    tags_by_pk = get_tags_from_annotations_v2(annotations)
+
+    pos_dataset_item_pks = []
+    neg_dataset_item_pks = []
+    for pk, tags in tags_by_pk.items():
+        if any(t in pos_tags for t in tags):
+            pos_dataset_item_pks.append(pk)
+        elif any(t in neg_tags for t in tags):
+            neg_dataset_item_pks.append(pk)
+
     pos_dataset_item_internal_identifiers = list(
-        DatasetItem.objects.filter(pk__in=pos_ids).values_list(
+        DatasetItem.objects.filter(pk__in=pos_dataset_item_pks).values_list(
             "identifier", flat=True
         )
     )
     neg_dataset_item_internal_identifiers = list(
-        DatasetItem.objects.filter(pk__in=neg_ids).values_list(
+        DatasetItem.objects.filter(pk__in=neg_dataset_item_pks).values_list(
             "identifier", flat=True
         )
     )
