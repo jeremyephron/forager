@@ -1256,6 +1256,8 @@ async def query_svm_v2(request):
     # Get positive and negative image embeddings from local flat index
     pos_vectors = index.get_embeddings(pos_identifiers)
     neg_vectors = index.get_embeddings(neg_identifiers)
+    print(pos_vectors.shape)
+    print(neg_vectors.shape)
 
     # Train SVM
     model = svm.SVC(kernel="linear")
