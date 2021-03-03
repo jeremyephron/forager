@@ -1231,6 +1231,46 @@ def query_knn_v2(request, dataset_name):
 
 @api_view(["GET"])
 @csrf_exempt
+def query_svm_v2(request, dataset_name):
+    index_id = request.GET["index_id"]
+    pos_ids = request.GET["pos_ids"].split(",")
+    neg_ids = request.GET["neg_ids"].split(",")
+    num_results = int(request.GET.get("num", 1000))
+
+    dataset = get_object_or_404(Dataset, name=dataset_name)
+    pos_dataset_item_internal_identifiers = list(
+        DatasetItem.objects.filter(pk__in=pos_ids).values_list(
+            "identifier", flat=True
+        )
+    )
+    neg_dataset_item_internal_identifiers = list(
+        DatasetItem.objects.filter(pk__in=neg_ids).values_list(
+            "identifier", flat=True
+        )
+    )
+
+    params = {
+        "index_id": index_id,
+        "num_results": num_results,
+        "pos_identifiers": pos_dataset_item_internal_identifiers,
+        "neg_identifiers": neg_dataset_item_internal_identifiers,
+    }
+    r = requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/query_svm_v2",
+        json=params,
+    )
+    response_data = r.json()
+
+    result_images = process_image_query_results_v2(
+        request,
+        dataset,
+        response_data,
+    )
+    return JsonResponse(build_result_set_v2(request, dataset, result_images))
+
+
+@api_view(["GET"])
+@csrf_exempt
 def get_next_images_v2(request, dataset_name, dataset=None):
     if not dataset:
         dataset = get_object_or_404(Dataset, name=dataset_name)
@@ -1366,7 +1406,7 @@ def update_category_v2(request):
         # label_function__exact=user,
         label_category__exact=old_category,
     ).update(label_category=new_category)
-    
+
     return JsonResponse({"updated": n})
 
 

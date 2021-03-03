@@ -1238,8 +1238,41 @@ async def query_knn_v2(request):
     query_vector = np.mean(index.get_embeddings(identifiers), axis=0)
 
     # Run query and return results
-    query_results = index.query(query_vector, num_results, None, True, False)
+    query_results = index.query(
+        query_vector, num_results, use_full_image=True, svm=False
+    )
     return resp.json({"results": [r.to_dict() for r in query_results]})
+
+
+@app.route("/query_svm_v2", methods=["POST"])
+async def query_svm_v2(request):
+    pos_identifiers = request.json["pos_identifiers"]
+    neg_identifiers = request.json["neg_identifiers"]
+    index_id = request.json["index_id"]
+    num_results = int(request.json["num_results"])
+
+    index = await get_index(index_id)
+
+    # Get positive and negative image embeddings from local flat index
+    pos_vectors = index.get_embeddings(pos_identifiers)
+    neg_vectors = index.get_embeddings(neg_identifiers)
+
+    # Train SVM
+    model = svm.SVC(kernel="linear")
+    model.fit(
+        np.concatenate(pos_vectors, neg_vectors),
+        np.array([1] * len(pos_vectors) + [0] * len(neg_vectors)),
+    )
+    w = np.array(model.coef_[0] * 1000, dtype=np.float32)
+
+    # Run query and return results
+    query_results = index.query(w, num_results, use_full_image=True, svm=True)
+    return resp.json(
+        {
+            "results": [r.to_dict() for r in query_results],
+            "svm_vector": utils.numpy_to_base64(w),
+        }
+    )
 
 
 # CLEANUP
