@@ -410,7 +410,7 @@ const App = () => {
             <Typeahead
               multiple
               id="svm-neg-bar"
-              className="typeahead-bar rbt-red mt-1 mb-2"
+              className="typeahead-bar rbt-red mt-2 mb-1"
               placeholder="Negative example tags"
               options={datasetInfo.categories}
               selected={svmNegTags}
