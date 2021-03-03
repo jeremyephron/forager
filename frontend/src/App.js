@@ -129,10 +129,7 @@ const App = () => {
   const [queryResultData, setQueryResultData] = useState({images: [], clustering: []});
 
   const setOrderingMode = (mode) => {
-    if (mode === "svm") {
-      setOrderingModePopoverOpen(true);
-    } else {
-      setOrderingModePopoverOpen(false);
+    if (mode !== "svm") {
       setSvmPosTags([]);
       setSvmNegTags([]);
     }
@@ -391,10 +388,12 @@ const App = () => {
             </Form>
           </Container>
         </div>
-        <Popover
+        {orderingMode === "svm" && <Popover
           placement="bottom"
           isOpen={orderingModePopoverOpen}
           target="ordering-mode"
+          trigger="hover focus"
+          toggle={() => setOrderingModePopoverOpen(!orderingModePopoverOpen)}
           fade={false}
         >
           <PopoverBody>
@@ -417,7 +416,7 @@ const App = () => {
               onChange={selected => setSvmNegTags(selected)}
             />
           </PopoverBody>
-        </Popover>
+        </Popover>}
         <Container fluid>
           {(!!!(datasetInfo.isNotLoaded) && !isLoading && queryResultData.images.length == 0) &&
             <p className="text-center text-muted">No results match your query.</p>}
