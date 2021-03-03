@@ -133,8 +133,8 @@ const App = () => {
       setOrderingModePopoverOpen(true);
     } else {
       setOrderingModePopoverOpen(false);
-      // setSvmPosTags([]);
-      // setSvmNegTags([]);
+      setSvmPosTags([]);
+      setSvmNegTags([]);
     }
     setOrderingMode_(mode);
   };
