@@ -41,13 +41,15 @@ const sources = [
 const orderingModes = [
   {id: "random", label: "Random order"},
   {id: "id", label: "Dataset order"},
+  {id: "svm", label: "SVM"},
   {id: "knn", label: "KNN", disabled: true},
 ]
 
 const endpoints = fromPairs(toPairs({
-  getDatasetInfo: 'get_dataset_info_v2',
-  getNextImages: 'get_next_images_v2',
-  queryKnn: 'query_knn_v2',
+  getDatasetInfo: "get_dataset_info_v2",
+  getNextImages: "get_next_images_v2",
+  querySvm: "query_svm_v2",
+  queryKnn: "query_knn_v2",
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
 const App = () => {
@@ -114,17 +116,32 @@ const App = () => {
   const [datasetIncludeTags, setDatasetIncludeTags] = useState([]);
   const [datasetExcludeTags, setDatasetExcludeTags] = useState([]);
   const [googleQuery, setGoogleQuery] = useState("");
-  const [orderingMode, setOrderingMode] = useState(orderingModes[0].id);
+  const [orderingMode, setOrderingMode_] = useState(orderingModes[0].id);
   const [orderByClusterSize, setOrderByClusterSize] = useState(true);
   const [clusteringStrength, setClusteringStrength] = useState(20);
+  const [orderingModePopoverOpen, setOrderingModePopoverOpen] = useState(false);
 
   const [knnImage, setKnnImage] = useState({});
+  const [svmPosTags, setSvmPosTags] = useState([]);
+  const [svmNegTags, setSvmNegTags] = useState([]);
   const [subset, setSubset_] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [queryResultData, setQueryResultData] = useState({images: [], clustering: []});
 
+  const setOrderingMode = (mode) => {
+    if (mode === "svm") {
+      setOrderingModePopoverOpen(true);
+    } else {
+      setOrderingModePopoverOpen(false);
+      // setSvmPosTags([]);
+      // setSvmNegTags([]);
+    }
+    setOrderingMode_(mode);
+  };
+
   const runQuery = async () => {
     setClusterIsOpen(false);
+    setOrderingModePopoverOpen(false);
     setSelection({});
 
     let url;
@@ -142,6 +159,9 @@ const App = () => {
     } else if (source === "dataset" && orderingMode === "knn") {
       url = new URL(`${endpoints.queryKnn}/${datasetName}`);
       url.search = new URLSearchParams({...params, image_ids: [knnImage.id]}).toString();
+    } else if (source === "dataset" && orderingMode === "svm") {
+      url = new URL(`${endpoints.querySvm}/${datasetName}`);
+      url.search = new URLSearchParams({...params, pos_tags: svmPosTags, neg_tags: svmNegTags}).toString();
     } else {
       console.error(`Query type (${source}, ${orderingMode}) not implemented`);
       return;
@@ -331,12 +351,16 @@ const App = () => {
                 }
               })()}
               <FormGroup className="mb-0">
-                <select className="custom-select mx-2" onChange={e => setOrderingMode(e.target.value)}>
+                <select className="custom-select mx-2" id="ordering-mode" onChange={e => setOrderingMode(e.target.value)}>
                   {orderingModes.map((m) => <option value={m.id} selected={orderingMode === m.id} disabled={m.disabled}>{m.label}</option>)}
                 </select>
                 <ReactSVG className="icon" src="assets/arrow-caret.svg" />
               </FormGroup>
-              <Button color="primary" onClick={() => setIsLoading(true)}>Run query</Button>
+              <Button
+                color="primary"
+                onClick={() => setIsLoading(true)}
+                disabled={orderingMode === "svm" && (svmPosTags.length === 0 || svmNegTags.length === 0)}
+              >Run query</Button>
             </Form>
             <Form className="mt-2 mb-1 d-flex flex-row align-items-center">
               {subset.length > 0 && <div className="rbt-token rbt-token-removeable alert-secondary">
@@ -367,6 +391,33 @@ const App = () => {
             </Form>
           </Container>
         </div>
+        <Popover
+          placement="bottom"
+          isOpen={orderingModePopoverOpen}
+          target="ordering-mode"
+          fade={false}
+        >
+          <PopoverBody>
+            <Typeahead
+              multiple
+              id="svm-pos-bar"
+              className="typeahead-bar mt-1"
+              placeholder="Positive example tags"
+              options={datasetInfo.categories}
+              selected={svmPosTags}
+              onChange={selected => setSvmPosTags(selected)}
+            />
+            <Typeahead
+              multiple
+              id="svm-neg-bar"
+              className="typeahead-bar rbt-red mt-1 mb-2"
+              placeholder="Negative example tags"
+              options={datasetInfo.categories}
+              selected={svmNegTags}
+              onChange={selected => setSvmNegTags(selected)}
+            />
+          </PopoverBody>
+        </Popover>
         <Container fluid>
           {(!!!(datasetInfo.isNotLoaded) && !isLoading && queryResultData.images.length == 0) &&
             <p className="text-center text-muted">No results match your query.</p>}

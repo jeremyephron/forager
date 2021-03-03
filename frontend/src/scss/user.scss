@@ -10,7 +10,7 @@ $primary-alt: mix($primary,$white,6%);
 $primary-alt-lighter: mix($primary,$white,2%);
 $primary-alt-darker: mix($primary,$white,8%);
 
-body {
+body, .popover {
   font-family: proxima-nova, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
