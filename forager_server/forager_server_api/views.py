@@ -1394,6 +1394,11 @@ def add_annotations_v2(request):
         )
     )
 
+    res = {"created": len(image_identifiers)}
+
+    if value == LabelValue.TOMBSTONE:
+        res["removed"] = category_has_labels(dataset_items[0].dataset, category)
+
     return JsonResponse({"created": len(image_identifiers)})
 
 
@@ -1451,3 +1456,18 @@ def get_category_counts_v2(request, dataset_name):
         )))
 
     return JsonResponse({"numLabeled": n_labeled})
+
+
+def category_has_labels(dataset, category):
+    anns = Annotation.objects.filter(
+        dataset_item__in=dataset.datasetitem_set.filter(),
+        label_category__exact=category,
+        label_type__exact="klabel_frame",
+    ).order_by(
+        "dataset_item", "label_category", "-created"
+    ).distinct("dataset_item", "label_category")
+
+    n_labels = len(list(filter(
+        lambda x: json.loads(x.label_data)["value"] != LabelValue.TOMBSTONE, anns
+    )))
+    return n_labels > 0
