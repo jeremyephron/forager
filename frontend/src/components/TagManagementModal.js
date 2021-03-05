@@ -11,10 +11,18 @@ import {
   ModalBody,
 } from "reactstrap";
 
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faSort,
+  faSortDown,
+  faSortUp
+} from "@fortawesome/free-solid-svg-icons";
+
 import styled from "styled-components";
 
 import fromPairs from "lodash/fromPairs";
 import toPairs from "lodash/toPairs";
+
 
 import { ConfirmModal } from "../components";
 
@@ -41,17 +49,120 @@ const TagManagementModal = ({
   // TODO: store with redux
   const [categories, setCategories] = useState([]);
   const [categoryCounts, setCategoryCounts] = useState({});
+  const [preventCountReload, setPreventCountReload] = useState(false);
+
+  const kOrderBy = {name: 0, count: 1};
+  const kOrderDir = {asc: 0, desc: 1};
+  const [orderBy, setOrderBy] = useState(kOrderBy.name);
+  const [orderDir, setOrderDir] = useState(kOrderDir.asc);
 
   const [confirmIsOpen, setConfirmIsOpen] = useState(false);
   const [confirmCategory, setConfirmCategory] = useState(null);
   const [confirmCategoryIdx, setConfirmCategoryIdx] = useState(null);
   const toggleConfirmIsOpen = (category) => setConfirmIsOpen(!confirmIsOpen);
 
-  let preventCountReload = false;
-  useEffect(async () => {
-    if (preventCountReload) return;
+  const sortCategories = (arr) => {
+    const copy = arr.slice(0);
 
-    setCategories(datasetInfo.categories.slice(0)); // .slice(0) is fastest clone
+    if (orderBy === kOrderBy.name) {
+      if (orderDir === kOrderDir.asc) {
+        copy.sort((a, b) => a.tag < b.tag ? -1 : 1);
+      } else {
+        copy.sort((a, b) => b.tag < a.tag ? -1 : 1);
+      }
+    } else { // orderBy === kOrderBy.count
+      if (orderDir === kOrderDir.asc) {
+        copy.sort((a, b) => categoryCounts[a.tag] - categoryCounts[b.tag]);
+      } else {
+        copy.sort((a, b) => categoryCounts[b.tag] - categoryCounts[a.tag]);
+      }
+    }
+    
+    return copy;
+  };
+
+  const changeOrdering = (by) => {
+    if (by === orderBy) {
+      setOrderDir(orderDir === kOrderDir.asc ? kOrderDir.desc : kOrderDir.asc);
+    } else {
+      setOrderBy(by);
+      setOrderDir(kOrderDir.asc)
+    }
+  };
+
+  const setCategoryByIndex = (tag, idx) => {
+    if (isReadOnly) return;
+
+    const oldTag = categories[idx].tag;
+
+    categories[idx].tag = tag;
+    setCategories(categories.slice(0));
+
+    delete Object.assign(categoryCounts, {[tag]: categoryCounts[oldTag]})[oldTag];
+    setCategoryCounts(categoryCounts);
+  };
+
+  const updateCategoryByIndex = async (idx, srcIdx) => {
+    if (isReadOnly) return;
+
+    const newCategory = categories[idx].tag;
+    const oldCategory = datasetInfo.categories[srcIdx];
+    if (newCategory === oldCategory) {
+      return;
+    }
+
+    const url = new URL(endpoints.updateCategory);
+    const body = {
+      user: username,
+      newCategory: newCategory,
+      oldCategory: oldCategory,
+    };
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body),
+    }).then(res => res.json());
+
+    setPreventCountReload(true);
+    const categoriesCopy = categories.map((obj, i) => obj.tag);
+    categoriesCopy.sort();
+    setDatasetInfo({...datasetInfo, categories: categoriesCopy});
+  };
+
+  const deleteCategoryByIndex = async (idx) => {
+    if (isReadOnly) return;
+
+    const tag = categories[idx].tag;
+    const url = new URL(endpoints.deleteCategory);
+    const body = {
+      user: username,
+      category: tag,
+    };
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body),
+    }).then(res => res.json());
+
+    delete categoryCounts[tag];
+    setCategoryCounts(categoryCounts);
+
+    setPreventCountReload(true);
+    datasetInfo.categories.splice(categories[idx].srcIdx, 1);
+    setDatasetInfo({...datasetInfo, categories: datasetInfo.categories.slice(0)});
+  };
+
+  useEffect(async () => {
+    setCategories(sortCategories(datasetInfo.categories.map(
+      (tag, i) => ({tag, srcIdx: i})
+    )));
+
+    if (preventCountReload) {
+      setPreventCountReload(false);
+      return;
+    }
 
     const url = new URL(endpoints.getCategoryCounts + `/${datasetName}`);
     const body = {
@@ -69,86 +180,30 @@ const TagManagementModal = ({
     }
   }, [datasetInfo.categories]);
 
-  const setCategoryByIndex = (tag, idx) => {
-    if (isReadOnly) return;
-
-    const oldTag = categories[idx];
-
-    categories[idx] = tag;
-    setCategories(categories.slice(0));
-
-    delete Object.assign(categoryCounts, {[tag]: categoryCounts[oldTag] })[oldTag];
-    setCategoryCounts(categoryCounts);
-  };
-
-  const updateCategoryByIndex = async (idx) => {
-    const url = new URL(endpoints.updateCategory);
-    const body = {
-      user: username,
-      newCategory: categories[idx],
-      oldCategory: datasetInfo.categories[idx],
-    };
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(body),
-    }).then(res => res.json());
-
-    categories.sort()
-    setCategories(categories.slice(0));
-
-    preventCountReload = true;
-    setDatasetInfo({...datasetInfo, categories: categories});
-    preventCountReload = false;
-  };
-
-  const deleteCategoryByIndex = async (idx) => {
-    if (isReadOnly) return;
-
-    const tag = categories[idx];
-    const url = new URL(endpoints.deleteCategory);
-    const body = {
-      user: username,
-      category: tag,
-    };
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(body),
-    }).then(res => res.json());
-
-    categories.splice(idx, 1);
-    setCategories(categories);
-
-    delete categoryCounts[tag];
-    setCategoryCounts(categoryCounts);
-
-    preventCountReload = true;
-    setDatasetInfo({...datasetInfo, categories: categories});
-    preventCountReload = false;
-  };
+  useEffect(() => {
+    setCategories(prev => sortCategories(prev))
+  }, [categoryCounts, orderBy, orderDir]);
 
   const tableBodyFromTags = () => {
     return (
       <tbody>
-        {categories.map((tag, i) => {
+        {categories.map((obj, i) => {
           return (
-            <tr key={i}>
+            <tr key={obj.srcIdx}>
               <td>
                 <input
                   type="text"
-                  value={tag}
+                  value={obj.tag}
                   disabled={isReadOnly}
                   onChange={(e) => setCategoryByIndex(e.target.value, i)}
                   onKeyDown={(e) => { if (e.keyCode === 13) e.target.blur(); }}
-                  onBlur={(e) => updateCategoryByIndex(i)}
+                  onBlur={(e) => updateCategoryByIndex(i, obj.srcIdx)}
                 />
               </td>
-              <td>{categoryCounts[tag]}</td>
+              <td>{categoryCounts[obj.tag]}</td>
               <td>
                 <Button close disabled={isReadOnly} onClick={(e) => {
-                    setConfirmCategory(categories[i]);
+                    setConfirmCategory(obj.tag);
                     setConfirmCategoryIdx(i);
                     toggleConfirmIsOpen();
                     document.activeElement.blur();
@@ -175,8 +230,16 @@ const TagManagementModal = ({
           <Table hover borderless size="sm">
             <thead>
               <tr>
-                <th>Tag</th>
-                <th># Images</th>
+                <th style={{cursor: "pointer"}} onClick={() => changeOrdering(kOrderBy.name)}>
+                  Tag Name <FontAwesomeIcon icon={
+                    orderBy !== kOrderBy.name ? faSort : (orderDir === kOrderDir.asc ? faSortUp : faSortDown)
+                  } />
+                </th>
+                <th style={{cursor: "pointer"}} onClick={() => changeOrdering(kOrderBy.count)}>
+                  # Images <FontAwesomeIcon icon={
+                    orderBy !== kOrderBy.count ? faSort : (orderDir === kOrderDir.asc ? faSortUp : faSortDown)
+                  } />
+                </th>
               </tr>
             </thead>
             {tableBodyFromTags()}
