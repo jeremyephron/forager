@@ -1397,7 +1397,9 @@ def add_annotations_v2(request):
     res = {"created": len(image_identifiers)}
 
     if value == LabelValue.TOMBSTONE:
-        res["removed"] = category_has_labels(dataset_items[0].dataset, category)
+        res["removed"] = not category_has_labels(
+            dataset_items[0].dataset, category
+        )
 
     return JsonResponse({"created": len(image_identifiers)})
 
