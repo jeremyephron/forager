@@ -172,7 +172,7 @@ const ClusterModal = ({
     }
     setIsLoading(true);
     setAnnotations(newAnnotations);
-    setTags(union(tags, added));
+    setTags(union(tags, added).sort());
 
     let addPromises = added.map(async t => addAnnotations(t, "positive", imageIds));
     let deletePromises = deleted.map(async t => addAnnotations(t, "negative", imageIds));

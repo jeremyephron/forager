@@ -39,14 +39,20 @@ const TagManagementModal = ({
   isReadOnly
 }) => {
   // TODO: store with redux
-  const [categoryCounts, setCategoryCounts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [categoryCounts, setCategoryCounts] = useState({});
 
   const [confirmIsOpen, setConfirmIsOpen] = useState(false);
   const [confirmCategory, setConfirmCategory] = useState(null);
   const [confirmCategoryIdx, setConfirmCategoryIdx] = useState(null);
   const toggleConfirmIsOpen = (category) => setConfirmIsOpen(!confirmIsOpen);
 
+  let preventCountReload = false;
   useEffect(async () => {
+    if (preventCountReload) return;
+
+    setCategories(datasetInfo.categories.slice(0)); // .slice(0) is fastest clone
+
     const url = new URL(endpoints.getCategoryCounts + `/${datasetName}`);
     const body = {
       user: username,
@@ -63,32 +69,48 @@ const TagManagementModal = ({
     }
   }, [datasetInfo.categories]);
 
-  const setCategoryByIndex = async (tag, idx) => {
+  const setCategoryByIndex = (tag, idx) => {
     if (isReadOnly) return;
 
+    const oldTag = categories[idx];
+
+    categories[idx] = tag;
+    setCategories(categories.slice(0));
+
+    delete Object.assign(categoryCounts, {[tag]: categoryCounts[oldTag] })[oldTag];
+    setCategoryCounts(categoryCounts);
+  };
+
+  const updateCategoryByIndex = async (idx) => {
     const url = new URL(endpoints.updateCategory);
     const body = {
       user: username,
-      newCategory: tag,
+      newCategory: categories[idx],
       oldCategory: datasetInfo.categories[idx],
     };
+
     const res = await fetch(url, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(body),
     }).then(res => res.json());
 
-    datasetInfo.categories[idx] = tag;
-    setDatasetInfo({...datasetInfo, categories: datasetInfo.categories});
+    categories.sort()
+    setCategories(categories.slice(0));
+
+    preventCountReload = true;
+    setDatasetInfo({...datasetInfo, categories: categories});
+    preventCountReload = false;
   };
 
   const deleteCategoryByIndex = async (idx) => {
     if (isReadOnly) return;
 
+    const tag = categories[idx];
     const url = new URL(endpoints.deleteCategory);
     const body = {
       user: username,
-      category: datasetInfo.categories[idx],
+      category: tag,
     };
     const res = await fetch(url, {
       method: "POST",
@@ -96,14 +118,21 @@ const TagManagementModal = ({
       body: JSON.stringify(body),
     }).then(res => res.json());
 
-    datasetInfo.categories.splice(idx, 1);
-    setDatasetInfo({...datasetInfo, categories: datasetInfo.categories});
+    categories.splice(idx, 1);
+    setCategories(categories);
+
+    delete categoryCounts[tag];
+    setCategoryCounts(categoryCounts);
+
+    preventCountReload = true;
+    setDatasetInfo({...datasetInfo, categories: categories});
+    preventCountReload = false;
   };
 
   const tableBodyFromTags = () => {
     return (
       <tbody>
-        {datasetInfo.categories.map((tag, i) => {
+        {categories.map((tag, i) => {
           return (
             <tr key={i}>
               <td>
@@ -112,15 +141,14 @@ const TagManagementModal = ({
                   value={tag}
                   disabled={isReadOnly}
                   onChange={(e) => setCategoryByIndex(e.target.value, i)}
-                  onKeyDown={(e) => {
-                    if (e.keyCode === 13) e.target.blur();
-                  }}
+                  onKeyDown={(e) => { if (e.keyCode === 13) e.target.blur(); }}
+                  onBlur={(e) => updateCategoryByIndex(i)}
                 />
               </td>
-              <td>{categoryCounts[i]}</td>
+              <td>{categoryCounts[tag]}</td>
               <td>
                 <Button close disabled={isReadOnly} onClick={(e) => {
-                    setConfirmCategory(datasetInfo.categories[i]);
+                    setConfirmCategory(categories[i]);
                     setConfirmCategoryIdx(i);
                     toggleConfirmIsOpen();
                     document.activeElement.blur();

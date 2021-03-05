@@ -1432,7 +1432,7 @@ def get_category_counts_v2(request, dataset_name):
     user = payload["user"]
     categories = payload["categories"]
 
-    n_labeled = [None] * len(categories)
+    n_labeled = {}
     for i, category in enumerate(categories):
         anns = Annotation.objects.filter(
             dataset_item__in=dataset.datasetitem_set.filter(),
@@ -1442,7 +1442,7 @@ def get_category_counts_v2(request, dataset_name):
             "dataset_item", "label_category", "-created"
         ).distinct("dataset_item", "label_category")
 
-        n_labeled[i] = len(list(filter(
+        n_labeled[category] = len(list(filter(
             # TODO: refactor positive value enum
             lambda x: json.loads(x.label_data)['value'] == 1, anns
         )))
