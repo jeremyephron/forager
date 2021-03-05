@@ -1315,11 +1315,18 @@ def get_dataset_info_v2(request, dataset_name):
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
     annotations = Annotation.objects.filter(
-        dataset_item__in=dataset.datasetitem_set.filter()
-    )
-    categories = sorted(
-        list({ann.label_category for ann in annotations if ann.label_category})
-    )
+        dataset_item__in=dataset.datasetitem_set.filter(),
+        label_type__exact="klabel_frame", # TODO: change in the future
+    ).order_by(
+        "dataset_item", "label_category", "-created"
+    ).distinct("dataset_item", "label_category")
+
+    # Unique categories that have at least one non-tombstone label
+    categories = sorted(set(map(lambda x: x.label_category, filter(
+        lambda x: json.loads(x.label_data)["value"] != LabelValue.TOMBSTONE,
+        annotations
+    ))))
+
     return JsonResponse(
         {
             "categories": categories,
@@ -1361,7 +1368,6 @@ def add_annotations_v2(request):
     if not image_identifiers:
         return JsonResponse({"created": 0})
 
-    # TODO(mihirg): handle deletion as deleted tag, not negative
     user = payload["user"]
     category = payload["category"]
     value = int(LabelValue[payload["value"]])
