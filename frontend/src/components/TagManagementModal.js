@@ -77,7 +77,7 @@ const TagManagementModal = ({
         copy.sort((a, b) => categoryCounts[b.tag] - categoryCounts[a.tag]);
       }
     }
-    
+
     return copy;
   };
 
@@ -97,37 +97,47 @@ const TagManagementModal = ({
 
     categories[idx].tag = tag;
     setCategories(categories.slice(0));
-
-    delete Object.assign(categoryCounts, {[tag]: categoryCounts[oldTag]})[oldTag];
-    setCategoryCounts(categoryCounts);
   };
 
-  const updateCategoryByIndex = async (idx, srcIdx) => {
+  const updateCategoryByIndex = async (e, idx, srcIdx) => {
     if (isReadOnly) return;
 
-    const newCategory = categories[idx].tag;
-    const oldCategory = datasetInfo.categories[srcIdx];
-    if (newCategory === oldCategory) {
+    const newTag = categories[idx].tag;
+    const oldTag = datasetInfo.categories[srcIdx];
+    if (newTag === oldTag) {
       return;
+    }
+
+    console.log(datasetInfo.categories.find((name) => name === newTag))
+
+    if (datasetInfo.categories.find((name) => name === newTag) !== undefined) {
+      e.target.setCustomValidity(`"${newTag}" already exists`);
+      e.target.reportValidity();
+      categories[idx].tag = oldTag;
+      setCategories(categories.slice(0));
+      return
     }
 
     const url = new URL(endpoints.updateCategory);
     const body = {
       user: username,
-      newCategory: newCategory,
-      oldCategory: oldCategory,
+      newCategory: newTag,
+      oldCategory: oldTag,
     };
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(body),
-    }).then(res => res.json());
+    // const res = await fetch(url, {
+    //   method: "POST",
+    //   headers: {"Content-Type": "application/json"},
+    //   body: JSON.stringify(body),
+    // }).then(res => res.json());
 
     setPreventCountReload(true);
     const categoriesCopy = categories.map((obj, i) => obj.tag);
     categoriesCopy.sort();
     setDatasetInfo({...datasetInfo, categories: categoriesCopy});
+
+    delete Object.assign(categoryCounts, {[newTag]: categoryCounts[oldTag]})[oldTag];
+    setCategoryCounts(categoryCounts);
   };
 
   const deleteCategoryByIndex = async (idx) => {
@@ -197,10 +207,10 @@ const TagManagementModal = ({
                   disabled={isReadOnly}
                   onChange={(e) => setCategoryByIndex(e.target.value, i)}
                   onKeyDown={(e) => { if (e.keyCode === 13) e.target.blur(); }}
-                  onBlur={(e) => updateCategoryByIndex(i, obj.srcIdx)}
+                  onBlur={(e) => updateCategoryByIndex(e, i, obj.srcIdx)}
                 />
               </td>
-              <td>{categoryCounts[obj.tag]}</td>
+              <td>{categoryCounts[datasetInfo.categories[obj.srcIdx]]}</td>
               <td>
                 <Button close disabled={isReadOnly} onClick={(e) => {
                     setConfirmCategory(obj.tag);
