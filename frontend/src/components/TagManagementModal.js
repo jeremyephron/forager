@@ -25,7 +25,7 @@ const endpoints = fromPairs(toPairs({
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
 const TableContainer = styled.div`
-  height: 80vh;
+  height: 70vh;
   overflow: auto;  
 `;
 
