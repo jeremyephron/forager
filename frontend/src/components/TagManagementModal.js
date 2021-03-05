@@ -108,8 +108,6 @@ const TagManagementModal = ({
       return;
     }
 
-    console.log(datasetInfo.categories.find((name) => name === newTag))
-
     if (datasetInfo.categories.find((name) => name === newTag) !== undefined) {
       e.target.setCustomValidity(`"${newTag}" already exists`);
       e.target.reportValidity();
@@ -125,11 +123,11 @@ const TagManagementModal = ({
       oldCategory: oldTag,
     };
 
-    // const res = await fetch(url, {
-    //   method: "POST",
-    //   headers: {"Content-Type": "application/json"},
-    //   body: JSON.stringify(body),
-    // }).then(res => res.json());
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body),
+    }).then(res => res.json());
 
     setPreventCountReload(true);
     const categoriesCopy = categories.map((obj, i) => obj.tag);
