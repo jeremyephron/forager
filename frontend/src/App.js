@@ -392,7 +392,7 @@ const App = () => {
           placement="bottom"
           isOpen={orderingModePopoverOpen}
           target="ordering-mode"
-          trigger="hover focus"
+          trigger="hover"
           toggle={() => setOrderingModePopoverOpen(!orderingModePopoverOpen)}
           fade={false}
         >
