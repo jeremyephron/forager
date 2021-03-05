@@ -1,6 +1,6 @@
 import distutils.util
 from google.cloud import storage
-from enum import Enum
+from enum import IntEnum
 import json
 import os
 import random
@@ -22,11 +22,12 @@ from pycocotools.coco import COCO
 
 from .models import Dataset, DatasetItem, Annotation
 
-class PerFrameLabelValue(Enum):
-    positive = 1
-    negative = 2
-    hard_negative = 3
-    unsure = 4
+class LabelValue(IntEnum):
+    TOMBSTONE = -1
+    POSITIVE = 1
+    NEGATIVE = 2
+    HARD_NEGATIVE = 3
+    UNSURE = 4
 
 def nest_anns(anns, nest_category=True, nest_lf=True):
     if nest_category and nest_lf:
@@ -558,7 +559,7 @@ def filtered_images(request, dataset, path_filter=None):
         anns = filter_most_recent_anns(
             nest_anns(annotations, nest_category=False, nest_lf=False))
 
-        cat_value = PerFrameLabelValue[label_value].value
+        cat_value = LabelValue[label_value]
         images_with_label = set()
         for di_pk, ann_list in anns.items():
             for ann in ann_list:
@@ -995,10 +996,7 @@ def lookup_svm(request, dataset_name):
     neg_paths = []
     for ann in frame_anns:
         label_value = json.loads(ann.label_data)['value']
-        if label_value in (
-            PerFrameLabelValue.negative.value,
-            PerFrameLabelValue.hard_negative.value,
-        ):
+        if label_value in [LabelValue.NEGATIVE, LabelValue.HARD_NEGATIVE]:
             neg_paths.append(ann.dataset_item.path)
 
     # 3. Send paths and patches to /query_svm
@@ -1090,7 +1088,7 @@ def get_tags_from_annotations_v2(annotations):
             assert len(ann_list) == 1  # should only be one latest per-frame annotation
             for ann in ann_list:
                 label_data = json.loads(ann.label_data)
-                if label_data["value"] != PerFrameLabelValue.positive.value:
+                if label_data["value"] != LabelValue.POSITIVE:
                     continue
                 tag_anns_by_pk[di_pk].append(ann)
 
@@ -1366,7 +1364,7 @@ def add_annotations_v2(request):
     # TODO(mihirg): handle deletion as deleted tag, not negative
     user = payload["user"]
     category = payload["category"]
-    value = PerFrameLabelValue[payload["value"]].value
+    value = int(LabelValue[payload["value"]])
     annotation = json.dumps(
         {
             "type": 0,  # full-frame
@@ -1443,8 +1441,7 @@ def get_category_counts_v2(request, dataset_name):
         ).distinct("dataset_item", "label_category")
 
         n_labeled[category] = len(list(filter(
-            # TODO: refactor positive value enum
-            lambda x: json.loads(x.label_data)['value'] == 1, anns
+            lambda x: json.loads(x.label_data)["value"] == LabelValue.POSITIVE, anns
         )))
 
     return JsonResponse({"numLabeled": n_labeled})
