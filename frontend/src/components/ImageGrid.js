@@ -21,7 +21,7 @@ const ImageGrid = ({ images, onClick, minRowHeight, imageAspectRatio, selectedPr
 
   return (
     <div className="image-grid" ref={ref}>
-      {images.map((im, i) =>
+      {(width > 0) && images.map((im, i) =>
         <a href="#" onClick={(e) => handleClick(e, i)}
           style={{width: imageWidth, marginBottom: MARGIN, marginRight: MARGIN}}
         >

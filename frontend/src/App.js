@@ -17,11 +17,13 @@ import {
 } from "reactstrap";
 import { Typeahead } from "react-bootstrap-typeahead";
 import { ReactSVG } from "react-svg";
+import Slider, { Range } from "rc-slider";
 
 import fromPairs from "lodash/fromPairs";
 import toPairs from "lodash/toPairs";
 
 import "react-bootstrap-typeahead/css/Typeahead.css";
+import "rc-slider/assets/index.css";
 import "./scss/theme.scss";
 
 import {
@@ -120,6 +122,8 @@ const App = () => {
   const [orderByClusterSize, setOrderByClusterSize] = useState(true);
   const [clusteringStrength, setClusteringStrength] = useState(20);
   const [orderingModePopoverOpen, setOrderingModePopoverOpen] = useState(false);
+  const [svmScoreRange, setSvmScoreRange] = useState([0, 100]);
+  const [augmentSvm, setAugmentSvm] = useState(true);
 
   const [knnImage, setKnnImage] = useState({});
   const [svmPosTags, setSvmPosTags] = useState([]);
@@ -132,6 +136,8 @@ const App = () => {
     if (mode !== "svm") {
       setSvmPosTags([]);
       setSvmNegTags([]);
+      setSvmScoreRange([0, 100]);
+      setAugmentSvm(true);
     }
     setOrderingMode_(mode);
   };
@@ -155,10 +161,18 @@ const App = () => {
       url.search = new URLSearchParams({...params, order: orderingMode}).toString();
     } else if (source === "dataset" && orderingMode === "knn") {
       url = new URL(`${endpoints.queryKnn}/${datasetName}`);
-      url.search = new URLSearchParams({...params, image_ids: [knnImage.id]}).toString();
+      url.search = new URLSearchParams({...params,
+        image_ids: [knnImage.id]
+      }).toString();
     } else if (source === "dataset" && orderingMode === "svm") {
       url = new URL(`${endpoints.querySvm}/${datasetName}`);
-      url.search = new URLSearchParams({...params, pos_tags: svmPosTags, neg_tags: svmNegTags}).toString();
+      url.search = new URLSearchParams({...params,
+        pos_tags: svmPosTags,
+        neg_tags: svmNegTags,
+        augment: augmentSvm,
+        score_min: svmScoreRange[0] / 100,
+        score_max: svmScoreRange[1] / 100,
+      }).toString();
     } else {
       console.error(`Query type (${source}, ${orderingMode}) not implemented`);
       return;
@@ -356,7 +370,7 @@ const App = () => {
               <Button
                 color="primary"
                 onClick={() => setIsLoading(true)}
-                disabled={orderingMode === "svm" && (svmPosTags.length === 0 || svmNegTags.length === 0)}
+                disabled={orderingMode === "svm" && svmPosTags.length === 0}
               >Run query</Button>
             </Form>
             <Form className="mt-2 mb-1 d-flex flex-row align-items-center">
@@ -372,18 +386,17 @@ const App = () => {
                   checked={orderByClusterSize}
                   onChange={(e) => setOrderByClusterSize(e.target.checked)}
                 />
-                <label className="custom-control-label text-nowrap" for="order-by-cluster-size-switch">
+                <label className="custom-control-label text-nowrap" htmlFor="order-by-cluster-size-switch">
                   Order by cluster size
                 </label>
               </div>
-              <label for="cluster-strength-slider" className="mb-0 mr-2 text-nowrap">
+              <label className="mb-0 mr-2 text-nowrap">
                 Clustering strength:
               </label>
-              <input className="custom-range" type="range" min="0" max="100"
-                id="cluster-strength-slider"
+              <Slider
                 value={clusteringStrength}
-                onChange={e => setClusteringStrength(e.target.value)}
-                onMouseUp={recluster}
+                onChange={setClusteringStrength}
+                onAfterChange={recluster}
               />
             </Form>
           </Container>
@@ -395,6 +408,7 @@ const App = () => {
           trigger="hover"
           toggle={() => setOrderingModePopoverOpen(!orderingModePopoverOpen)}
           fade={false}
+          popperClassName="svm-popover"
         >
           <PopoverBody>
             <Typeahead
@@ -415,6 +429,26 @@ const App = () => {
               selected={svmNegTags}
               onChange={selected => setSvmNegTags(selected)}
             />
+
+            <div className="mt-2 custom-control custom-checkbox">
+              <input
+                type="checkbox"
+                className="custom-control-input"
+                id="augment-svm-checkbox"
+                disabled={svmNegTags.length === 0}
+                checked={augmentSvm || svmNegTags.length === 0}
+                onChange={(e) => setAugmentSvm(e.target.checked)}
+              />
+              <label className="custom-control-label" htmlFor="augment-svm-checkbox">
+                Automatically augment negative set with random examples (
+                {svmNegTags.length === 0 ? "required if no explicit negative examples" : "recommended"})
+              </label>
+            </div>
+
+            <hr className="my-2" />
+
+            <div>Score range: {svmScoreRange[0] / 100} to {svmScoreRange[1] / 100}</div>
+            <Range allowCross={false} value={svmScoreRange} onChange={setSvmScoreRange} />
           </PopoverBody>
         </Popover>}
         <Container fluid>

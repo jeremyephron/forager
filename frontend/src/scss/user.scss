@@ -86,7 +86,7 @@ html, body, #root, .main {
     width: 9rem;
   }
 
-  .custom-range {
+  .rc-slider {
     width: 10rem;
   }
 }
@@ -147,6 +147,19 @@ html, body, #root, .main {
   .popover-body {
     padding-bottom: 0.6rem;
   }
+}
+
+.svm-popover {
+  min-width: 25rem;
+}
+
+.rc-slider-track {
+  background-color: $primary;
+}
+
+.rc-slider-handle {
+  border-color: $primary !important;
+  box-shadow: none !important;
 }
 
 // .panel {
