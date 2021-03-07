@@ -123,21 +123,25 @@ const App = () => {
   const [clusteringStrength, setClusteringStrength] = useState(20);
   const [orderingModePopoverOpen, setOrderingModePopoverOpen] = useState(false);
   const [svmScoreRange, setSvmScoreRange] = useState([0, 100]);
-  const [augmentSvm, setAugmentSvm] = useState(true);
+  const [svmAugmentNegs, setSvmAugmentNegs] = useState(true);
 
   const [knnImage, setKnnImage] = useState({});
   const [svmPosTags, setSvmPosTags] = useState([]);
   const [svmNegTags, setSvmNegTags] = useState([]);
   const [subset, setSubset_] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [queryResultData, setQueryResultData] = useState({images: [], clustering: []});
+  const [queryResultData, setQueryResultData] = useState({
+    type: null,
+    images: [],
+    clustering: []
+  });
 
   const setOrderingMode = (mode) => {
     if (mode !== "svm") {
       setSvmPosTags([]);
       setSvmNegTags([]);
       setSvmScoreRange([0, 100]);
-      setAugmentSvm(true);
+      setSvmAugmentNegs(true);
     }
     setOrderingMode_(mode);
   };
@@ -169,7 +173,7 @@ const App = () => {
       url.search = new URLSearchParams({...params,
         pos_tags: svmPosTags,
         neg_tags: svmNegTags,
-        augment: augmentSvm,
+        augment_negs: svmAugmentNegs,
         score_min: svmScoreRange[0] / 100,
         score_max: svmScoreRange[1] / 100,
       }).toString();
@@ -373,31 +377,43 @@ const App = () => {
                 disabled={orderingMode === "svm" && svmPosTags.length === 0}
               >Run query</Button>
             </Form>
-            <Form className="mt-2 mb-1 d-flex flex-row align-items-center">
+            <Form className="mt-2 mb-1 d-flex flex-row-reverse justify-content-between">
+              <div className="d-flex flex-row align-items-center">
+                <div className="custom-switch mr-4">
+                  <Input type="checkbox" className="custom-control-input"
+                    id="order-by-cluster-size-switch"
+                    checked={orderByClusterSize}
+                    onChange={(e) => setOrderByClusterSize(e.target.checked)}
+                  />
+                  <label className="custom-control-label text-nowrap" htmlFor="order-by-cluster-size-switch">
+                    Order by cluster size
+                  </label>
+                </div>
+                <label className="mb-0 mr-2 text-nowrap">
+                  Clustering strength:
+                </label>
+                <Slider
+                  value={clusteringStrength}
+                  onChange={setClusteringStrength}
+                  onAfterChange={recluster}
+                />
+              </div>
+              {queryResultData.type === "svm" && <div className="d-flex flex-row align-items-center">
+                <label className="mb-0 mr-1 text-nowrap">SVM score range:</label>
+                <span className="mb-0 mr-2 text-nowrap text-muted text-monospace text-small">
+                  {Number(svmScoreRange[0] / 100).toFixed(2)}
+                </span>
+                <Range allowCross={false} value={svmScoreRange} onChange={setSvmScoreRange} />
+                <span className="mb-0 ml-2 text-nowrap text-muted text-monospace text-small">
+                  {Number(svmScoreRange[1] / 100).toFixed(2)}
+                </span>
+              </div>}
               {subset.length > 0 && <div className="rbt-token rbt-token-removeable alert-secondary">
-                Limited to subset of {subset.length} image{subset.length !== 1 && "s"}
+                Limited to {subset.length} image{subset.length !== 1 && "s"}
                 <button aria-label="Remove" className="close rbt-close rbt-token-remove-button" type="button" onClick={() => setSubset([])}>
                   <span aria-hidden="true">×</span><span className="sr-only">Remove</span>
                 </button>
               </div>}
-              <div className="custom-switch mr-5 ml-auto">
-                <Input type="checkbox" className="custom-control-input"
-                  id="order-by-cluster-size-switch"
-                  checked={orderByClusterSize}
-                  onChange={(e) => setOrderByClusterSize(e.target.checked)}
-                />
-                <label className="custom-control-label text-nowrap" htmlFor="order-by-cluster-size-switch">
-                  Order by cluster size
-                </label>
-              </div>
-              <label className="mb-0 mr-2 text-nowrap">
-                Clustering strength:
-              </label>
-              <Slider
-                value={clusteringStrength}
-                onChange={setClusteringStrength}
-                onAfterChange={recluster}
-              />
             </Form>
           </Container>
         </div>
@@ -434,21 +450,16 @@ const App = () => {
               <input
                 type="checkbox"
                 className="custom-control-input"
-                id="augment-svm-checkbox"
+                id="svm-augment-negs-checkbox"
                 disabled={svmNegTags.length === 0}
-                checked={augmentSvm || svmNegTags.length === 0}
-                onChange={(e) => setAugmentSvm(e.target.checked)}
+                checked={svmAugmentNegs || svmNegTags.length === 0}
+                onChange={(e) => setSvmAugmentNegs(e.target.checked)}
               />
-              <label className="custom-control-label" htmlFor="augment-svm-checkbox">
+              <label className="custom-control-label" htmlFor="svm-augment-negs-checkbox">
                 Automatically augment negative set with random examples (
                 {svmNegTags.length === 0 ? "required if no explicit negative examples" : "recommended"})
               </label>
             </div>
-
-            <hr className="my-2" />
-
-            <div>Score range: {svmScoreRange[0] / 100} to {svmScoreRange[1] / 100}</div>
-            <Range allowCross={false} value={svmScoreRange} onChange={setSvmScoreRange} />
           </PopoverBody>
         </Popover>}
         <Container fluid>

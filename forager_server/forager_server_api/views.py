@@ -1163,7 +1163,7 @@ def process_image_query_results_v2(request, dataset, query_response):
     ]
 
 
-def build_result_set_v2(request, dataset, dataset_items, num_total=None):
+def build_result_set_v2(request, dataset, dataset_items, type, *, num_total=None):
     index_id = request.GET["index_id"]
 
     bucket_name = dataset.directory[len("gs://") :].split("/")[0]
@@ -1187,6 +1187,7 @@ def build_result_set_v2(request, dataset, dataset_items, num_total=None):
     dataset_item_identifiers = [di.pk for di in dataset_items]
 
     return {
+        "type": type,
         "paths": dataset_item_paths,
         "identifiers": dataset_item_identifiers,
         "num_total": num_total or len(dataset_items),
@@ -1224,16 +1225,20 @@ def query_knn_v2(request, dataset_name):
         dataset,
         response_data,
     )
-    return JsonResponse(build_result_set_v2(request, dataset, result_images))
+    return JsonResponse(build_result_set_v2(request, dataset, result_images, "knn"))
 
 
 @api_view(["GET"])
 @csrf_exempt
 def query_svm_v2(request, dataset_name):
     index_id = request.GET["index_id"]
-    pos_tags = set(request.GET["pos_tags"].split(","))
-    neg_tags = set(request.GET["neg_tags"].split(","))
     num_results = int(request.GET.get("num", 1000))
+
+    pos_tags = set(request.GET["pos_tags"].split(","))
+    neg_tags = set(filter(bool, request.GET.get("neg_tags", "").split(",")))
+    augment_negs = bool(distutils.util.strtobool(request.GET.get("augment_negs", "false")))
+    score_min = float(request.GET.get("score_min", 0.0))
+    score_max = float(request.GET.get("score_max", 1.0))
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
     annotations = Annotation.objects.filter(
@@ -1266,6 +1271,9 @@ def query_svm_v2(request, dataset_name):
         "num_results": num_results,
         "pos_identifiers": pos_dataset_item_internal_identifiers,
         "neg_identifiers": neg_dataset_item_internal_identifiers,
+        "augment_negs": augment_negs,
+        "score_min": score_min,
+        "score_max": score_max,
     }
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/query_svm_v2",
@@ -1278,7 +1286,7 @@ def query_svm_v2(request, dataset_name):
         dataset,
         response_data,
     )
-    return JsonResponse(build_result_set_v2(request, dataset, result_images))
+    return JsonResponse(build_result_set_v2(request, dataset, result_images, "svm"))
 
 
 @api_view(["GET"])
@@ -1305,7 +1313,9 @@ def get_next_images_v2(request, dataset_name, dataset=None):
     else:
         next_images = all_images[offset_to_return : offset_to_return + num_to_return]
     return JsonResponse(
-        build_result_set_v2(request, dataset, next_images, len(all_images))
+        build_result_set_v2(
+            request, dataset, next_images, "query", num_total=len(all_images)
+        )
     )
 
 
