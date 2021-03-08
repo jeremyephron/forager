@@ -141,6 +141,8 @@ class LabeledIndex:
             if num_results is None:
                 num_results = index.n_vectors
                 num_probes = index.n_centroids
+                print(index.n_vectors)
+                print(index.n_centroids)
 
             dists, (ids, _) = index.query(
                 query_vector, num_results, n_probes=num_probes
