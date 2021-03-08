@@ -204,12 +204,6 @@ const App = () => {
       };
     });
 
-    setQueryResultData({
-      images,
-      clustering: results.clustering,
-      type: results.type,
-    });
-
     if (results.type !== "svm") {
       // Reset all SVM parameters
       setSvmScoreRange([0, 100]);
@@ -218,6 +212,16 @@ const App = () => {
       setSvmNegTags([]);
       setTrainedSvmData(null);
     }
+    if ((results.type === "knn" || results.type === "svm") &&
+        (queryResultData.type !== "knn" && queryResultData.type !== "svm")) {
+      setOrderByClusterSize(false);
+    }
+
+    setQueryResultData({
+      images,
+      clustering: results.clustering,
+      type: results.type,
+    });
   };
   useEffect(() => {
     if (isLoading) runQuery().finally(() => setIsLoading(false));

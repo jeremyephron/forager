@@ -148,7 +148,6 @@ class LabeledIndex:
             assert len(ids) == 1 and len(dists) == 1
             lowest_dist = np.min(dists)
             highest_dist = np.max(dists)
-            print(lowest_dist, highest_dist)
 
             sorted_results = []
             for i, d in zip(ids[0], dists[0]):
@@ -159,7 +158,10 @@ class LabeledIndex:
         else:
             assert (
                 num_results is not None
-            ), "Can't return all results for spatial queries"
+            ), "Returning exhausive results not supported for spatial queries"
+            assert (
+                min_d == 0.0 and max_d == 1.0
+            ), "Distance bounds not supported for spatial queries"
 
             index = self.indexes[IndexType.SPATIAL_DOT if svm else IndexType.SPATIAL]
             dists, (ids, locs) = index.query(
@@ -168,8 +170,6 @@ class LabeledIndex:
                 n_probes=num_probes,
             )
             assert len(ids) == 1 and len(locs) == 1 and len(dists) == 1
-            lowest_dist = np.min(dists)
-            highest_dist = np.max(dists)
 
             # Gather lowest QUERY_PATCHES_PER_IMAGE distances for each image
             dists_by_id: DefaultDict[int, List[float]] = defaultdict(list)
@@ -178,12 +178,7 @@ class LabeledIndex:
             ] = defaultdict(list)
             for i, l, d in zip(ids[0], locs[0], dists[0]):
                 i, l, d = int(i), int(l), float(d)  # cast numpy types
-                d = (d - lowest_dist) / (highest_dist - lowest_dist)  # normalize
-                if (
-                    i >= 0
-                    and min_d <= d <= max_d
-                    and len(dists_by_id[i]) < config.QUERY_PATCHES_PER_IMAGE
-                ):
+                if i >= 0 and len(dists_by_id[i]) < config.QUERY_PATCHES_PER_IMAGE:
                     dists_by_id[i].append(d)
                     spatial_dists_by_id[i].append((l, d))
 
