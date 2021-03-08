@@ -1295,8 +1295,7 @@ async def train_svm_v2(request):
             unused_identifiers, min(len(unused_identifiers), num_extra_neg_vectors)
         )
     extra_neg_vectors = index.get_embeddings(extra_neg_identifiers)
-
-    assert len(neg_vectors) > 0
+    assert len(neg_vectors) + len(extra_neg_vectors) > 0
 
     # Train SVM and return serialized vector
     model = svm.SVC(kernel="linear")
