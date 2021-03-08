@@ -146,12 +146,15 @@ class LabeledIndex:
                 query_vector, num_results, n_probes=num_probes
             )
             assert len(ids) == 1 and len(dists) == 1
-            print(dists[0])
-            sorted_results = [
-                LabeledIndex.QueryResult(int(i), float(d))  # cast numpy types
-                for i, d in zip(ids[0], dists[0])
-                if int(i) >= 0 and min_d <= float(d) <= max_d
-            ]
+            lowest_dist = np.min(dists)
+            highest_dist = np.max(dists)
+
+            sorted_results = []
+            for i, d in zip(ids[0], dists[0]):
+                i, d = int(i), float(d)  # cast numpy types
+                d = (d - lowest_dist) / (highest_dist - lowest_dist)  # normalize
+                if i >= 0 and min_d <= d <= max_d:
+                    sorted_results.append(LabeledIndex.QueryResult(int(i), float(d)))
         else:
             assert (
                 num_results is not None
@@ -164,6 +167,8 @@ class LabeledIndex:
                 n_probes=num_probes,
             )
             assert len(ids) == 1 and len(locs) == 1 and len(dists) == 1
+            lowest_dist = np.min(dists)
+            highest_dist = np.max(dists)
 
             # Gather lowest QUERY_PATCHES_PER_IMAGE distances for each image
             dists_by_id: DefaultDict[int, List[float]] = defaultdict(list)
@@ -172,6 +177,7 @@ class LabeledIndex:
             ] = defaultdict(list)
             for i, l, d in zip(ids[0], locs[0], dists[0]):
                 i, l, d = int(i), int(l), float(d)  # cast numpy types
+                d = (d - lowest_dist) / (highest_dist - lowest_dist)  # normalize
                 if (
                     i >= 0
                     and min_d <= d <= max_d
