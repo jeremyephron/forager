@@ -62,3 +62,5 @@ INDEX_UPLOAD_GCS_PATH = "gs://foragerml/indexes/"  # trailing slash = directory
 
 QUERY_PATCHES_PER_IMAGE = 8
 QUERY_NUM_RESULTS_MULTIPLE = 80
+
+SVM_NUM_NEGS_MULTIPLIER = 7

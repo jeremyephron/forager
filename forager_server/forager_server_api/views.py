@@ -1150,8 +1150,10 @@ def filtered_images_v2(
     return filtered
 
 
-def process_image_query_results_v2(request, dataset, query_response):
+def process_image_query_results_v2(request, dataset, query_response, num_results=None):
     ordered_results = query_response["results"]
+    if num_results is not None:
+        ordered_results = ordered_results[:num_results]
     dataset_items = filtered_images_v2(
         request, dataset, [r["label"] for r in ordered_results]
     )
@@ -1224,24 +1226,22 @@ def query_knn_v2(request, dataset_name):
         request,
         dataset,
         response_data,
+        num_results
     )
     return JsonResponse(build_result_set_v2(request, dataset, result_images, "knn"))
 
 
 @api_view(["GET"])
 @csrf_exempt
-def query_svm_v2(request, dataset_name):
+def train_svm_v2(request, dataset_name):
     index_id = request.GET["index_id"]
-    num_results = int(request.GET.get("num", 1000))
-
     pos_tags = set(request.GET["pos_tags"].split(","))
     neg_tags = set(filter(bool, request.GET.get("neg_tags", "").split(",")))
     augment_negs = bool(distutils.util.strtobool(request.GET.get("augment_negs", "false")))
-    score_min = float(request.GET.get("score_min", 0.0))
-    score_max = float(request.GET.get("score_max", 1.0))
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
     annotations = Annotation.objects.filter(
+        dataset_item__in=dataset.datasetitem_set.filter(),
         label_category__in=(list(pos_tags) + list(neg_tags)),
         label_type="klabel_frame",
     )
@@ -1268,10 +1268,31 @@ def query_svm_v2(request, dataset_name):
 
     params = {
         "index_id": index_id,
-        "num_results": num_results,
         "pos_identifiers": pos_dataset_item_internal_identifiers,
         "neg_identifiers": neg_dataset_item_internal_identifiers,
         "augment_negs": augment_negs,
+    }
+    r = requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/train_svm_v2",
+        json=params,
+    )
+    return JsonResponse(r.json())  # {"svm_vector": base64-encoded string}
+
+
+@api_view(["GET"])
+@csrf_exempt
+def query_svm_v2(request, dataset_name):
+    index_id = request.GET["index_id"]
+    svm_vector = request.GET["svm_vector"]
+    score_min = float(request.GET.get("score_min", 0.0))
+    score_max = float(request.GET.get("score_max", 1.0))
+    num_results = int(request.GET.get("num", 1000))
+
+    dataset = get_object_or_404(Dataset, name=dataset_name)
+
+    params = {
+        "index_id": index_id,
+        "svm_vector": svm_vector,
         "score_min": score_min,
         "score_max": score_max,
     }
@@ -1285,6 +1306,7 @@ def query_svm_v2(request, dataset_name):
         request,
         dataset,
         response_data,
+        num_results,
     )
     return JsonResponse(build_result_set_v2(request, dataset, result_images, "svm"))
 

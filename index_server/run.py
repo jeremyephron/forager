@@ -10,6 +10,7 @@ import logging
 import operator
 import os
 from pathlib import Path
+import random
 import shutil
 import time
 import uuid
@@ -123,10 +124,12 @@ class LabeledIndex:
     def query(
         self,
         query_vector: np.ndarray,
-        num_results: int,
+        num_results: Optional[int] = None,  # if None, all results
         num_probes: Optional[int] = None,
         use_full_image: bool = False,
         svm: bool = False,
+        min_d: float = 0.0,
+        max_d: float = float("inf"),
     ) -> List[QueryResult]:
         assert self.ready.is_set()
 
@@ -135,6 +138,10 @@ class LabeledIndex:
 
         if use_full_image:
             index = self.indexes[IndexType.FULL_DOT if svm else IndexType.FULL]
+            if num_results is None:
+                num_results = index.n_vectors
+                num_probes = index.n_centroids
+
             dists, (ids, _) = index.query(
                 query_vector, num_results, n_probes=num_probes
             )
@@ -142,9 +149,13 @@ class LabeledIndex:
             sorted_results = [
                 LabeledIndex.QueryResult(int(i), float(d))  # cast numpy types
                 for i, d in zip(ids[0], dists[0])
-                if i >= 0
+                if int(i) >= 0 and min_d <= float(d) <= max_d
             ]
         else:
+            assert (
+                num_results is not None
+            ), "Can't return all results for spatial queries"
+
             index = self.indexes[IndexType.SPATIAL_DOT if svm else IndexType.SPATIAL]
             dists, (ids, locs) = index.query(
                 query_vector,
@@ -160,7 +171,11 @@ class LabeledIndex:
             ] = defaultdict(list)
             for i, l, d in zip(ids[0], locs[0], dists[0]):
                 i, l, d = int(i), int(l), float(d)  # cast numpy types
-                if i >= 0 and len(dists_by_id[i]) < config.QUERY_PATCHES_PER_IMAGE:
+                if (
+                    i >= 0
+                    and min_d <= d <= max_d
+                    and len(dists_by_id[i]) < config.QUERY_PATCHES_PER_IMAGE
+                ):
                     dists_by_id[i].append(d)
                     spatial_dists_by_id[i].append((l, d))
 
@@ -225,6 +240,10 @@ class LabeledIndex:
         for result in results:
             result.label = self.labels[result.id]
         return results
+
+    def get_identifier_set(self) -> Set[str]:
+        assert self.identifiers
+        return set(self.identifiers.keys())
 
     def get_embeddings(self, identifiers: List[str]) -> np.ndarray:
         assert (
@@ -1244,35 +1263,64 @@ async def query_knn_v2(request):
     return resp.json({"results": [r.to_dict() for r in query_results]})
 
 
-@app.route("/query_svm_v2", methods=["POST"])
-async def query_svm_v2(request):
+@app.route("/train_svm_v2", methods=["POST"])
+async def train_svm_v2(request):
     pos_identifiers = request.json["pos_identifiers"]
     neg_identifiers = request.json["neg_identifiers"]
+    augment_negs = bool(request.json["augment_negs"])
     index_id = request.json["index_id"]
-    num_results = int(request.json["num_results"])
 
     index = await get_index(index_id)
 
     # Get positive and negative image embeddings from local flat index
     pos_vectors = index.get_embeddings(pos_identifiers)
+    assert len(pos_vectors) > 0
     neg_vectors = index.get_embeddings(neg_identifiers)
 
-    # Train SVM
+    # Augment with randomly sampled negatives if requested
+    extra_neg_identifiers = []
+    if augment_negs:
+        unused_identifiers = (
+            index.get_identifier_set()
+            .difference(pos_identifiers)
+            .difference(neg_identifiers)
+        )
+        num_extra_neg_vectors = config.SVM_NUM_NEGS_MULTIPLIER * len(pos_vectors) - len(
+            neg_vectors
+        )
+        extra_neg_identifiers = random.sample(
+            unused_identifiers, min(len(unused_identifiers), num_extra_neg_vectors)
+        )
+    extra_neg_vectors = index.get_embeddings(extra_neg_identifiers)
+
+    assert len(neg_vectors) > 0
+
+    # Train SVM and return serialized vector
     model = svm.SVC(kernel="linear")
     model.fit(
-        np.concatenate((pos_vectors, neg_vectors)),
-        np.array([1] * len(pos_vectors) + [0] * len(neg_vectors)),
+        np.concatenate((pos_vectors, neg_vectors, extra_neg_vectors)),
+        np.array(
+            [1] * len(pos_vectors) + [0] * len(neg_vectors) + len(extra_neg_vectors)
+        ),
     )
     w = np.array(model.coef_[0] * 1000, dtype=np.float32)
+    return resp.json({"svm_vector": utils.numpy_to_base64(w)})
+
+
+@app.route("/query_svm_v2", methods=["POST"])
+async def query_svm_v2(request):
+    score_min = float(request.json["score_min"])
+    score_max = float(request.json["score_max"])
+    svm_vector = utils.base64_to_numpy(request.json["svm_vector"])
+    index_id = request.json["index_id"]
+
+    index = await get_index(index_id)
 
     # Run query and return results
-    query_results = index.query(w, num_results, use_full_image=True, svm=True)
-    return resp.json(
-        {
-            "results": [r.to_dict() for r in query_results],
-            "svm_vector": utils.numpy_to_base64(w),
-        }
+    query_results = index.query(
+        svm_vector, use_full_image=True, svm=True, min_d=score_min, max_d=score_max
     )
+    return resp.json({"results": [r.to_dict() for r in query_results]})
 
 
 # CLEANUP
