@@ -142,6 +142,9 @@ class LabeledIndex:
                 num_results = len(self.labels)  # can't use n_vectors - distributed add
                 num_probes = index.n_centroids
 
+            print(num_results)
+            print(num_probes)
+
             dists, (ids, _) = index.query(
                 query_vector, num_results, n_probes=num_probes
             )
