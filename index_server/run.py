@@ -139,10 +139,8 @@ class LabeledIndex:
         if use_full_image:
             index = self.indexes[IndexType.FULL_DOT if svm else IndexType.FULL]
             if num_results is None:
-                num_results = index.n_vectors
+                num_results = len(self.labels)  # can't use n_vectors - distributed add
                 num_probes = index.n_centroids
-                print(index.n_vectors)
-                print(index.n_centroids)
 
             dists, (ids, _) = index.query(
                 query_vector, num_results, n_probes=num_probes
