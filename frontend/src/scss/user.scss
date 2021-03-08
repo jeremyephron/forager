@@ -168,6 +168,10 @@ html, body, #root, .main {
   box-shadow: none !important;
 }
 
+.text-monospace {
+  letter-spacing: -1px;
+}
+
 // .panel {
 //   width: 40%;
 //   background: $primary-alt-darker;

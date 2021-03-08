@@ -420,7 +420,12 @@ const App = () => {
                 <span className="mb-0 mr-2 text-nowrap text-muted text-monospace text-small">
                   {Number(svmScoreRange[0] / 100).toFixed(2)}
                 </span>
-                <Range allowCross={false} value={svmScoreRange} onChange={setSvmScoreRange} />
+                <Range
+                  allowCross={false}
+                  value={svmScoreRange}
+                  onChange={setSvmScoreRange}
+                  onAfterChange={() => setIsLoading(true)}
+                />
                 <span className="mb-0 ml-2 text-nowrap text-muted text-monospace text-small">
                   {Number(svmScoreRange[1] / 100).toFixed(2)}
                 </span>
