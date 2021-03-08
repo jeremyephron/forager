@@ -1303,7 +1303,7 @@ async def train_svm_v2(request):
     model.fit(
         np.concatenate((pos_vectors, neg_vectors, extra_neg_vectors)),
         np.array(
-            [1] * len(pos_vectors) + [0] * len(neg_vectors) + len(extra_neg_vectors)
+            [1] * len(pos_vectors) + [0] * (len(neg_vectors) + len(extra_neg_vectors))
         ),
     )
     w = np.array(model.coef_[0] * 1000, dtype=np.float32)
