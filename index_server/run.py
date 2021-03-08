@@ -148,6 +148,7 @@ class LabeledIndex:
             assert len(ids) == 1 and len(dists) == 1
             lowest_dist = np.min(dists)
             highest_dist = np.max(dists)
+            print(lowest_dist, highest_dist)
 
             sorted_results = []
             for i, d in zip(ids[0], dists[0]):
