@@ -1265,8 +1265,11 @@ async def query_knn_v2(request):
 
 @app.route("/train_svm_v2", methods=["POST"])
 async def train_svm_v2(request):
-    pos_identifiers = request.json["pos_identifiers"]
-    neg_identifiers = request.json["neg_identifiers"]
+    # HACK(mihirg): sometimes we get empty identifiers (i.e., "") from the server that
+    # would otherwise cause a crash here; we should probably figure out why this is, but
+    # just filtering out for now.
+    pos_identifiers = list(filter(bool, request.json["pos_identifiers"]))
+    neg_identifiers = list(filter(bool, request.json["neg_identifiers"]))
     augment_negs = bool(request.json["augment_negs"])
     index_id = request.json["index_id"]
 
