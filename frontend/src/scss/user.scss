@@ -20,7 +20,7 @@ html, body, #root, .main {
   height: 100%;
 }
 
-.loading, .loading input, .loading .stack {
+.loading, .loading input, .loading .stack, .loading label, .loading div {
   cursor: wait !important;
 }
 

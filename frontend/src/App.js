@@ -18,6 +18,7 @@ import {
 import { Typeahead } from "react-bootstrap-typeahead";
 import { ReactSVG } from "react-svg";
 import Slider, { Range } from "rc-slider";
+import Emoji from "react-emoji-render";
 
 import fromPairs from "lodash/fromPairs";
 import toPairs from "lodash/toPairs";
@@ -50,6 +51,7 @@ const orderingModes = [
 const endpoints = fromPairs(toPairs({
   getDatasetInfo: "get_dataset_info_v2",
   getNextImages: "get_next_images_v2",
+  trainSvm: "train_svm_v2",
   querySvm: "query_svm_v2",
   queryKnn: "query_knn_v2",
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
@@ -118,16 +120,16 @@ const App = () => {
   const [datasetIncludeTags, setDatasetIncludeTags] = useState([]);
   const [datasetExcludeTags, setDatasetExcludeTags] = useState([]);
   const [googleQuery, setGoogleQuery] = useState("");
-  const [orderingMode, setOrderingMode_] = useState(orderingModes[0].id);
+  const [orderingMode, setOrderingMode] = useState(orderingModes[0].id);
   const [orderByClusterSize, setOrderByClusterSize] = useState(true);
   const [clusteringStrength, setClusteringStrength] = useState(20);
   const [orderingModePopoverOpen, setOrderingModePopoverOpen] = useState(false);
   const [svmScoreRange, setSvmScoreRange] = useState([0, 100]);
   const [svmAugmentNegs, setSvmAugmentNegs] = useState(true);
-
-  const [knnImage, setKnnImage] = useState({});
   const [svmPosTags, setSvmPosTags] = useState([]);
   const [svmNegTags, setSvmNegTags] = useState([]);
+
+  const [knnImage, setKnnImage] = useState({});
   const [subset, setSubset_] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [queryResultData, setQueryResultData] = useState({
@@ -135,20 +137,29 @@ const App = () => {
     images: [],
     clustering: []
   });
+  const [isTraining, setIsTraining] = useState(false);
+  const [trainedSvmData, setTrainedSvmData] = useState(null);
 
-  const setOrderingMode = (mode) => {
-    if (mode !== "svm") {
-      setSvmPosTags([]);
-      setSvmNegTags([]);
-      setSvmScoreRange([0, 100]);
-      setSvmAugmentNegs(true);
-    }
-    setOrderingMode_(mode);
+  const trainSvm = async () => {
+    const url = new URL(`${endpoints.trainSvm}/${datasetName}`);
+    url.search = new URLSearchParams({
+      index_id: datasetInfo.index_id,
+      pos_tags: svmPosTags,
+      neg_tags: svmNegTags,
+      augment_negs: svmAugmentNegs,
+    }).toString();
+    const svmData = await fetch(url, {
+      method: "GET",
+    }).then(r => r.json());
+
+    setTrainedSvmData(svmData);
   };
+  useEffect(() => {
+    if (isTraining) trainSvm().finally(() => setIsTraining(false));
+  }, [isTraining]);
 
   const runQuery = async () => {
     setClusterIsOpen(false);
-    setOrderingModePopoverOpen(false);
     setSelection({});
 
     let url;
@@ -170,10 +181,7 @@ const App = () => {
       }).toString();
     } else if (source === "dataset" && orderingMode === "svm") {
       url = new URL(`${endpoints.querySvm}/${datasetName}`);
-      url.search = new URLSearchParams({...params,
-        pos_tags: svmPosTags,
-        neg_tags: svmNegTags,
-        augment_negs: svmAugmentNegs,
+      url.search = new URLSearchParams({...params, ...trainedSvmData,
         score_min: svmScoreRange[0] / 100,
         score_max: svmScoreRange[1] / 100,
       }).toString();
@@ -199,11 +207,20 @@ const App = () => {
     setQueryResultData({
       images,
       clustering: results.clustering,
+      type: results.type,
     });
-    setIsLoading(false);
+
+    if (results.type !== "svm") {
+      // Reset all SVM parameters
+      setSvmScoreRange([0, 100]);
+      setSvmAugmentNegs(true);
+      setSvmPosTags([]);
+      setSvmNegTags([]);
+      setTrainedSvmData(null);
+    }
   };
   useEffect(() => {
-    if (isLoading) runQuery();
+    if (isLoading) runQuery().finally(() => setIsLoading(false));
   }, [isLoading]);
 
   const setSubset = (subset) => {
@@ -374,12 +391,12 @@ const App = () => {
               <Button
                 color="primary"
                 onClick={() => setIsLoading(true)}
-                disabled={orderingMode === "svm" && svmPosTags.length === 0}
+                disabled={orderingMode === "svm" && !!!(trainedSvmData)}
               >Run query</Button>
             </Form>
             <Form className="mt-2 mb-1 d-flex flex-row-reverse justify-content-between">
               <div className="d-flex flex-row align-items-center">
-                <div className="custom-switch mr-4">
+                <div className="custom-switch custom-control mr-4">
                   <Input type="checkbox" className="custom-control-input"
                     id="order-by-cluster-size-switch"
                     checked={orderByClusterSize}
@@ -419,47 +436,72 @@ const App = () => {
         </div>
         {orderingMode === "svm" && <Popover
           placement="bottom"
-          isOpen={orderingModePopoverOpen}
+          isOpen={orderingModePopoverOpen || isTraining || !!!(trainedSvmData)}
           target="ordering-mode"
           trigger="hover"
           toggle={() => setOrderingModePopoverOpen(!orderingModePopoverOpen)}
           fade={false}
-          popperClassName="svm-popover"
+          popperClassName={`svm-popover ${isTraining ? "loading" : ""}`}
         >
           <PopoverBody>
-            <Typeahead
-              multiple
-              id="svm-pos-bar"
-              className="typeahead-bar mt-1"
-              placeholder="Positive example tags"
-              options={datasetInfo.categories}
-              selected={svmPosTags}
-              onChange={selected => setSvmPosTags(selected)}
-            />
-            <Typeahead
-              multiple
-              id="svm-neg-bar"
-              className="typeahead-bar rbt-red mt-2 mb-1"
-              placeholder="Negative example tags"
-              options={datasetInfo.categories}
-              selected={svmNegTags}
-              onChange={selected => setSvmNegTags(selected)}
-            />
-
-            <div className="mt-2 custom-control custom-checkbox">
-              <input
-                type="checkbox"
-                className="custom-control-input"
-                id="svm-augment-negs-checkbox"
-                disabled={svmNegTags.length === 0}
-                checked={svmAugmentNegs || svmNegTags.length === 0}
-                onChange={(e) => setSvmAugmentNegs(e.target.checked)}
+            <Form>
+              <Typeahead
+                multiple
+                id="svm-pos-bar"
+                className="typeahead-bar mt-1"
+                placeholder="Positive example tags"
+                options={datasetInfo.categories}
+                selected={svmPosTags}
+                disabled={isTraining}
+                onChange={selected => {
+                  setSvmPosTags(selected);
+                  setTrainedSvmData(null);
+                }}
               />
-              <label className="custom-control-label" htmlFor="svm-augment-negs-checkbox">
-                Automatically augment negative set with random examples (
-                {svmNegTags.length === 0 ? "required if no explicit negative examples" : "recommended"})
-              </label>
-            </div>
+              <Typeahead
+                multiple
+                id="svm-neg-bar"
+                className="typeahead-bar rbt-red mt-2 mb-1"
+                placeholder="Negative example tags"
+                options={datasetInfo.categories}
+                selected={svmNegTags}
+                disabled={isTraining}
+                onChange={selected => {
+                  setSvmNegTags(selected);
+                  setTrainedSvmData(null);
+                }}
+              />
+
+              <div className="my-2 custom-control custom-checkbox">
+                <input
+                  type="checkbox"
+                  className="custom-control-input"
+                  id="svm-augment-negs-checkbox"
+                  disabled={svmNegTags.length === 0 || isTraining}
+                  checked={svmAugmentNegs || svmNegTags.length === 0}
+                  onChange={(e) => {
+                    setSvmAugmentNegs(e.target.checked);
+                    setTrainedSvmData(null);
+                  }}
+                />
+                <label className="custom-control-label" htmlFor="svm-augment-negs-checkbox">
+                  Automatically augment negative set with random examples (
+                  {svmNegTags.length === 0 ? "required if no explicit negative examples" : "recommended"})
+                </label>
+              </div>
+              {!!(trainedSvmData) ?
+                <Button
+                  color="light"
+                  disabled
+                  className="mb-1 w-100"
+                >{<Emoji text=":white_check_mark:" />} Trained</Button> :
+                <Button
+                  color="light"
+                  onClick={() => setIsTraining(true)}
+                  disabled={svmPosTags.length === 0}
+                  className="mb-1 w-100"
+                >Train</Button>}
+            </Form>
           </PopoverBody>
         </Popover>}
         <Container fluid>

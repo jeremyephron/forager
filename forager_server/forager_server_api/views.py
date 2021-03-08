@@ -1226,7 +1226,6 @@ def query_knn_v2(request, dataset_name):
         request,
         dataset,
         response_data,
-        num_results
     )
     return JsonResponse(build_result_set_v2(request, dataset, result_images, "knn"))
 
@@ -1302,6 +1301,9 @@ def query_svm_v2(request, dataset_name):
     )
     response_data = r.json()
 
+    # TODO(mihirg, jeremye): Consider some smarter pagination/filtering scheme to avoid
+    # running a separate query over the index every single time the user adjusts score
+    # thresholds
     result_images = process_image_query_results_v2(
         request,
         dataset,
