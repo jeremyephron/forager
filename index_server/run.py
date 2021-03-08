@@ -1282,14 +1282,14 @@ async def train_svm_v2(request):
 
     # Augment with randomly sampled negatives if requested
     extra_neg_identifiers = []
-    if augment_negs:
+    num_extra_neg_vectors = config.SVM_NUM_NEGS_MULTIPLIER * len(pos_vectors) - len(
+        neg_vectors
+    )
+    if augment_negs and num_extra_neg_vectors > 0:
         unused_identifiers = (
             index.get_identifier_set()
             .difference(pos_identifiers)
             .difference(neg_identifiers)
-        )
-        num_extra_neg_vectors = config.SVM_NUM_NEGS_MULTIPLIER * len(pos_vectors) - len(
-            neg_vectors
         )
         extra_neg_identifiers = random.sample(
             unused_identifiers, min(len(unused_identifiers), num_extra_neg_vectors)
