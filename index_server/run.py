@@ -129,7 +129,7 @@ class LabeledIndex:
         use_full_image: bool = False,
         svm: bool = False,
         min_d: float = 0.0,
-        max_d: float = float("inf"),
+        max_d: float = 1.0,
     ) -> List[QueryResult]:
         assert self.ready.is_set()
 
@@ -142,19 +142,16 @@ class LabeledIndex:
                 num_results = len(self.labels)  # can't use n_vectors - distributed add
                 num_probes = index.n_centroids
 
-            print(num_results)
-            print(num_probes)
-
             dists, (ids, _) = index.query(
                 query_vector, num_results, n_probes=num_probes
             )
             assert len(ids) == 1 and len(dists) == 1
+            print(dists[0])
             sorted_results = [
                 LabeledIndex.QueryResult(int(i), float(d))  # cast numpy types
                 for i, d in zip(ids[0], dists[0])
                 if int(i) >= 0 and min_d <= float(d) <= max_d
             ]
-            print([r.dist for r in sorted_results])
         else:
             assert (
                 num_results is not None
