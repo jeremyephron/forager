@@ -151,6 +151,7 @@ class LabeledIndex:
                 for i, d in zip(ids[0], dists[0])
                 if int(i) >= 0 and min_d <= float(d) <= max_d
             ]
+            print([r.dist for r in sorted_results])
         else:
             assert (
                 num_results is not None
