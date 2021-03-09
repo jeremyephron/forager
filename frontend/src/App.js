@@ -426,18 +426,15 @@ const App = () => {
                 />
               </div>
               {queryResultData.type === "svm" && <div className="d-flex flex-row align-items-center">
-                <label className="mb-0 mr-1 text-nowrap">SVM score range:</label>
-                <span className="mb-0 mr-2 text-nowrap text-muted text-monospace text-small">
-                  {Number(svmScoreRange[0] / 100).toFixed(2)}
-                </span>
+                <label className="mb-0 mr-2 text-nowrap">SVM score range:</label>
                 <Range
                   allowCross={false}
                   value={svmScoreRange}
                   onChange={setSvmScoreRange}
                   onAfterChange={() => setIsLoading(true)}
                 />
-                <span className="mb-0 ml-2 text-nowrap text-muted text-monospace text-small">
-                  {Number(svmScoreRange[1] / 100).toFixed(2)}
+                <span className="mb-0 ml-2 text-nowrap text-muted">
+                  ({Number(svmScoreRange[0] / 100).toFixed(2)} to {Number(svmScoreRange[1] / 100).toFixed(2)})
                 </span>
               </div>}
               {subset.length > 0 && <div className="rbt-token rbt-token-removeable alert-secondary">
