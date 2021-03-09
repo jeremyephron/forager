@@ -1301,15 +1301,23 @@ async def train_svm_v2(request):
     assert len(neg_vectors) + len(extra_neg_vectors) > 0
 
     # Train SVM and return serialized vector
-    model = svm.SVC(kernel="linear")
-    model.fit(
-        np.concatenate((pos_vectors, neg_vectors, extra_neg_vectors)),
-        np.array(
-            [1] * len(pos_vectors) + [0] * (len(neg_vectors) + len(extra_neg_vectors))
-        ),
+    training_features = np.concatenate((pos_vectors, neg_vectors, extra_neg_vectors))
+    training_labels = np.array(
+        [1] * len(pos_vectors) + [0] * (len(neg_vectors) + len(extra_neg_vectors))
     )
+    model = svm.SVC(kernel="linear")
+    model.fit(training_labels, training_features)
+
     w = np.array(model.coef_[0] * 1000, dtype=np.float32)
-    return resp.json({"svm_vector": utils.numpy_to_base64(w)})
+    predicted = model.predict(training_features)
+    accuracy = accuracy_score(training_labels, predicted)
+
+    return resp.json(
+        {
+            "svm_vector": utils.numpy_to_base64(w),
+            "accuracy": accuracy,
+        }
+    )
 
 
 @app.route("/query_svm_v2", methods=["POST"])
