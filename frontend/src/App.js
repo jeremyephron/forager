@@ -19,6 +19,9 @@ import { Typeahead } from "react-bootstrap-typeahead";
 import { ReactSVG } from "react-svg";
 import Slider, { Range } from "rc-slider";
 import Emoji from "react-emoji-render";
+import TimeAgo from "javascript-time-ago";
+import ReactTimeAgo from "react-time-ago";
+import en from "javascript-time-ago/locale/en";
 
 import fromPairs from "lodash/fromPairs";
 import toPairs from "lodash/toPairs";
@@ -33,6 +36,8 @@ import {
   SignInModal,
   TagManagementModal
 } from "./components";
+
+TimeAgo.addDefaultLocale(en)
 
 var disjointSet = require("disjoint-set");
 
@@ -152,7 +157,7 @@ const App = () => {
       method: "GET",
     }).then(r => r.json());
 
-    setTrainedSvmData(svmData);
+    setTrainedSvmData({...svmData, date: Date.now()});
   };
   useEffect(() => {
     if (isTraining) trainSvm().finally(() => setIsTraining(false));
@@ -181,7 +186,8 @@ const App = () => {
       }).toString();
     } else if (source === "dataset" && orderingMode === "svm") {
       url = new URL(`${endpoints.querySvm}/${datasetName}`);
-      url.search = new URLSearchParams({...params, ...trainedSvmData,
+      url.search = new URLSearchParams({...params,
+        svm_vector: trainedSvmData.svm_vector,
         score_min: svmScoreRange[0] / 100,
         score_max: svmScoreRange[1] / 100,
       }).toString();
@@ -498,18 +504,17 @@ const App = () => {
                   {svmNegTags.length === 0 ? "required if no explicit negative examples" : "recommended"})
                 </label>
               </div>
-              {!!(trainedSvmData) ?
-                <Button
-                  color="light"
-                  disabled
-                  className="mb-1 w-100"
-                >{<Emoji text=":white_check_mark:" />} Trained</Button> :
-                <Button
-                  color="light"
-                  onClick={() => setIsTraining(true)}
-                  disabled={svmPosTags.length === 0}
-                  className="mb-1 w-100"
-                >Train</Button>}
+              <Button
+                color="light"
+                onClick={() => setIsTraining(true)}
+                disabled={svmPosTags.length === 0}
+                className="mb-1 w-100"
+              >Train</Button>
+              {!!(trainedSvmData) && <div className="mt-1">
+                <Emoji text=":white_check_mark:" /> Trained model (accuracy{" "}
+                {Number(trainedSvmData.accuracy).toFixed(2)}){" "}
+                <ReactTimeAgo date={trainedSvmData.date} timeStyle="mini"/> ago
+              </div>}
             </Form>
           </PopoverBody>
         </Popover>}
