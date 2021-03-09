@@ -1316,6 +1316,8 @@ async def train_svm_v2(request):
         {
             "svm_vector": utils.numpy_to_base64(w),
             "accuracy": accuracy,
+            "num_positives": len(pos_vectors),
+            "num_negatives": len(neg_vectors) + len(extra_neg_vectors),
         }
     )
 
