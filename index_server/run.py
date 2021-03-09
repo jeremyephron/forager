@@ -1304,9 +1304,9 @@ async def train_svm_v2(request):
     training_features = np.concatenate((pos_vectors, neg_vectors, extra_neg_vectors))
     training_labels = np.array(
         [1] * len(pos_vectors) + [0] * (len(neg_vectors) + len(extra_neg_vectors))
-    ).reshape(-1, 1)
+    )
     model = svm.SVC(kernel="linear")
-    model.fit(training_labels, training_features)
+    model.fit(training_features, training_labels)
 
     w = np.array(model.coef_[0] * 1000, dtype=np.float32)
     predicted = model.predict(training_features)
