@@ -451,7 +451,7 @@ const App = () => {
         </div>
         {orderingMode === "svm" && <Popover
           placement="bottom"
-          isOpen={orderingModePopoverOpen || isTraining || !!!(trainedSvmData)}
+          isOpen={orderingModePopoverOpen || isTraining || !!!(trainedSvmData) || queryResultData.type !== "svm"}
           target="ordering-mode"
           trigger="hover"
           toggle={() => setOrderingModePopoverOpen(!orderingModePopoverOpen)}
@@ -507,12 +507,13 @@ const App = () => {
               <Button
                 color="light"
                 onClick={() => setIsTraining(true)}
-                disabled={svmPosTags.length === 0}
+                disabled={svmPosTags.length === 0 || isTraining}
                 className="mb-1 w-100"
               >Train</Button>
               {!!(trainedSvmData) && <div className="mt-1">
-                <Emoji text=":white_check_mark:" /> Trained model (accuracy{" "}
-                {Number(trainedSvmData.accuracy).toFixed(2)}){" "}
+                Trained model ({trainedSvmData.num_positives} positives,{" "}
+                {trainedSvmData.num_negatives} negatives,{" "}
+                {Math.round(trainedSvmData.accuracy * 100)}% accuracy){" "}
                 <ReactTimeAgo date={trainedSvmData.date} timeStyle="mini"/> ago
               </div>}
             </Form>
