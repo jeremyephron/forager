@@ -448,7 +448,7 @@ const App = () => {
         </div>
         {orderingMode === "svm" && <Popover
           placement="bottom"
-          isOpen={orderingModePopoverOpen || isTraining || !!!(trainedSvmData) || queryResultData.type !== "svm"}
+          isOpen={orderingModePopoverOpen || isTraining || !!!(trainedSvmData)}
           target="ordering-mode"
           trigger="hover"
           toggle={() => setOrderingModePopoverOpen(!orderingModePopoverOpen)}
