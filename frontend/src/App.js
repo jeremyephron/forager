@@ -4,186 +4,350 @@ import {
   Row,
   Col,
   Button,
+  Nav,
   Navbar,
   NavbarBrand,
   Form,
   FormGroup,
   Input,
   Modal,
-  ModalHeader,
   ModalBody,
+  Popover,
+  PopoverBody,
 } from "reactstrap";
 import { Typeahead } from "react-bootstrap-typeahead";
 import { ReactSVG } from "react-svg";
-import times from "lodash/times";
+import Slider, { Range } from "rc-slider";
+import Emoji from "react-emoji-render";
+import TimeAgo from "javascript-time-ago";
+import ReactTimeAgo from "react-time-ago";
+import en from "javascript-time-ago/locale/en";
 
-import imageIds from "./data/waymo";
+import fromPairs from "lodash/fromPairs";
+import toPairs from "lodash/toPairs";
 
 import "react-bootstrap-typeahead/css/Typeahead.css";
+import "rc-slider/assets/index.css";
 import "./scss/theme.scss";
 
-var performClustering = require("hierarchical-clustering");
-var computeSimilarity = require("compute-cosine-similarity");
+import {
+  ClusterModal,
+  ImageStack,
+  SignInModal,
+  TagManagementModal
+} from "./components";
+
+TimeAgo.addDefaultLocale(en)
+
+var disjointSet = require("disjoint-set");
 
 const sources = [
   {id: "dataset", label: "Dataset"},
-  {id: "google", label: "Google"},
+  // {id: "google", label: "Google"},
 ]
 
-const tags = [
-  {id: "full_dataset", label: "full dataset", hide: true},
-  {id: "50_dataset", label: "50% dataset", hide: true},
-  {id: "10_dataset", label: "10% dataset", hide: true},
-  {id: "1_dataset", label: "1% dataset", hide: true},
-  {id: "pickup_truck", label: "pickup truck"},
-  {id: "house_flag", label: "house flag"},
-  {id: "pride_flag", label: "pride flag"},
-  {id: "pride_flag", label: "street flag"},
-  {id: "garbage_bin", label: "garbage bin"},
+const orderingModes = [
+  {id: "random", label: "Random order"},
+  {id: "id", label: "Dataset order"},
+  {id: "svm", label: "SVM"},
+  {id: "knn", label: "KNN", disabled: true},
 ]
 
-const images = imageIds.slice(0, 1000).map(id => {
-  return {
-    name: `${id}_front.jpeg`,
-    url: `https://storage.googleapis.com/foragerml/waymo/train/${id}_front.jpeg`,
-    embedding: [...new Array(256)].map(() => Math.random() * 10 - 5)  // random for now
-  };
-})
-
-const imageSimilarity = (a, b) => computeSimilarity(a.embedding, b.embedding);
-
-const ImageStack = ({ id, onClick, images, showLabel }) => {
-  return (
-    <a className="stack" onClick={onClick}>
-      {times(Math.min(4, images.length), (i) =>
-        <img key={`stack-${i}`} className="thumb" src={images[i].url}></img>
-      )}
-      {showLabel && <div className="label">
-        <b>Cluster {id + 1}</b> ({images.length} image{images.length !== 1 && "s"})
-      </div>}
-    </a>
-  );
-}
-
-// TEMPORARY until we have a real clustering algorithm in
-let initialClusters = [];
-for (let i = 0; i < 100; i++) {
-  let cluster = [];
-  for (let j = 0; j < 10; j++) {
-    cluster.push(images[i * 10 + j]);
-  }
-  initialClusters.push(cluster);
-}
+const endpoints = fromPairs(toPairs({
+  getDatasetInfo: "get_dataset_info_v2",
+  getNextImages: "get_next_images_v2",
+  trainSvm: "train_svm_v2",
+  querySvm: "query_svm_v2",
+  queryKnn: "query_knn_v2",
+}).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
 const App = () => {
-  const [source, setSource] = useState(sources[0].id);
-  const [datasetQuery, setDatasetQuery] = useState([tags[0]]);
-  const [googleQuery, setGoogleQuery] = useState("");
-  const [clusteringStrength, setClusteringStrength] = useState(50);
+  //
+  // USER AUTHENTICATION
+  //
+
+  const [username, setUsername_] = useState(
+    window.localStorage.getItem("foragerUsername") || ""
+  );
+  const [loginIsOpen, setLoginIsOpen] = useState(false);
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+
+  const setUsername = (u) => {
+    window.localStorage.setItem("foragerUsername", u);
+    setUsername_(u);
+  }
+
+  const login = (e) => {
+    if (loginUsername !== undefined && loginPassword === "forager") setUsername(loginUsername.trim());
+    setLoginIsOpen(false);
+    e.preventDefault();
+  }
+
+  //
+  // CLUSTER FOCUS MODAL
+  //
+
   const [selection, setSelection] = useState({});
-  const [isOpen, setIsOpen] = useState(false);
-  const [clusters, setClusters] = useState([]);
+  const [clusterIsOpen, setClusterIsOpen] = useState(false);
 
-  const handleKeyDown = useCallback(e => {
-    if (isOpen) {
-      const { key } = e;
-      let caught = true;
-      if (key === "ArrowDown" || (clusteringStrength == 0 && key === "ArrowRight")) {
-        setSelection({cluster: Math.min(selection.cluster + 1, clusters.length - 1), image: 0});
-      } else if (key === "ArrowUp" || (clusteringStrength == 0 && key === "ArrowLeft")) {
-        setSelection({cluster: Math.max(selection.cluster - 1, 0), image: 0});
-      } else if (key === "ArrowRight") {
-        setSelection({...selection, image: Math.min(selection.image + 1, clusters[selection.cluster].length - 1)});
-      } else if (key === "ArrowLeft") {
-        setSelection({...selection, image: Math.max(selection.image - 1, 0)});
-      } else {
-        caught = false;
-      }
-      if (caught) e.preventDefault();
-    }
-  }, [isOpen, clusteringStrength, setSelection, selection]);
+  //
+  // TAG MANAGEMENT MODAL
+  //
+  const [tagManagementIsOpen, setTagManagementIsOpen] = useState(false);
+  const toggleTagManagement = () => setTagManagementIsOpen(!tagManagementIsOpen);
 
+  //
+  // DATA CONNECTIONS
+  //
+
+  // Load dataset info on initial page load
+  const [datasetName, setDatasetName] = useState("waymo_train_central");
+  const [datasetInfo, setDatasetInfo] = useState({
+    isNotLoaded: true,
+    categories: [],
+    index_id: null,
+    num_images: 0,
+    num_google: 0,
+  });
+  const [popoverOpen, setPopoverOpen] = useState(false);
+
+  useEffect(async () => {
+    const url = new URL(`${endpoints.getDatasetInfo}/${datasetName}`);
+    setDatasetInfo(await fetch(url, {
+      method: "GET",
+    }).then(r => r.json()));
+    setIsLoading(true);
+  }, [datasetName]);
+
+  // Run queries after dataset info has loaded and whenever user clicks "query" button
+  const [source, setSource] = useState(sources[0].id);
+  const [datasetIncludeTags, setDatasetIncludeTags] = useState([]);
+  const [datasetExcludeTags, setDatasetExcludeTags] = useState([]);
+  const [googleQuery, setGoogleQuery] = useState("");
+  const [orderingMode, setOrderingMode] = useState(orderingModes[0].id);
+  const [orderByClusterSize, setOrderByClusterSize] = useState(true);
+  const [clusteringStrength, setClusteringStrength] = useState(20);
+  const [orderingModePopoverOpen, setOrderingModePopoverOpen] = useState(false);
+  const [svmScoreRange, setSvmScoreRange] = useState([0, 100]);
+  const [svmAugmentNegs, setSvmAugmentNegs] = useState(true);
+  const [svmPosTags, setSvmPosTags] = useState([]);
+  const [svmNegTags, setSvmNegTags] = useState([]);
+
+  const [knnImage, setKnnImage] = useState({});
+  const [subset, setSubset_] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [queryResultData, setQueryResultData] = useState({
+    type: null,
+    images: [],
+    clustering: []
+  });
+  const [isTraining, setIsTraining] = useState(false);
+  const [trainedSvmData, setTrainedSvmData] = useState(null);
+
+  const trainSvm = async () => {
+    const url = new URL(`${endpoints.trainSvm}/${datasetName}`);
+    url.search = new URLSearchParams({
+      index_id: datasetInfo.index_id,
+      pos_tags: svmPosTags,
+      neg_tags: svmNegTags,
+      augment_negs: svmAugmentNegs,
+    }).toString();
+    const svmData = await fetch(url, {
+      method: "GET",
+    }).then(r => r.json());
+
+    setTrainedSvmData({...svmData, date: Date.now()});
+  };
   useEffect(() => {
-    document.addEventListener("keydown", handleKeyDown)
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown)
+    if (isTraining) trainSvm().finally(() => setIsTraining(false));
+  }, [isTraining]);
+
+  const runQuery = async () => {
+    setClusterIsOpen(false);
+    setSelection({});
+
+    let url;
+    let params = {
+      num: 1000,
+      index_id: datasetInfo.index_id,
+      include: datasetIncludeTags,
+      exclude: datasetExcludeTags,
+      subset: subset.map(im => im.id),
+    };
+
+    if (source === "dataset" && (orderingMode === "id" || orderingMode === "random")) {
+      url = new URL(`${endpoints.getNextImages}/${datasetName}`);
+      url.search = new URLSearchParams({...params, order: orderingMode}).toString();
+    } else if (source === "dataset" && orderingMode === "knn") {
+      url = new URL(`${endpoints.queryKnn}/${datasetName}`);
+      url.search = new URLSearchParams({...params,
+        image_ids: [knnImage.id]
+      }).toString();
+    } else if (source === "dataset" && orderingMode === "svm") {
+      url = new URL(`${endpoints.querySvm}/${datasetName}`);
+      url.search = new URLSearchParams({...params,
+        svm_vector: trainedSvmData.svm_vector,
+        score_min: svmScoreRange[0] / 100,
+        score_max: svmScoreRange[1] / 100,
+      }).toString();
+    } else {
+      console.error(`Query type (${source}, ${orderingMode}) not implemented`);
+      return;
     }
-  }, [handleKeyDown]);
+    const results = await fetch(url, {
+      method: "GET",
+    }).then(r => r.json());
+
+    const images = results.paths.map((path, i) => {
+      let filename = path.substring(path.lastIndexOf("/") + 1);
+      let id = filename.substring(0, filename.indexOf("."));
+      return {
+        name: filename,
+        src: path,
+        id: results.identifiers[i],
+        thumb: `https://storage.googleapis.com/foragerml/thumbnails/${datasetInfo.index_id}/${id}.jpg`,
+      };
+    });
+
+    if (results.type !== "svm") {
+      // Reset all SVM parameters
+      setSvmScoreRange([0, 100]);
+      setSvmAugmentNegs(true);
+      setSvmPosTags([]);
+      setSvmNegTags([]);
+      setTrainedSvmData(null);
+    }
+    if ((results.type === "knn" || results.type === "svm") &&
+        (queryResultData.type !== "knn" && queryResultData.type !== "svm")) {
+      setOrderByClusterSize(false);
+    }
+
+    setQueryResultData({
+      images,
+      clustering: results.clustering,
+      type: results.type,
+    });
+  };
+  useEffect(() => {
+    if (isLoading) runQuery().finally(() => setIsLoading(false));
+  }, [isLoading]);
+
+  const setSubset = (subset) => {
+    setSubset_(subset);
+    setIsLoading(true);
+  }
+
+  // Run KNN queries whenever user clicks "find similar" button
+  const findSimilar = (image) => {
+    setKnnImage(image);
+    setOrderingMode("knn");
+    setIsLoading(true);
+  }
+
+  // Automatically (re-)cluster whenever new results load; also run this manually when
+  // the user releases the cluster strength slider
+  const [clusters, setClusters] = useState([]);
 
   const recluster = () => {
     if (clusteringStrength == 0) {
-      setClusters(images.map(i => [i]));
+      setClusters(queryResultData.images.map(i => [i]));
     } else {
-      // TODO(mihirg): Figure out a way to do this that doesn't crash the browser
-      // TODO(mihirg): Cache distance matrix for faster re-clustering
-      setClusters(initialClusters);
-      // const levels = performClustering({
-      //   input: images,
-      //   distance: imageSimilarity,
-      //   linkage: "average",
-      //   maxLinkage: clusteringStrength / 100,
-      // });
-      // const clusterIndices = levels[levels.length - 1].clusters;
-      // setClusters(clusterIndices.map(cluster => cluster.map(index => images[index])));
+      const thresh = Math.pow(clusteringStrength / 100, 2);
+      let ds = disjointSet();
+      for (let image of queryResultData.images) {
+        ds.add(image);
+      }
+      for (let [a, b, dist] of queryResultData.clustering) {
+        if (dist > thresh) break;
+        ds.union(queryResultData.images[a], queryResultData.images[b]);
+      }
+      const clusters = ds.extract();
+      ds.destroy();
+      if (orderByClusterSize) clusters.sort((a, b) => b.length - a.length);
+      setClusters(clusters);
     }
-  };
-  useEffect(recluster, []);
+  }
+  useEffect(recluster, [queryResultData, setClusters, orderByClusterSize]);
 
-  const toggle = () => setIsOpen(!isOpen);
+  //
+  // RENDERING
+  //
 
   return (
-    <div>
-      <Modal isOpen={isOpen} toggle={toggle} size="lg">
-        {selection.cluster !== undefined && selection.image !== undefined &&
-          selection.cluster < clusters.length &&
-          selection.image < clusters[selection.cluster].length &&
-          <>
-            <ModalHeader toggle={toggle}>
-              {(clusteringStrength > 0) ?
-                <span>
-                  Cluster {selection.cluster + 1} of {clusters.length},
-                  image {selection.image + 1} of {clusters[selection.cluster].length}
-                </span>:
-                <span>
-                  Image {selection.cluster + 1} of {clusters.length}
-                </span>}
-              <span className="text-muted"> ({clusters[selection.cluster][selection.image].name})</span>
-            </ModalHeader>
-            <ModalBody>
-              <p>
-                <b>Key bindings: </b> use <kbd>&uarr;</kbd> <kbd>&darr;</kbd>
-                {(clusteringStrength > 0) ? " to move between clusters, " : " or "}
-                <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to move between images
-              </p>
-              <img src={clusters[selection.cluster][selection.image].url} />
-              <Form>
-                <FormGroup className="mt-2 mb-0 d-flex flex-row align-items-center">
-                  <Button color="warning" className="mr-2" onClick={() => {}}>Find similar images</Button>
-                  <Typeahead
-                    multiple
-                    allowNew
-                    id="image-tag-bar"
-                    className="typeahead-bar"
-                    placeholder="Image tags"
-                    options={tags.filter(t => !t.hide)}
-                  />
-                </FormGroup>
-              </Form>
-            </ModalBody>
-          </>}
-      </Modal>
-
-      <Navbar color="primary" className="text-light" dark>
+    <div className={`main ${isLoading ? "loading" : ""}`}>
+      <SignInModal
+        isOpen={loginIsOpen}
+        toggle={() => setLoginIsOpen(false)}
+        loginUsername={loginUsername}
+        loginPassword={loginPassword}
+        setLoginUsername={setLoginUsername}
+        setLoginPassword={setLoginPassword}
+        login={login}
+      />
+      <TagManagementModal
+        isOpen={tagManagementIsOpen}
+        toggle={toggleTagManagement}
+        datasetName={datasetName}
+        datasetInfo={datasetInfo}
+        setDatasetInfo={setDatasetInfo}
+        username={username}
+        isReadOnly={!!!(username)}
+      />
+      <ClusterModal
+        isOpen={clusterIsOpen}
+        setIsOpen={setClusterIsOpen}
+        isImageOnly={clusteringStrength == 0}
+        isReadOnly={!!!(username)}
+        selection={selection}
+        setSelection={setSelection}
+        clusters={clusters}
+        findSimilar={findSimilar}
+        tags={datasetInfo.categories}
+        setTags={(tags) => setDatasetInfo({...datasetInfo, categories: tags})}
+        username={username}
+        setSubset={setSubset}
+      />
+      <Navbar color="primary" className="text-light mb-2" dark>
         <Container fluid>
           <span>
             <NavbarBrand href="/">Forager</NavbarBrand>
-            <NavbarBrand className="font-weight-normal">waymo_train</NavbarBrand>
+            <NavbarBrand className="font-weight-normal" id="dataset-name">{datasetName}</NavbarBrand>
           </span>
-          <span>
-            mihirg@stanford.edu (<a href="#">Logout</a>)
-          </span>
+          <div>
+            <span className="mr-4" onClick={toggleTagManagement} style={{cursor: "pointer"}}>
+              Manage Tags
+            </span>
+            <span>
+              {username ?
+                <>{username} (<a href="#" onClick={(e) => {
+                  setUsername("");
+                  e.preventDefault();
+                }}>Sign out</a>)</> :
+                <a href="#" onClick={(e) => {
+                  setLoginUsername("");
+                  setLoginPassword("");
+                  setLoginIsOpen(true);
+                  e.preventDefault();
+                }}>Sign in</a>
+              }
+            </span>
+          </div>
         </Container>
       </Navbar>
+      <Popover
+        placement="bottom"
+        isOpen={popoverOpen}
+        target="dataset-name"
+        toggle={() => setPopoverOpen(!popoverOpen)}
+        trigger="hover focus"
+        fade={false}
+      >
+        <PopoverBody>
+          <div><b>Dataset size:</b> {datasetInfo.num_images} image{datasetInfo.num_images === 1 ? "" : "s"}</div>
+          <div><b>Index status:</b> {datasetInfo.index_id ? "Created" : "Not created"}</div>
+        </PopoverBody>
+      </Popover>
       <div className="app">
         <div className="query-container sticky">
           <Container fluid>
@@ -196,15 +360,27 @@ const App = () => {
               </FormGroup>
               {(() => {
                 if (source === "dataset") {
-                  return (<Typeahead
-                    multiple
-                    id="dataset-query-bar"
-                    className="typeahead-bar"
-                    placeholder="Query tags"
-                    options={tags}
-                    selected={datasetQuery}
-                    onChange={selected => setDatasetQuery(selected)}
-                  />)
+                  return (
+                    <>
+                      <Typeahead
+                        multiple
+                        id="dataset-include-bar"
+                        className="typeahead-bar mr-2"
+                        placeholder="Tags to include"
+                        options={datasetInfo.categories}
+                        selected={datasetIncludeTags}
+                        onChange={selected => setDatasetIncludeTags(selected)}
+                      />
+                      <Typeahead
+                        multiple
+                        id="dataset-exclude-bar"
+                        className="typeahead-bar rbt-red"
+                        placeholder="Tags to exclude"
+                        options={datasetInfo.categories}
+                        selected={datasetExcludeTags}
+                        onChange={selected => setDatasetExcludeTags(selected)}
+                      />
+                    </>)
                 } else if (source === "google") {
                   return (
                     <Input
@@ -217,33 +393,140 @@ const App = () => {
                 }
               })()}
               <FormGroup className="mb-0">
-                <select className="custom-select mx-2">
-                  <option value="default" selected>Default order</option>
-                  <option value="random">Random order</option>
-                  <option value="knn" disabled>KNN</option>
+                <select className="custom-select mx-2" id="ordering-mode" onChange={e => setOrderingMode(e.target.value)}>
+                  {orderingModes.map((m) => <option value={m.id} selected={orderingMode === m.id} disabled={m.disabled}>{m.label}</option>)}
                 </select>
                 <ReactSVG className="icon" src="assets/arrow-caret.svg" />
               </FormGroup>
-              <Button color="primary" className="mr-4">Run query</Button>
-              <div>
-                <span className="text-nowrap">Clustering strength:</span>
-                <input className="custom-range" type="range" min="0" max="100"
+              <Button
+                color="primary"
+                onClick={() => setIsLoading(true)}
+                disabled={orderingMode === "svm" && !!!(trainedSvmData)}
+              >Run query</Button>
+            </Form>
+            <Form className="mt-2 mb-1 d-flex flex-row-reverse justify-content-between">
+              <div className="d-flex flex-row align-items-center">
+                <div className="custom-switch custom-control mr-4">
+                  <Input type="checkbox" className="custom-control-input"
+                    id="order-by-cluster-size-switch"
+                    checked={orderByClusterSize}
+                    onChange={(e) => setOrderByClusterSize(e.target.checked)}
+                  />
+                  <label className="custom-control-label text-nowrap" htmlFor="order-by-cluster-size-switch">
+                    Order by cluster size
+                  </label>
+                </div>
+                <label className="mb-0 mr-2 text-nowrap">
+                  Clustering strength:
+                </label>
+                <Slider
                   value={clusteringStrength}
-                  onChange={e => setClusteringStrength(e.target.value)}
-                  onMouseUp={recluster} />
+                  onChange={setClusteringStrength}
+                  onAfterChange={recluster}
+                />
               </div>
+              {queryResultData.type === "svm" && <div className="d-flex flex-row align-items-center">
+                <label className="mb-0 mr-2 text-nowrap">SVM score range:</label>
+                <Range
+                  allowCross={false}
+                  value={svmScoreRange}
+                  onChange={setSvmScoreRange}
+                  onAfterChange={() => setIsLoading(true)}
+                />
+                <span className="mb-0 ml-2 text-nowrap text-muted">
+                  ({Number(svmScoreRange[0] / 100).toFixed(2)} to {Number(svmScoreRange[1] / 100).toFixed(2)})
+                </span>
+              </div>}
+              {subset.length > 0 && <div className="rbt-token rbt-token-removeable alert-secondary">
+                Limited to {subset.length} image{subset.length !== 1 && "s"}
+                <button aria-label="Remove" className="close rbt-close rbt-token-remove-button" type="button" onClick={() => setSubset([])}>
+                  <span aria-hidden="true">×</span><span className="sr-only">Remove</span>
+                </button>
+              </div>}
             </Form>
           </Container>
         </div>
+        {orderingMode === "svm" && <Popover
+          placement="bottom"
+          isOpen={orderingModePopoverOpen || isTraining || !!!(trainedSvmData)}
+          target="ordering-mode"
+          trigger="hover"
+          toggle={() => setOrderingModePopoverOpen(!orderingModePopoverOpen)}
+          fade={false}
+          popperClassName={`svm-popover ${isTraining ? "loading" : ""}`}
+        >
+          <PopoverBody>
+            <Form>
+              <Typeahead
+                multiple
+                id="svm-pos-bar"
+                className="typeahead-bar mt-1"
+                placeholder="Positive example tags"
+                options={datasetInfo.categories}
+                selected={svmPosTags}
+                disabled={isTraining}
+                onChange={selected => {
+                  setSvmPosTags(selected);
+                  setTrainedSvmData(null);
+                }}
+              />
+              <Typeahead
+                multiple
+                id="svm-neg-bar"
+                className="typeahead-bar rbt-red mt-2 mb-1"
+                placeholder="Negative example tags"
+                options={datasetInfo.categories}
+                selected={svmNegTags}
+                disabled={isTraining}
+                onChange={selected => {
+                  setSvmNegTags(selected);
+                  setTrainedSvmData(null);
+                }}
+              />
+
+              <div className="my-2 custom-control custom-checkbox">
+                <input
+                  type="checkbox"
+                  className="custom-control-input"
+                  id="svm-augment-negs-checkbox"
+                  disabled={svmNegTags.length === 0 || isTraining}
+                  checked={svmAugmentNegs || svmNegTags.length === 0}
+                  onChange={(e) => {
+                    setSvmAugmentNegs(e.target.checked);
+                    setTrainedSvmData(null);
+                  }}
+                />
+                <label className="custom-control-label" htmlFor="svm-augment-negs-checkbox">
+                  Automatically augment negative set with random examples (
+                  {svmNegTags.length === 0 ? "required if no explicit negative examples" : "recommended"})
+                </label>
+              </div>
+              <Button
+                color="light"
+                onClick={() => setIsTraining(true)}
+                disabled={svmPosTags.length === 0 || isTraining}
+                className="mb-1 w-100"
+              >Train</Button>
+              {!!(trainedSvmData) && <div className="mt-1">
+                Trained model ({trainedSvmData.num_positives} positives,{" "}
+                {trainedSvmData.num_negatives} negatives,{" "}
+                {Math.round(trainedSvmData.accuracy * 100)}% accuracy){" "}
+                <ReactTimeAgo date={trainedSvmData.date} timeStyle="mini"/> ago
+              </div>}
+            </Form>
+          </PopoverBody>
+        </Popover>}
         <Container fluid>
+          {(!!!(datasetInfo.isNotLoaded) && !isLoading && queryResultData.images.length == 0) &&
+            <p className="text-center text-muted">No results match your query.</p>}
           <Row>
             <Col className="stack-grid">
               {clusters.map((images, i) =>
                 <ImageStack
                   id={i}
                   onClick={() => {
-                    setSelection({cluster: i, image: 0});
-                    setIsOpen(true);
+                    setSelection({cluster: i});
+                    setClusterIsOpen(true);
                   }}
                   images={images}
                   showLabel={clusteringStrength > 0}

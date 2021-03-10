@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass
 from enum import Enum
 import functools
@@ -13,6 +14,21 @@ from knn import utils
 from knn.utils import JSONType
 
 from .base import Reducer
+
+
+class IsFinishedReducer(Reducer):
+    def __init__(self):
+        self.finished = asyncio.Event()
+
+    def finish(self):
+        self.finished.set()
+
+    def handle_result(self, input, output):
+        pass
+
+    @property
+    def result(self) -> bool:
+        return self.finished.is_set()
 
 
 class TopKReducer(Reducer):

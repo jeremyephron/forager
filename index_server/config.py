@@ -27,10 +27,20 @@ MAPPER_REQUEST_TIMEOUT = (
 )  # seconds; more than a minute per image is probably too much
 MAPPER_CLOUD_RUN_URL = "https://forager-index-mapper-g6rwrca4fq-uc.a.run.app"
 
+LOCAL_INDEX_BUILDING_NUM_THREADS = 10
+
 ADDER_NUM_RETRIES = 5
 ADDER_CHUNK_SIZE = lambda nproc: 1
 ADDER_REQUEST_MULTIPLE = lambda nproc: nproc
 ADDER_REQUEST_TIMEOUT = 5 * 60  # seconds
+
+RESIZER_NUM_RETRIES = 20  # all should succeed
+RESIZER_CHUNK_SIZE = lambda nproc: 20
+RESIZER_REQUEST_MULTIPLE = lambda nproc: nproc
+RESIZER_REQUEST_TIMEOUT = 60  # seconds
+RESIZER_OUTPUT_BUCKET = "foragerml"
+RESIZER_OUTPUT_DIR_TMPL = "thumbnails/{}/"
+RESIZER_MAX_HEIGHT = 200
 
 NUM_IMAGES_TO_MAP_BEFORE_CONFIGURING_INDEX = 100
 EMBEDDING_DIM = 2048
@@ -52,3 +62,5 @@ INDEX_UPLOAD_GCS_PATH = "gs://foragerml/indexes/"  # trailing slash = directory
 
 QUERY_PATCHES_PER_IMAGE = 8
 QUERY_NUM_RESULTS_MULTIPLE = 80
+
+SVM_NUM_NEGS_MULTIPLIER = 7

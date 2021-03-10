@@ -1,45 +1,45 @@
-variable "mapper_image_name" {
+variable "resizer_image_name" {
   type    = string
-  default = "gcr.io/visualdb-1046/forager-index-mapper:latest"
+  default = "gcr.io/visualdb-1046/forager-index-resizer:latest"
 }
 
-variable "mapper_node_pool_name" {
+variable "resizer_node_pool_name" {
   type    = string
-  default = "mapper-np"
+  default = "resizer-np"
 }
 
-variable "mapper_num_nodes" {
+variable "resizer_num_nodes" {
   type    = number
-  default = 50
+  default = 20
 }
 
-variable "mapper_node_type" {
+variable "resizer_node_type" {
   type    = string
-  default = "n2-standard-16"
+  default = "n2-standard-4"
 }
 
-variable "mapper_nproc" {
+variable "resizer_nproc" {
   type    = number
-  default = 16
+  default = 4
 }
 
 locals {
-  mapper_external_port = 5000
-  mapper_internal_port = 5000
-  mapper_app_name      = "mapper"
-  mapper_disk_size_gb  = 10
+  resizer_external_port = 5000
+  resizer_internal_port = 5000
+  resizer_app_name      = "resizer"
+  resizer_disk_size_gb  = 10
 }
 
-resource "google_container_node_pool" "mapper_np" {
+resource "google_container_node_pool" "resizer_np" {
   count      = var.create_node_pools_separately ? 1 : 0
-  name       = var.mapper_node_pool_name
+  name       = var.resizer_node_pool_name
   location   = var.zone
   cluster    = google_container_cluster.cluster.name
-  node_count = var.mapper_num_nodes
+  node_count = var.resizer_num_nodes
 
   node_config {
     preemptible  = true
-    machine_type = var.mapper_node_type
+    machine_type = var.resizer_node_type
     disk_size_gb = local.trainer_disk_size_gb
     oauth_scopes = local.node_pool_oauth_scopes
   }
@@ -47,47 +47,47 @@ resource "google_container_node_pool" "mapper_np" {
   depends_on = [kubernetes_persistent_volume_claim.nfs_claim]
 }
 
-resource "kubernetes_deployment" "mapper_dep" {
+resource "kubernetes_deployment" "resizer_dep" {
   metadata {
-    name = "mapper-dep"
+    name = "resizer-dep"
     labels = {
-      app = local.mapper_app_name
+      app = local.resizer_app_name
     }
   }
 
   spec {
-    replicas = var.mapper_num_nodes
+    replicas = var.resizer_num_nodes
 
     selector {
       match_labels = {
-        app = local.mapper_app_name
+        app = local.resizer_app_name
       }
     }
 
     template {
       metadata {
         labels = {
-          app = local.mapper_app_name
+          app = local.resizer_app_name
         }
       }
 
       spec {
         container {
-          image = var.mapper_image_name
-          name  = local.mapper_app_name
+          image = var.resizer_image_name
+          name  = local.resizer_app_name
 
           env {
             name  = "PORT"
-            value = local.mapper_internal_port
+            value = local.resizer_internal_port
           }
 
           env {
             name = "NPROC"
-            value = var.mapper_nproc
+            value = var.resizer_nproc
           }
 
           port {
-            container_port = local.mapper_internal_port
+            container_port = local.resizer_internal_port
           }
 
           volume_mount {
@@ -108,7 +108,7 @@ resource "kubernetes_deployment" "mapper_dep" {
                 match_expressions {
                   key      = "app"
                   operator = "In"
-                  values   = [local.mapper_app_name]
+                  values   = [local.resizer_app_name]
                 }
               }
 
@@ -134,38 +134,38 @@ resource "kubernetes_deployment" "mapper_dep" {
         }
 
         node_selector = {
-          "cloud.google.com/gke-nodepool" = var.mapper_node_pool_name
+          "cloud.google.com/gke-nodepool" = var.resizer_node_pool_name
         }
       }
     }
   }
 
-  depends_on = [google_container_cluster.cluster, google_container_node_pool.mapper_np]
+  depends_on = [google_container_cluster.cluster, google_container_node_pool.resizer_np]
 }
 
-resource "kubernetes_service" "mapper_svc" {
+resource "kubernetes_service" "resizer_svc" {
   metadata {
-    name = "${kubernetes_deployment.mapper_dep.metadata.0.name}-svc"
+    name = "${kubernetes_deployment.resizer_dep.metadata.0.name}-svc"
   }
   spec {
-    selector = kubernetes_deployment.mapper_dep.metadata.0.labels
+    selector = kubernetes_deployment.resizer_dep.metadata.0.labels
     port {
-      port        = local.mapper_external_port
-      target_port = local.mapper_internal_port
+      port        = local.resizer_external_port
+      target_port = local.resizer_internal_port
     }
 
     type = "LoadBalancer"
   }
 }
 
-output "mapper_url" {
-  value = "http://${kubernetes_service.mapper_svc.status.0.load_balancer.0.ingress.0.ip}:${local.mapper_external_port}"
+output "resizer_url" {
+  value = "http://${kubernetes_service.resizer_svc.status.0.load_balancer.0.ingress.0.ip}:${local.resizer_external_port}"
 }
 
-output "num_mappers" {
-  value = var.mapper_num_nodes
+output "num_resizers" {
+  value = var.resizer_num_nodes
 }
 
-output "mapper_nproc" {
-  value = var.mapper_nproc
+output "resizer_nproc" {
+  value = var.resizer_nproc
 }

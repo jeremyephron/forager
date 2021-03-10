@@ -143,6 +143,6 @@ resource "kubernetes_service" "trainer_svc" {
 output "trainer_urls" {
   value = [
     for svc in kubernetes_service.trainer_svc:
-    "http://${svc.load_balancer_ingress.0.ip}:${local.trainer_external_port}"
+    "http://${svc.status.0.load_balancer.0.ingress.0.ip}:${local.trainer_external_port}"
   ]
 }

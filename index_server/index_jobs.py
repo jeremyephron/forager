@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from enum import IntEnum
+import numpy as np
 import os
 from pathlib import Path
 import time
@@ -306,3 +307,88 @@ class TrainingJob:
             ),
             "reduction": "average" if self.average else None,
         }
+
+
+class LocalFlatIndex:
+    # TODO(mihirg): Don't store entire dataset in memory long-term
+
+    INDEX_FILENAME = "embeddings.npy"
+    DISTANCE_MATRIX_FILENAME = "distances.npy"
+
+    @classmethod
+    def load(cls, dir: Path, num_images: int):
+        self = cls()
+        self.index = np.memmap(
+            dir / self.INDEX_FILENAME,
+            dtype=np.float32,
+            mode="r",
+            shape=(num_images, config.EMBEDDING_DIM),
+        )
+        self.distance_matrix = np.memmap(
+            dir / self.DISTANCE_MATRIX_FILENAME,
+            dtype=np.float32,
+            mode="r",
+            shape=(num_images, num_images),
+        )
+        return self
+
+    @classmethod
+    def create(cls, dir: Path, num_images: int, cluster_mount_parent_dir: Path):
+        self = cls()
+        self.index = np.memmap(
+            dir / self.INDEX_FILENAME,
+            dtype=np.float32,
+            mode="w+",
+            shape=(num_images, config.EMBEDDING_DIM),
+        )
+        self.distance_matrix = np.memmap(
+            dir / self.DISTANCE_MATRIX_FILENAME,
+            dtype=np.float32,
+            mode="w+",
+            shape=(num_images, num_images),
+        )
+        self.cluster_mount_parent_dir = cluster_mount_parent_dir
+        return self
+
+    # Don't use this directly - use a @classmethod constructor
+    def __init__(self):
+        self.index: Optional[np.ndarray] = None
+        self.distance_matrix: Optional[np.ndarray] = None
+        self.cluster_mount_parent_dir: Optional[Path] = None
+
+    def add_from_file(self, path_tmpl: str):
+        # Each file is a np.save'd Dict[int, np.ndarray] where each value is 1 x D
+        assert self.index is not None and self.cluster_mount_parent_dir
+        embedding_dict = np.load(
+            self.cluster_mount_parent_dir / path_tmpl.format("average").lstrip(os.sep),
+            allow_pickle=True,
+        ).item()  # type: Dict[int, np.ndarray]
+
+        # Populate local index
+        for id, embeddings in embedding_dict.items():
+            assert len(embeddings) == 1
+            self.index[int(id)] = embeddings[0]
+
+    def build_distance_matrix(self):
+        self._pdist(self.index, self.distance_matrix)
+
+    def save(self, dir: Path):
+        assert self.index is not None and self.distance_matrix is not None
+        self.index.flush()
+        self.distance_matrix.flush()
+
+    @staticmethod
+    def _pdist(M, out):
+        # TODO(mihirg): Consider using cosine similarity instead
+        # Alternative to scipy's pdist that respects dtype; modified from
+        # http://www.xavierdupre.fr/app/mlprodict/helpsphinx/notebooks/onnx_pdist.html
+        n = M.shape[0]
+        buffer = np.empty((n - 1, M.shape[1]), dtype=M.dtype)  # TODO(mihirg): Eliminate
+        a = np.empty(n, dtype=M.dtype)
+        for i in range(1, n):
+            np.subtract(M[:i], M[i], out=buffer[:i])  # broadcasted substraction
+            np.square(buffer[:i], out=buffer[:i])
+            np.sum(buffer[:i], axis=1, out=a[:i])
+            np.sqrt(a[i], out=a[:i])
+            out[:i, i] = a[:i]
+            out[i, :i] = a[:i]

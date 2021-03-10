@@ -6,7 +6,7 @@ variable "create_node_pools_separately" {
 locals {
   node_pool_oauth_scopes = [
     "https://www.googleapis.com/auth/cloud-platform",
-    "https://www.googleapis.com/auth/devstorage.read_only",
+    "https://www.googleapis.com/auth/devstorage.read_write",
     "https://www.googleapis.com/auth/logging.write",
     "https://www.googleapis.com/auth/monitoring",
     "https://www.googleapis.com/auth/servicecontrol",
@@ -72,6 +72,21 @@ resource "google_container_cluster" "cluster" {
     }
   }
 
+  dynamic "node_pool" {
+    for_each = var.create_node_pools_separately ? [] : [1]
+    content {
+      name       = var.resizer_node_pool_name
+      node_count = var.resizer_num_nodes
+
+      node_config {
+        preemptible  = true
+        machine_type = var.resizer_node_type
+        disk_size_gb = local.trainer_disk_size_gb
+        oauth_scopes = local.node_pool_oauth_scopes
+      }
+    }
+  }
+
   master_auth {
     username = ""
     password = ""
@@ -99,8 +114,6 @@ resource "kubectl_manifest" "gpu_installer" {
 }
 
 provider "kubernetes" {
-  load_config_file = false
-
   host  = "https://${google_container_cluster.cluster.endpoint}"
   token = data.google_client_config.provider.access_token
   cluster_ca_certificate = base64decode(

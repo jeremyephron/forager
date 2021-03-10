@@ -2,7 +2,6 @@ import asyncio
 import concurrent
 from collections import defaultdict
 from dataclasses import dataclass
-from distutils.util import strtobool
 import functools
 import heapq
 import itertools
@@ -11,16 +10,19 @@ import logging
 import operator
 import os
 from pathlib import Path
-import shutil
 import random
+import shutil
 import time
 import uuid
 
 import aiohttp
+from bidict import bidict
 from dataclasses_json import dataclass_json
+import fastcluster
 import numpy as np
 from sanic import Sanic
 import sanic.response as resp
+from scipy.spatial.distance import squareform
 from sklearn import svm
 from sklearn.metrics import accuracy_score
 
@@ -32,11 +34,18 @@ from interactive_index.utils import sample_farthest_vectors
 from knn import utils
 from knn.clusters import TerraformModule
 from knn.jobs import MapReduceJob, MapperSpec
-from knn.reducers import Reducer, VectorReducer
+from knn.reducers import Reducer, IsFinishedReducer, VectorReducer
 from knn.utils import JSONType
 
 import config
-from index_jobs import AdderReducer, IndexType, MapperReducer, Trainer, TrainingJob
+from index_jobs import (
+    AdderReducer,
+    IndexType,
+    MapperReducer,
+    Trainer,
+    TrainingJob,
+    LocalFlatIndex,
+)
 from utils import CleanupDict
 
 
@@ -63,7 +72,8 @@ logger.addHandler(log_ch)
 
 
 class LabeledIndex:
-    LABEL_FILENAME = "labels.json"
+    LABELS_FILENAME = "labels.json"
+    IDENTIFIERS_FILENAME = "identifiers.json"
 
     @dataclass_json
     @dataclass
@@ -89,28 +99,37 @@ class LabeledIndex:
         self.ready = asyncio.Event()
 
         # Will be filled by each individual constructor
+        # TODO(mihirg): Deprecate self.identifiers in favor of self.lables
+        # TODO(mihirg): Consider using primary key for thumbnail filenames
         self.labels: List[str] = []
+        self.identifiers: Optional[bidict[str, int]] = None
         self.indexes: Dict[IndexType, InteractiveIndex] = {}
+        self.local_flat_index: Optional[LocalFlatIndex] = None
 
         # Will only be used by the start_building() pathway
+        self.bucket: Optional[str] = None
         self.cluster: Optional[TerraformModule] = None
         self.http_session: Optional[aiohttp.ClientSession] = None
         self.mapper_job: Optional[MapReduceJob] = None
+        self.build_local_flat_index_task: Optional[asyncio.Task] = None
         self.training_jobs: CleanupDict[IndexType, TrainingJob] = CleanupDict(
             lambda job: job.stop()
         )
         self.start_adding_eventually_task: Optional[asyncio.Task] = None
         self.adder_job: Optional[MapReduceJob] = None
+        self.resizer_job: Optional[MapReduceJob] = None
         self.merge_task: Optional[asyncio.Task] = None
         self.cluster_unlock_fn: Optional[Callable[[None], None]] = None
 
     def query(
         self,
         query_vector: np.ndarray,
-        num_results: int,
+        num_results: Optional[int] = None,  # if None, all results
         num_probes: Optional[int] = None,
         use_full_image: bool = False,
         svm: bool = False,
+        min_d: float = 0.0,
+        max_d: float = 1.0,
     ) -> List[QueryResult]:
         assert self.ready.is_set()
 
@@ -119,16 +138,31 @@ class LabeledIndex:
 
         if use_full_image:
             index = self.indexes[IndexType.FULL_DOT if svm else IndexType.FULL]
+            if num_results is None:
+                num_results = len(self.labels)  # can't use n_vectors - distributed add
+                num_probes = index.n_centroids
+
             dists, (ids, _) = index.query(
                 query_vector, num_results, n_probes=num_probes
             )
             assert len(ids) == 1 and len(dists) == 1
-            sorted_results = [
-                LabeledIndex.QueryResult(int(i), float(d))  # cast numpy types
-                for i, d in zip(ids[0], dists[0])
-                if i >= 0
-            ]
+            lowest_dist = np.min(dists)
+            highest_dist = np.max(dists)
+
+            sorted_results = []
+            for i, d in zip(ids[0], dists[0]):
+                i, d = int(i), float(d)  # cast numpy types
+                d = (d - lowest_dist) / (highest_dist - lowest_dist)  # normalize
+                if i >= 0 and min_d <= d <= max_d:
+                    sorted_results.append(LabeledIndex.QueryResult(int(i), float(d)))
         else:
+            assert (
+                num_results is not None
+            ), "Returning exhausive results not supported for spatial queries"
+            assert (
+                min_d == 0.0 and max_d == 1.0
+            ), "Distance bounds not supported for spatial queries"
+
             index = self.indexes[IndexType.SPATIAL_DOT if svm else IndexType.SPATIAL]
             dists, (ids, locs) = index.query(
                 query_vector,
@@ -193,7 +227,7 @@ class LabeledIndex:
             # Gather spatial locations for each image
             locs_by_id: DefaultDict[int, List[int]] = defaultdict(list)
             for i, l in zip(ids, locs):
-                i, l = int(i), int(l)  # cast numpy types
+                i, l = int(i), int(l)  # cast numpy type  # noqa: E741
                 locs_by_id[i].append(l)
 
             # Return up to max_samples images with the highest number (but at least
@@ -210,6 +244,55 @@ class LabeledIndex:
             result.label = self.labels[result.id]
         return results
 
+    def get_identifier_set(self) -> Set[str]:
+        assert self.identifiers
+        return set(self.identifiers.keys())
+
+    def get_embeddings(self, identifiers: List[str]) -> np.ndarray:
+        assert (
+            self.identifiers
+            and self.local_flat_index
+            and self.local_flat_index.index is not None
+        )
+        inds = [self.identifiers[id] for id in identifiers]
+        return self.local_flat_index.index[inds]
+
+    def cluster_identifiers(self, identifiers: List[str]) -> List[List[float]]:
+        assert self.identifiers
+        inds = [self.identifiers[id] for id in identifiers]
+        return self._cluster(inds)
+
+    def cluster_results(self, results: List[QueryResult]) -> List[List[float]]:
+        inds = [result.id for result in results]
+        return self._cluster(inds)
+
+    def _cluster(self, inds: List[int]) -> List[List[float]]:
+        # TODO(mihirg): Consider performing hierarchical clustering once over the entire
+        # dataset during index build time
+        assert (
+            self.local_flat_index is not None
+            and self.local_flat_index.distance_matrix is not None
+        )
+        if len(inds) <= 1:
+            return []
+
+        # Construct condensed distance submatrix
+        dists = self.local_flat_index.distance_matrix[np.ix_(inds, inds)]
+        condensed = squareform(dists)
+
+        # Perform hierarchical clustering
+        result = fastcluster.linkage(condensed, method="ward", preserve_input=False)
+        max_dist = result[-1, 2]
+
+        # Simplify dendogram matrix by using original cluster indexes
+        simplified = []
+        clusters = list(range(len(inds)))
+        for a, b, dist, _ in result:
+            a, b = int(a), int(b)
+            simplified.append([clusters[a], clusters[b], dist / max_dist])
+            clusters.append(clusters[a])
+        return simplified
+
     # CLEANUP
 
     def delete(self):
@@ -220,6 +303,12 @@ class LabeledIndex:
         # Map
         if self.mapper_job:
             await self.mapper_job.stop()
+        if (
+            self.build_local_flat_index_task
+            and not self.build_local_flat_index_task.done()
+        ):
+            self.build_local_flat_index_task.cancel()
+            await self.build_local_flat_index_task
 
         # Train
         await self.training_jobs.clear_async()
@@ -233,6 +322,10 @@ class LabeledIndex:
             await self.start_adding_eventually_task
         if self.adder_job:
             await self.adder_job.stop()
+
+        # Resize
+        if self.resizer_job:
+            await self.resizer_job.stop()
 
         # Close network connections
         if self.http_session:
@@ -260,14 +353,21 @@ class LabeledIndex:
         cluster_unlock_fn: Callable[[], None],
         bucket: str,
         paths: List[str],
+        identifiers: List[str],
         *args,
         **kwargs,
     ):
         self = cls(str(uuid.uuid4()), *args, **kwargs)
+        self.bucket = bucket
         self.http_session = utils.create_unlimited_aiohttp_session()
 
         # Randomly shuffle input images
-        self.labels = random.sample(paths, k=len(paths))
+        inds = np.arange(len(paths))
+        np.random.shuffle(inds)
+        self.labels = [paths[i] for i in inds]
+        self.identifiers = bidict(
+            {identifiers[i]: new_i for new_i, i in enumerate(inds)}
+        )
         iterable = (
             {"id": i, "image": path, "augmentations": {}}
             for i, path in enumerate(self.labels)
@@ -292,7 +392,7 @@ class LabeledIndex:
             )
 
         # Step 1: "Map" input images to embedding files saved to shared disk
-        # TODO(mihirg): Fail gracefully if entire Map, Train, or Add jobs fail
+        # TODO(mihirg): Fail gracefully if entire Map, Train, Add, or Resize jobs fail
         notification_request_to_configure_indexes = MapperReducer.NotificationRequest(
             self.configure_indexes,
             on_num_images=config.NUM_IMAGES_TO_MAP_BEFORE_CONFIGURING_INDEX,
@@ -309,7 +409,7 @@ class LabeledIndex:
                 n_mappers=n_mappers,
             ),
             MapperReducer([notification_request_to_configure_indexes]),
-            {"input_bucket": bucket, "return_type": "save"},
+            {"input_bucket": self.bucket, "return_type": "save"},
             session=self.http_session,
             n_retries=config.MAPPER_NUM_RETRIES,
             chunk_size=chunk_size,
@@ -317,6 +417,13 @@ class LabeledIndex:
         )
         await self.mapper_job.start(iterable, self.start_training, len(paths))
         self.logger.info(f"Map: started with {len(paths)} images")
+
+        # Start a background task that consumes Map outputs as they're generated and
+        # builds a local flat index of full-image embeddings
+        self.local_flat_index = LocalFlatIndex.create(
+            len(self.labels), self.cluster.mount_parent_dir
+        )
+        self.build_local_flat_index_task = self.build_local_flat_index_in_background()
 
         # Start a background task that waits until the Train step (started automatically
         # per above) is done and then kicks off the Add step
@@ -347,6 +454,29 @@ class LabeledIndex:
                 )
             )
 
+    @utils.unasync_as_task
+    async def build_local_flat_index_in_background(self):
+        # Step 2: As the Map step runs, build a local flat index of the full-image
+        # embeddings it generates to facilitate fast SVM queries and a distance matrix
+        # to facilitate fast clustering
+        with concurrent.futures.ThreadPoolExecutor(
+            config.LOCAL_INDEX_BUILDING_NUM_THREADS
+        ) as pool:
+            coro_gen = (
+                utils.run_in_executor(
+                    self.local_flat_index.add_from_file, path_tmpl, executor=pool
+                )
+                async for path_tmpl in self.mapper_job.reducer.output_path_tmpl_gen()
+            )
+            async for task in utils.limited_as_completed_from_async_coro_gen(
+                coro_gen, config.LOCAL_INDEX_BUILDING_NUM_THREADS
+            ):
+                await task
+
+            self.logger.info("Local flat index: finished consuming Map output")
+            await utils.run_in_executor(self.local_flat_index.build_distance_matrix)
+            self.logger.info("Local flat index: finished building distance matrix")
+
     def start_training(
         self,
         mapper_result: MapperReducer.Result,
@@ -358,7 +488,7 @@ class LabeledIndex:
                 f"{mapper_result.num_images} images"
             )
 
-        # Step 2: "Train" each index once we have enough images/spatial embeddings (or
+        # Step 3: "Train" each index once we have enough images/spatial embeddings (or
         # when the Map step finishes, in which case index_type=None indicating that we
         # should train all remaining indexes)
         index_types = [index_type] if index_type else iter(IndexType)
@@ -419,7 +549,7 @@ class LabeledIndex:
         # then remove this line!
         await self.mapper_job.reducer.finished.wait()
 
-        # Step 3: As the Map step computes and saves embeddings, "Add" them into shards
+        # Step 4: As the Map step computes and saves embeddings, "Add" them into shards
         # of the newly trained indexes
         # TODO(mihirg): Consider adding to each index independently as training
         # finishes, then merging independently, then making indexes available on the
@@ -442,19 +572,56 @@ class LabeledIndex:
             request_timeout=config.ADDER_REQUEST_TIMEOUT,
         )
         await self.adder_job.start(
-            self.mapper_job.reducer.output_path_tmpl_gen(), self.start_merging
+            self.mapper_job.reducer.output_path_tmpl_gen(),
+            self.start_resizing_and_merging,
         )  # iterable is an async generator that yields as the Map step produces outputs
         self.logger.info("Add: started")
 
-    def start_merging(self, shard_patterns: Set[str]):
+    @utils.unasync_as_task
+    async def start_resizing_and_merging(self, shard_patterns: Set[str]):
         self.logger.info(f"Add: finished with {len(shard_patterns)} shard patterns")
         self.merge_task = self.merge_indexes_in_background(shard_patterns)
+
+        # Step 5: "Resize" images into small thumbnails so that the frontend can render
+        # faster
+        assert self.cluster  # just to silence type warnings
+        iterable = (
+            {"image": label, "identifier": identifier}
+            for label, identifier in zip(self.labels, self.identifiers.keys())
+        )
+        nproc = self.cluster.output["resizer_nproc"]
+        n_mappers = int(
+            self.cluster.output["num_resizers"] * config.RESIZER_REQUEST_MULTIPLE(nproc)
+        )
+        chunk_size = config.RESIZER_CHUNK_SIZE(nproc)
+        self.resizer_job = MapReduceJob(
+            MapperSpec(
+                url=self.cluster.output["resizer_url"],
+                n_mappers=n_mappers,
+            ),
+            IsFinishedReducer(),
+            {
+                "input_bucket": self.bucket,
+                "output_bucket": config.RESIZER_OUTPUT_BUCKET,
+                "output_dir": config.RESIZER_OUTPUT_DIR_TMPL.format(self.index_id),
+                "resize_max_height": config.RESIZER_MAX_HEIGHT,
+            },
+            session=self.http_session,
+            n_retries=config.RESIZER_NUM_RETRIES,
+            chunk_size=chunk_size,
+            request_timeout=config.RESIZER_REQUEST_TIMEOUT,
+        )
+        await self.resizer_job.start(
+            iterable,
+            lambda _: self.logger.info("Resize: finished"),
+        )
+        self.logger.info("Resize: started")
 
     @utils.unasync_as_task
     async def merge_indexes_in_background(self, shard_patterns: Set[str]):
         loop = asyncio.get_running_loop()
 
-        # Step 4: "Merge" shards from shared disk into final local index (in a thread
+        # Step 6: "Merge" shards from shared disk into final local index (in a thread
         # pool; because FAISS releases the GIL, this won't block the event loop)
         # TODO(mihirg): Consider deleting all unnecessary intermediates from NAS after
         self._load_local_indexes()
@@ -478,7 +645,11 @@ class LabeledIndex:
             await asyncio.gather(*futures)
 
         # Upload final index to Cloud Storage
+        await self.build_local_flat_index_task
         await self.upload()
+
+        # Wait for resizing to complete
+        await self.resizer_job.reducer.finished.wait()
 
         self.logger.info("Finished building index")
         self.ready.set()
@@ -494,8 +665,13 @@ class LabeledIndex:
         index.merge_partial_indexes(shard_paths)
 
     async def upload(self):
-        # Dump labels
-        json.dump(self.labels, (self.index_dir / self.LABEL_FILENAME).open("w"))
+        # Dump labels, identifiers, full-image embeddings, and distance matrix
+        json.dump(self.labels, (self.index_dir / self.LABELS_FILENAME).open("w"))
+        json.dump(
+            dict(self.identifiers),
+            (self.index_dir / self.IDENTIFIERS_FILENAME).open("w"),
+        )
+        self.local_flat_index.save(self.index_dir)
 
         # Upload to Cloud Storage
         # TODO(mihirg): Speed up
@@ -520,36 +696,48 @@ class LabeledIndex:
                 index_type.name: job.status
                 for index_type, job in self.training_jobs.items()
             },
+            "resize": self.resizer_job.status if self.resizer_job else {},
         }
 
     # INDEX LOADING
 
     @classmethod
-    async def download(
+    async def load(
         cls,
         index_id: str,
+        download: bool = False,
         *args,
         **kwargs,
     ) -> "LabeledIndex":
         self = cls(index_id, *args, **kwargs)
 
-        # Download from Cloud Storage
-        config.INDEX_PARENT_DIR.mkdir(parents=True, exist_ok=True)
-        # TODO(mihirg): Speed up
-        # https://medium.com/@duhroach/gcs-read-performance-of-large-files-bd53cfca4410
-        proc = await asyncio.create_subprocess_exec(
-            "gsutil",
-            "-m",
-            "cp",
-            "-r",
-            "-n",
-            f"{config.INDEX_UPLOAD_GCS_PATH}{self.index_id}",
-            str(config.INDEX_PARENT_DIR),
-        )
-        await proc.wait()
+        if download:
+            # Download from Cloud Storage
+            config.INDEX_PARENT_DIR.mkdir(parents=True, exist_ok=True)
+            # TODO(mihirg): Speed up
+            # https://medium.com/@duhroach/gcs-read-performance-of-large-files-bd53cfca4410
+            proc = await asyncio.create_subprocess_exec(
+                "gsutil",
+                "-m",
+                "cp",
+                "-r",
+                "-n",
+                f"{config.INDEX_UPLOAD_GCS_PATH}{self.index_id}",
+                str(config.INDEX_PARENT_DIR),
+            )
+            await proc.wait()
 
         # Initialize indexes
-        self.labels = json.load((self.index_dir / self.LABEL_FILENAME).open())
+        self.labels = json.load((self.index_dir / self.LABELS_FILENAME).open())
+        try:
+            self.identifiers = bidict(
+                json.load((self.index_dir / self.IDENTIFIERS_FILENAME).open())
+            )
+            self.local_flat_index = LocalFlatIndex.load(
+                self.index_dir, len(self.labels)
+            )
+        except Exception:
+            pass
         self._load_local_indexes()
         self.logger.info(f"Finished loading index from {self.index_dir}")
 
@@ -667,11 +855,14 @@ async def start_job(request):
     cluster_id = request.json["cluster_id"]
     bucket = request.json["bucket"]
     paths = request.json["paths"]
+    identifiers = request.json["identifiers"]
 
     cluster = current_clusters[cluster_id]
     lock_id = current_clusters.lock(cluster_id)
     cluster_unlock_fn = functools.partial(current_clusters.unlock, cluster_id, lock_id)
-    index = await LabeledIndex.start_building(cluster, cluster_unlock_fn, bucket, paths)
+    index = await LabeledIndex.start_building(
+        cluster, cluster_unlock_fn, bucket, paths, identifiers
+    )
 
     index_id = index.index_id
     current_indexes[index_id] = index
@@ -711,7 +902,7 @@ async def stop_job(request):
 
 async def _download_index(index_id):
     if index_id not in current_indexes:
-        current_indexes[index_id] = await LabeledIndex.download(index_id)
+        current_indexes[index_id] = await LabeledIndex.load(index_id, download=True)
 
 
 @app.route("/download_index", methods=["POST"])
@@ -732,6 +923,12 @@ async def delete_index(request):
 # QUERY
 # TODO(mihirg): Change input from form encoding to JSON
 # TODO(all): Clean up this code
+
+
+async def get_index(index_id) -> LabeledIndex:
+    if index_id not in current_indexes:
+        current_indexes[index_id] = await LabeledIndex.load(index_id)
+    return current_indexes[index_id]
 
 
 def extract_embedding_from_mapper_output(output: str) -> np.ndarray:
@@ -766,6 +963,7 @@ class BestMapper:
 @app.route("/query_index", methods=["POST"])
 async def query_index(request):
     image_paths = request.json["paths"]
+    identifiers = request.json["identifiers"]
     cluster_id = request.json["cluster_id"]
     bucket = request.json["bucket"]
     patches = [
@@ -781,6 +979,8 @@ async def query_index(request):
         augmentation_dict[augmentations[2 * i]] = float(augmentations[2 * i + 1])
 
     use_full_image = bool(request.json.get("use_full_image", False))
+
+    index = await get_index(index_id)
 
     # Generate query vector as average of patch embeddings
     async with BestMapper(cluster_id) as mapper:
@@ -806,9 +1006,7 @@ async def query_index(request):
         )
 
     # Run query and return results
-    query_results = current_indexes[index_id].query(
-        query_vector, num_results, None, use_full_image, False
-    )
+    query_results = index.query(query_vector, num_results, None, use_full_image, False)
     return resp.json({"results": [r.to_dict() for r in query_results]})
 
 
@@ -826,6 +1024,8 @@ async def active_batch(request):
         augmentation_dict[augmentations[2 * i]] = float(augmentations[2 * i + 1])
 
     use_full_image = True
+
+    index = await get_index(index_id)
 
     # Generate query vector as average of patch embeddings
     async with BestMapper(cluster_id) as mapper:
@@ -848,7 +1048,7 @@ async def active_batch(request):
     perVector = (int)(num_results / len(query_vectors)) + 2
     for vec in query_vectors:
         # Return nearby images
-        query_results = current_indexes[index_id].query(
+        query_results = index.query(
             np.float32(vec),
             perVector,
             None,
@@ -902,7 +1102,7 @@ async def query_svm(request):
 
     # Automatically label `autolabel_max_vectors` vectors randomly sampled from the
     # bottom `autolabel_percent`% of the previous SVM's results as negative
-    index = current_indexes[index_id]
+    index = await get_index(index_id)
 
     prev_svm_vector = utils.base64_to_numpy(request.json["prev_svm_vector"])
     autolabel_percent = float(request.json["autolabel_percent"])
@@ -958,8 +1158,12 @@ async def query_svm(request):
         training_features, training_labels = await job.run_until_complete(
             itertools.chain(pos_inputs, neg_inputs, auto_inputs)
         )
-        logger.info(f"{log_id_string} - Finished SVM vector computation in {job.elapsed_time:.3f}s")
-        logger.debug(f"{log_id_string} - Vector computation performance: {job.performance}")
+        logger.info(
+            f"{log_id_string} - Finished SVM vector computation in {job.elapsed_time:.3f}s"
+        )
+        logger.debug(
+            f"{log_id_string} - Vector computation performance: {job.performance}"
+        )
 
     # Train SVM
     logger.debug(f"{log_id_string} - Starting SVM training")
@@ -970,8 +1174,12 @@ async def query_svm(request):
     predicted = model.predict(training_features)
 
     end_time = time.perf_counter()
-    logger.info(f"{log_id_string} - Finished training SVM in {end_time - start_time:.3f}s")
-    logger.debug(f"{log_id_string} - SVM accuracy: {accuracy_score(training_labels, predicted)}")
+    logger.info(
+        f"{log_id_string} - Finished training SVM in {end_time - start_time:.3f}s"
+    )
+    logger.debug(
+        f"{log_id_string} - SVM accuracy: {accuracy_score(training_labels, predicted)}"
+    )
 
     if mode == "svmPos" or mode == "spatialSvmPos":
         # Evaluate the SVM by querying index
@@ -1026,6 +1234,108 @@ async def query_svm(request):
         )  # unordered by distance for now
     else:
         return resp.json({"results": []})
+
+
+# NEW FRONTEND
+
+
+@app.route("/perform_clustering", methods=["POST"])
+async def perform_clustering(request):
+    identifiers = request.json["identifiers"]
+    index_id = request.json["index_id"]
+    index = await get_index(index_id)
+    clustering = index.cluster_identifiers(identifiers)
+    return resp.json({"clustering": clustering})
+
+
+@app.route("/query_knn_v2", methods=["POST"])
+async def query_knn_v2(request):
+    identifiers = request.json["identifiers"]
+    index_id = request.json["index_id"]
+    num_results = int(request.json["num_results"])
+
+    index = await get_index(index_id)
+
+    # Get query vector from local flat index
+    query_vector = np.mean(index.get_embeddings(identifiers), axis=0)
+
+    # Run query and return results
+    query_results = index.query(
+        query_vector, num_results, use_full_image=True, svm=False
+    )
+    return resp.json({"results": [r.to_dict() for r in query_results]})
+
+
+@app.route("/train_svm_v2", methods=["POST"])
+async def train_svm_v2(request):
+    # HACK(mihirg): sometimes we get empty identifiers (i.e., "") from the server that
+    # would otherwise cause a crash here; we should probably figure out why this is, but
+    # just filtering out for now.
+    pos_identifiers = list(filter(bool, request.json["pos_identifiers"]))
+    neg_identifiers = list(filter(bool, request.json["neg_identifiers"]))
+    augment_negs = bool(request.json["augment_negs"])
+    index_id = request.json["index_id"]
+
+    index = await get_index(index_id)
+
+    # Get positive and negative image embeddings from local flat index
+    pos_vectors = index.get_embeddings(pos_identifiers)
+    assert len(pos_vectors) > 0
+    neg_vectors = index.get_embeddings(neg_identifiers)
+
+    # Augment with randomly sampled negatives if requested
+    extra_neg_identifiers = []
+    num_extra_neg_vectors = config.SVM_NUM_NEGS_MULTIPLIER * len(pos_vectors) - len(
+        neg_vectors
+    )
+    if augment_negs and num_extra_neg_vectors > 0:
+        unused_identifiers = (
+            index.get_identifier_set()
+            .difference(pos_identifiers)
+            .difference(neg_identifiers)
+        )
+        extra_neg_identifiers = random.sample(
+            unused_identifiers, min(len(unused_identifiers), num_extra_neg_vectors)
+        )
+    extra_neg_vectors = index.get_embeddings(extra_neg_identifiers)
+    assert len(neg_vectors) + len(extra_neg_vectors) > 0
+
+    # Train SVM and return serialized vector
+    training_features = np.concatenate((pos_vectors, neg_vectors, extra_neg_vectors))
+    training_labels = np.array(
+        [1] * len(pos_vectors) + [0] * (len(neg_vectors) + len(extra_neg_vectors))
+    )
+    model = svm.LinearSVC()
+    model.fit(training_features, training_labels)
+
+    w = np.array(model.coef_[0] * 1000, dtype=np.float32)
+    predicted = model.predict(training_features)
+    accuracy = accuracy_score(training_labels, predicted)
+
+    return resp.json(
+        {
+            "svm_vector": utils.numpy_to_base64(w),
+            "accuracy": accuracy,
+            "num_positives": len(pos_vectors),
+            "num_negatives": len(neg_vectors) + len(extra_neg_vectors),
+        }
+    )
+
+
+@app.route("/query_svm_v2", methods=["POST"])
+async def query_svm_v2(request):
+    score_min = float(request.json["score_min"])
+    score_max = float(request.json["score_max"])
+    svm_vector = utils.base64_to_numpy(request.json["svm_vector"])
+    index_id = request.json["index_id"]
+
+    index = await get_index(index_id)
+
+    # Run query and return results
+    query_results = index.query(
+        svm_vector, use_full_image=True, svm=True, min_d=score_min, max_d=score_max
+    )
+    return resp.json({"results": [r.to_dict() for r in query_results]})
 
 
 # CLEANUP
