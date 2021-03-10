@@ -1252,7 +1252,6 @@ async def perform_clustering(request):
 async def query_knn_v2(request):
     identifiers = request.json["identifiers"]
     index_id = request.json["index_id"]
-    num_results = int(request.json["num_results"])
 
     index = await get_index(index_id)
 
@@ -1260,9 +1259,7 @@ async def query_knn_v2(request):
     query_vector = np.mean(index.get_embeddings(identifiers), axis=0)
 
     # Run query and return results
-    query_results = index.query(
-        query_vector, num_results, use_full_image=True, svm=False
-    )
+    query_results = index.query(query_vector, use_full_image=True, svm=False)
     return resp.json({"results": [r.to_dict() for r in query_results]})
 
 

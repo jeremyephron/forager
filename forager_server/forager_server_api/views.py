@@ -1152,17 +1152,17 @@ def filtered_images_v2(
 
 def process_image_query_results_v2(request, dataset, query_response, num_results=None):
     ordered_results = query_response["results"]
-    if num_results is not None:
-        ordered_results = ordered_results[:num_results]
     dataset_items = filtered_images_v2(
         request, dataset, [r["label"] for r in ordered_results]
     )
     dataset_items_by_path = {di.path: di for di in dataset_items}
-    return [
-        dataset_items_by_path[r["label"]]
-        for r in ordered_results
-        if r["label"] in dataset_items_by_path
-    ]
+    final_results = []
+    for r in ordered_results:
+        if r["label"] in dataset_items_by_path:
+            final_results.append(dataset_items_by_path[r["label"]])
+        if num_results is not None and len(final_results) >= num_results:
+            break
+    return final_results
 
 
 def build_result_set_v2(request, dataset, dataset_items, type, *, num_total=None):
@@ -1213,7 +1213,6 @@ def query_knn_v2(request, dataset_name):
 
     params = {
         "index_id": index_id,
-        "num_results": num_results,
         "identifiers": dataset_item_internal_identifiers,
     }
     r = requests.post(
@@ -1226,6 +1225,7 @@ def query_knn_v2(request, dataset_name):
         request,
         dataset,
         response_data,
+        num_results,
     )
     return JsonResponse(build_result_set_v2(request, dataset, result_images, "knn"))
 
