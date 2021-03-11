@@ -1302,7 +1302,7 @@ async def train_svm_v2(request):
     training_labels = np.array(
         [1] * len(pos_vectors) + [0] * (len(neg_vectors) + len(extra_neg_vectors))
     )
-    model = svm.LinearSVC()
+    model = svm.LinearSVC(C=0.1)
     model.fit(training_features, training_labels)
 
     w = np.array(model.coef_[0] * 1000, dtype=np.float32)
