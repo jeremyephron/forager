@@ -24,7 +24,7 @@ from sanic import Sanic
 import sanic.response as resp
 from scipy.spatial.distance import squareform
 from sklearn import svm
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score
 
 from typing import Callable, DefaultDict, Dict, List, Optional, Set, Tuple
 
@@ -1307,12 +1307,15 @@ async def train_svm_v2(request):
 
     w = np.array(model.coef_[0] * 1000, dtype=np.float32)
     predicted = model.predict(training_features)
-    accuracy = accuracy_score(training_labels, predicted)
+    precision = precision_score(training_labels, predicted)
+    recall = (recall_score(training_labels, predicted),)
 
     return resp.json(
         {
             "svm_vector": utils.numpy_to_base64(w),
-            "accuracy": accuracy,
+            "precision": precision,
+            "recall": recall,
+            "f1": 2 * precision * recall / (precision + recall),
             "num_positives": len(pos_vectors),
             "num_negatives": len(neg_vectors) + len(extra_neg_vectors),
         }
