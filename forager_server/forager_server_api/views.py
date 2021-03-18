@@ -1,3 +1,4 @@
+from collections import defaultdict, namedtuple
 import distutils.util
 from google.cloud import storage
 from enum import IntEnum
@@ -17,7 +18,6 @@ from django.shortcuts import get_object_or_404
 from django.conf import settings
 from rest_framework import status
 from rest_framework.decorators import api_view
-from collections import defaultdict
 from pycocotools.coco import COCO
 
 from .models import Dataset, DatasetItem, Annotation
@@ -1076,34 +1076,53 @@ def active_batch(request, dataset_name):
 #
 
 
+Tag = namedtuple("category", "value")
+
+
+def parse_tag_set_from_query_string_v2(s):
+    parts = (s or "").split(",")
+    ts = set()
+    for part in parts:
+        if not part:
+            continue
+        category, value_str = part.split(":")
+        ts.add(Tag(category, LabelValue[value_str]))
+    return ts
+
+
+def tag_sets_to_category_list_v2(*tagsets):
+    categories = set()
+    for ts in tagsets:
+        for tag in ts:
+            categories.add(tag.category)
+    return list(categories)
+
+
 def get_tags_from_annotations_v2(annotations):
     # [image][category][#]
     anns = filter_most_recent_anns(nest_anns(annotations, nest_lf=False))
 
-    tag_anns_by_pk = defaultdict(list)
+    tags_by_pk = defaultdict(list)
     for di_pk, anns_by_cat in anns.items():
         for cat, ann_list in anns_by_cat.items():
             if not cat:
                 continue
             assert len(ann_list) == 1  # should only be one latest per-frame annotation
-            for ann in ann_list:
-                label_data = json.loads(ann.label_data)
-                if label_data["value"] != LabelValue.POSITIVE:
-                    continue
-                tag_anns_by_pk[di_pk].append(ann)
+            ann = ann_list[0]
 
-    tags_by_pk = {}
-    for pk, tag_anns in tag_anns_by_pk.items():
-        sorted_tag_anns = sorted(tag_anns, key=lambda a: a.created)  # oldest first
-        tags_by_pk[pk] = [a.label_category for a in sorted_tag_anns]
+            label_data = json.loads(ann.label_data)
+            value = LabelValue(label_data["value"])
+            if value == LabelValue.TOMBSTONE:
+                continue
+            tags_by_pk[di_pk].append(Tag(cat, value))
     return tags_by_pk
 
 
 def filtered_images_v2(
     request, dataset, path_filter=None
 ) -> Union[List[DatasetItem], QuerySet]:
-    include_categories = {c for c in request.GET.get("include", "").split(",") if c}
-    exclude_categories = {c for c in request.GET.get("exclude", "").split(",") if c}
+    include_tags = parse_tag_set_from_query_string_v2(request.GET.get("include"))
+    exclude_tags = parse_tag_set_from_query_string_v2(request.GET.get("exclude"))
     subset_ids = [i for i in request.GET.get("subset", "").split(",") if i]
 
     filter_kwargs = {}
@@ -1115,7 +1134,7 @@ def filtered_images_v2(
         dataset=dataset, google=False, **filter_kwargs
     ).order_by("pk")
 
-    if not include_categories and not exclude_categories:
+    if not include_tags and not exclude_tags:
         return dataset_items
 
     # TODO(mihirg, fpoms): Speed up by filtering positive labels without having to json
@@ -1123,7 +1142,9 @@ def filtered_images_v2(
     annotations = (
         Annotation.objects.filter(
             dataset_item__in=dataset_items,
-            label_category__in=(list(include_categories) + list(exclude_categories)),
+            label_category__in=tag_sets_to_category_list_v2(
+                include_tags, exclude_tags
+            ),
             label_type="klabel_frame",
         )
         # ).order_by(
@@ -1135,13 +1156,13 @@ def filtered_images_v2(
     # TODO(mihirg, fpoms): Move all logic here into SQL query
     filtered = []
     for di in dataset_items:
-        include = not include_categories  # include everything if no explicit filter
+        include = not include_tags  # include everything if no explicit filter
         exclude = False
-        for cat in tags_by_pk.get(di.pk, []):
-            if cat in exclude_categories:
+        for tag in tags_by_pk[di.pk]:
+            if tag in exclude_tags:
                 exclude = True
                 break
-            elif cat in include_categories:
+            elif tag in include_tags:
                 include = True
 
         if include and not exclude:
@@ -1234,14 +1255,14 @@ def query_knn_v2(request, dataset_name):
 @csrf_exempt
 def train_svm_v2(request, dataset_name):
     index_id = request.GET["index_id"]
-    pos_tags = set(request.GET["pos_tags"].split(","))
-    neg_tags = set(filter(bool, request.GET.get("neg_tags", "").split(",")))
+    pos_tags = parse_tag_set_from_query_string_v2(request.GET["pos_tags"])
+    neg_tags = parse_tag_set_from_query_string_v2(request.GET.get("neg_tags"))
     augment_negs = bool(distutils.util.strtobool(request.GET.get("augment_negs", "false")))
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
     annotations = Annotation.objects.filter(
         dataset_item__in=dataset.datasetitem_set.filter(),
-        label_category__in=(list(pos_tags) + list(neg_tags)),
+        label_category__in=tag_sets_to_category_list_v2(pos_tags, neg_tags),
         label_type="klabel_frame",
     )
     tags_by_pk = get_tags_from_annotations_v2(annotations)
@@ -1335,7 +1356,7 @@ def get_next_images_v2(request, dataset_name, dataset=None):
         next_images_dict = DatasetItem.objects.in_bulk(next_image_pks)
         next_images = [next_images_dict[pk] for pk in next_image_pks]  # preserve order
     else:
-        next_images = all_images[offset_to_return : offset_to_return + num_to_return]
+        next_images = all_images[offset_to_return: offset_to_return + num_to_return]
     return JsonResponse(
         build_result_set_v2(
             request, dataset, next_images, "query", num_total=len(all_images)
@@ -1350,16 +1371,19 @@ def get_dataset_info_v2(request, dataset_name):
 
     annotations = Annotation.objects.filter(
         dataset_item__in=dataset.datasetitem_set.filter(),
-        label_type__exact="klabel_frame", # TODO: change in the future
+        label_type__exact="klabel_frame",  # TODO: change in the future
     ).order_by(
         "dataset_item", "label_category", "-created"
     ).distinct("dataset_item", "label_category")
 
     # Unique categories that have at least one non-tombstone label
-    categories = sorted(set(map(lambda x: x.label_category, filter(
-        lambda x: json.loads(x.label_data)["value"] != LabelValue.TOMBSTONE,
-        annotations
-    ))))
+    categories = sorted(
+        {
+            ann.label_category
+            for ann in annotations
+            if json.loads(ann.label_data)["value"] != LabelValue.TOMBSTONE
+        }
+    )
 
     return JsonResponse(
         {
@@ -1386,7 +1410,11 @@ def get_annotations_v2(request):
     #     "dataset_item", "label_category", "-created"
     # ).distinct("dataset_item", "label_category")
     tags_by_pk = get_tags_from_annotations_v2(annotations)
-    return JsonResponse(tags_by_pk)
+    annotations_by_pk = {
+        pk: [{"category": t.category, "value": t.value.name} for t in tags]
+        for pk, tags in tags_by_pk.items()
+    }
+    return JsonResponse(annotations_by_pk)
 
 
 # TODO(mihirg): Consider filtering by, e.g., major version in methods that query
@@ -1404,7 +1432,8 @@ def add_annotations_v2(request):
 
     user = payload["user"]
     category = payload["category"]
-    value = int(LabelValue[payload["value"]])
+    value_str = payload["value"]
+    value = int(LabelValue[value_str])
     annotation = json.dumps(
         {
             "type": 0,  # full-frame
