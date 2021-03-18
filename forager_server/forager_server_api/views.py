@@ -1430,19 +1430,17 @@ def add_annotations_v2(request):
 
     res = {"created": len(image_identifiers)}
 
-    if value == LabelValue.TOMBSTONE:
-        res["removed"] = not category_has_labels(
-            dataset_items[0].dataset, category
-        )
+    # if value == LabelValue.TOMBSTONE:
+    #     res["removed"] = num_category_labels(dataset_items[0].dataset, category) == 0
 
-    return JsonResponse({"created": len(image_identifiers)})
+    return JsonResponse(res)
 
 
 @api_view(["POST"])
 @csrf_exempt
 def delete_category_v2(request):
     payload = json.loads(request.body)
-    user = payload["user"]
+    # user = payload["user"]
     category = payload["category"]
 
     n, _ = Annotation.objects.filter(
@@ -1457,7 +1455,7 @@ def delete_category_v2(request):
 @csrf_exempt
 def update_category_v2(request):
     payload = json.loads(request.body)
-    user = payload["user"]
+    # user = payload["user"]
     old_category = payload["oldCategory"]
     new_category = payload["newCategory"]
 
@@ -1474,27 +1472,15 @@ def update_category_v2(request):
 def get_category_counts_v2(request, dataset_name):
     dataset = get_object_or_404(Dataset, name=dataset_name)
     payload = json.loads(request.body)
-    user = payload["user"]
     categories = payload["categories"]
 
-    n_labeled = {}
-    for i, category in enumerate(categories):
-        anns = Annotation.objects.filter(
-            dataset_item__in=dataset.datasetitem_set.filter(),
-            label_category__exact=category,
-            label_type__exact="klabel_frame",
-        ).order_by(
-            "dataset_item", "label_category", "-created"
-        ).distinct("dataset_item", "label_category")
-
-        n_labeled[category] = len(list(filter(
-            lambda x: json.loads(x.label_data)["value"] == LabelValue.POSITIVE, anns
-        )))
-
+    n_labeled = {
+        category: num_category_labels(dataset, category) for category in categories
+    }
     return JsonResponse({"numLabeled": n_labeled})
 
 
-def category_has_labels(dataset, category):
+def num_category_labels(dataset, category):
     anns = Annotation.objects.filter(
         dataset_item__in=dataset.datasetitem_set.filter(),
         label_category__exact=category,
@@ -1506,4 +1492,4 @@ def category_has_labels(dataset, category):
     n_labels = len(list(filter(
         lambda x: json.loads(x.label_data)["value"] != LabelValue.TOMBSTONE, anns
     )))
-    return n_labels > 0
+    return n_labels
