@@ -1257,7 +1257,9 @@ def train_svm_v2(request, dataset_name):
     index_id = request.GET["index_id"]
     pos_tags = parse_tag_set_from_query_string_v2(request.GET["pos_tags"])
     neg_tags = parse_tag_set_from_query_string_v2(request.GET.get("neg_tags"))
-    augment_negs = bool(distutils.util.strtobool(request.GET.get("augment_negs", "false")))
+    augment_negs = bool(
+        distutils.util.strtobool(request.GET.get("augment_negs", "false"))
+    )
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
     annotations = Annotation.objects.filter(
@@ -1411,7 +1413,7 @@ def get_annotations_v2(request):
     # ).distinct("dataset_item", "label_category")
     tags_by_pk = get_tags_from_annotations_v2(annotations)
     annotations_by_pk = {
-        pk: [{"category": t.category, "value": t.value.name} for t in tags]
+        pk: [{"category": t.category, "value": t.value.name} for t in sorted(tags)]
         for pk, tags in tags_by_pk.items()
     }
     return JsonResponse(annotations_by_pk)
