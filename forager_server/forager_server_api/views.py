@@ -1076,7 +1076,7 @@ def active_batch(request, dataset_name):
 #
 
 
-Tag = namedtuple("category value")
+Tag = namedtuple("Tag", "category value")
 
 
 def parse_tag_set_from_query_string_v2(s):
