@@ -1,169 +1,118 @@
-import asyncio
-from enum import Enum
-import os
-from pathlib import Path
+import functools
+import threading
 
-import aiohttp
+import backoff
 import numpy as np
-import torch
-
-from typing import List, Optional, Tuple, Union
-
-from knn import utils
-from knn.mappers import Mapper
+import requests
+import pickle
+import time
+import traceback
+import os.path
+from flask import Flask, request, abort
+from dataclasses import dataclass, field
+from typing import Callable, Dict, List, Any
 
 import config
-import inference
+from training_loop import TrainingLoop
 
 
-class EmbeddingMapper(Mapper):
-    class ReturData(Enum):
-        EMBEDDINGS = 0
-        PREDICTIONS = 1
+# Step 3: Call webhook to indicate completion
+@backoff.on_exception(backoff.expo, requests.exceptions.RequestException)
+def notify(url: str, payload: Dict[str, str]):
+    r = requests.put(url, data=payload)
+    r.raise_for_status()
 
-    class ReturnType(Enum):
-        SAVE = 0
-        SERIALIZE = 1
 
-    def initialize_container(self):
-        # Create model
-        shape = ShapeSpec(channels=3)
-        self.model = torch.nn.Sequential(
-            build_resnet_backbone(config.RESNET_CONFIG, shape)
+@dataclass
+class InferenceJob:
+    paths: List[str]
+    model_kwargs: Dict[str, Any]
+
+    checkpoint_path: str
+    model_id: str
+    model_name: str
+    notify_url: str
+
+    _done: bool = False
+    _done_lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def start(self):
+        thread = threading.Thread(target=self.run, daemon=True)
+        thread.start()
+
+    def finish(self, success: bool, **kwargs):
+        with self._done_lock:
+            if self._done:
+                return
+            self._done = True
+
+        notify(
+            self.notify_url,
+            {
+                "model_id": self.model_id,
+                "model_name": self.model_name,
+                "success": success,
+                **kwargs,
+            },
         )
 
-        # Load model weights
-        checkpointer = DetectionCheckpointer(self.model, save_to_disk=False)
-        checkpointer.load(config.WEIGHTS_PATH)
-        self.model.eval()
+    @property
+    def done(self):
+        with self._done_lock:
+            return self._done
 
-        # Store relevant attributes of config
-        self.pixel_mean = torch.tensor(config.RESNET_CONFIG.MODEL.PIXEL_MEAN).view(
-            -1, 1, 1
-        )
-        self.pixel_std = torch.tensor(config.RESNET_CONFIG.MODEL.PIXEL_STD).view(
-            -1, 1, 1
-        )
-        self.input_format = config.RESNET_CONFIG.INPUT.FORMAT
+    def run(self):
+        # TODO(mihirg): Figure out how to handle errors like OOMs and CUDA errors,
+        # maybe start a subprocess?
+        try:
+            start_time = time.perf_counter()
 
-        # Create connection pool
-        self.session = aiohttp.ClientSession()
+            self.model_kwargs['aux_labels'] = auxiliary_labels
+            self.model_kwargs['model_dir'] = model_dir
 
-    async def initialize_job(self, job_args):
-        return_data = job_args.get("return_data", "embeddings")
-        if return_data == "embeddings":
-            job_args["return_data"] = IndexEmbeddingMapper.ReturnData.EMBEDDINGS
-        elif return_data == "predictions":
-            job_args["return_data"] = IndexEmbeddingMapper.ReturnData.PREDICTIONS
+            end_time = time.perf_counter()
+            train_start_time = time.perf_counter()
+            # Train
+            loop = TrainingLoop(
+                model_kwargs=self.model_kwargs,
+                train_positive_paths=self.train_positive_paths,
+                train_negative_paths=self.train_negative_paths,
+                train_unlabeled_paths=self.train_unlabeled_paths,
+                val_positive_paths=self.val_positive_paths,
+                val_negative_paths=self.val_negative_paths,
+                val_unlabeled_paths=self.val_unlabeled_paths,
+            )
+            loop.run()
+            end_time = time.perf_counter()
+        except Exception as e:
+            traceback.print_exc()
+            self.finish(False, reason=str(e))
         else:
-            raise ValueError(f"Unknown return data: {return_data}")
-
-        return_type = job_args.get("return_type", "serialize")
-        if return_type == "save":
-            job_args["return_type"] = IndexEmbeddingMapper.ReturnType.SAVE
-        elif return_type == "serialize":
-            job_args["return_type"] = IndexEmbeddingMapper.ReturnType.SERIALIZE
-        else:
-            raise ValueError(f"Unknown return type: {return_type}")
-
-        job_args["n_chunks_saved"] = 0
-        return job_args
-
-    @utils.log_exception_from_coro_but_return_none
-    async def process_element(
-        self, input, job_id, job_args, request_id, element_index
-    ) -> np.ndarray:
-        image_path = input["image"]
-        image_patch = input.get("patch", (0, 0, 1, 1))
-        augmentations = input.get("augmentations", {})
-
-        # Download image
-        if "http" not in image_path:
-            image_bucket = job_args["input_bucket"]
-            image_path = os.path.join(config.GCS_URL_PREFIX, image_bucket,
-                                      image_path)
-        image_bytes = await self.download_image(image_path)
-
-        # Run inference
-        with self.profiler(request_id, "inference_time"):
-            model_output_dict = inference.run(
-                image_bytes,
-                image_patch,
-                augmentations,
-                self.input_format,
-                self.pixel_mean,
-                self.pixel_std,
-                self.model,
+            self.finish(
+                True,
+                model_dir=model_dir,
+                profiling=dict(
+                    load_time=train_start_time - start_time,
+                    train_time=end_time - train_start_time,
+                ),
             )
 
-        with self.profiler(request_id, "flatten_time"):
-            spatial_embeddings = next(iter(model_output_dict.values())).numpy()
-            n, c, h, w = spatial_embeddings.shape
-            assert n == 1
-            return np.ascontiguousarray(spatial_embeddings.reshape((c, h * w)).T)
 
-    async def download_image(
-        self, image_path: str, num_retries: int = config.DOWNLOAD_NUM_RETRIES
-    ) -> bytes:
-        for i in range(num_retries + 1):
-            try:
-                async with self.session.get(image_path) as response:
-                    assert response.status == 200
-                    return await response.read()
-            except Exception:
-                if i < num_retries:
-                    await asyncio.sleep(2 ** i)
-                else:
-                    raise
-        assert False  # unreachable
-
-    async def postprocess_chunk(
-        self,
-        inputs,
-        outputs: List[Optional[np.ndarray]],
-        job_id,
-        job_args,
-        request_id,
-    ) -> Union[Tuple[str, List[Optional[int]]], Tuple[None, List[Optional[str]]]]:
-        if job_args["return_type"] == IndexEmbeddingMapper.ReturnType.SAVE:
-            with self.profiler(request_id, "reduce_time"):
-                embeddings_dicts = {
-                    reduction: {
-                        int(input["id"]): reduce_fn(output)
-                        for input, output in zip(inputs, outputs)
-                        if output is not None
-                    }
-                    for reduction, reduce_fn in config.REDUCTIONS.items()
-                }
-
-            with self.profiler(request_id, "save_time"):
-                output_path_tmpl = config.EMBEDDINGS_FILE_TMPL.format(
-                    job_id, self.worker_id, job_args["n_chunks_saved"]
-                )
-                job_args["n_chunks_saved"] += 1
-                Path(output_path_tmpl).parent.mkdir(parents=True, exist_ok=True)
-
-                for name, embeddings_dict in embeddings_dicts.items():
-                    np.save(output_path_tmpl.format(name), embeddings_dict)
-
-            return output_path_tmpl, [
-                len(output) if output is not None else None for output in outputs
-            ]
-        else:
-            with self.profiler(request_id, "reduce_time"):
-                reduce_fn = config.REDUCTIONS[job_args.get("reduction")]
-                reduced_outputs = [
-                    reduce_fn(output) if output is not None else None
-                    for output in outputs
-                ]
-
-            with self.profiler(request_id, "serialize_time"):
-                serialized_outputs = [
-                    utils.numpy_to_base64(output) if output is not None else None
-                    for output in reduced_outputs
-                ]
-
-            return None, serialized_outputs
+working_lock = threading.Lock()
+app = Flask(__name__)
 
 
-app = IndexEmbeddingMapper().server
+@app.route("/", methods=["POST"])
+def start():
+    try:
+        payload = request.json or {}
+    except Exception as e:
+        abort(400, description=str(e))
+
+    if not working_lock.acquire(blocking=False):
+        abort(503, description="Busy")
+
+    payload["lock"] = working_lock
+    current_job = TrainingJob(**payload)
+    current_job.start()
+    return "Started"

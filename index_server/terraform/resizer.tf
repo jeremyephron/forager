@@ -10,7 +10,7 @@ variable "resizer_node_pool_name" {
 
 variable "resizer_num_nodes" {
   type    = number
-  default = 20
+  default = 1
 }
 
 variable "resizer_node_type" {

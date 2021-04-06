@@ -10,7 +10,7 @@ variable "adder_node_pool_name" {
 
 variable "adder_num_nodes" {
   type    = number
-  default = 200
+  default = 1
 }
 
 variable "adder_node_type" {
