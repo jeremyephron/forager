@@ -62,6 +62,10 @@ const endpoints = fromPairs(toPairs({
   trainSvm: "train_svm_v2",
   querySvm: "query_svm_v2",
   queryKnn: "query_knn_v2",
+  trainModel: "train_model_v2",
+  modelStatus: "model_v2",
+  startCluster: "start_cluster",
+  clusterStatus: "cluster",
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
 const App = () => {
@@ -156,7 +160,7 @@ const App = () => {
       index_id: datasetInfo.index_id,
       pos_tags: svmPosTags.map(t => `${t.category}:${t.value}`),
       neg_tags: svmNegTags.map(t => `${t.category}:${t.value}`),
-      augment_negs: svmAugmentNegs,
+      augment_negs: svmAugmentNegs || svmNegTags.length === 0,
     }).toString();
     const svmData = await fetch(url, {
       method: "GET",
@@ -280,12 +284,77 @@ const App = () => {
   //
   const [mode, setMode] = useState("explore");
   const [labelModeCategories, setLabelModeCategories_] = useState([]);
-  const [dnnStatus, setDnnStatus] = useState(null);
+  const [modelStatus, setModelStatus] = useState({});
   const [dnnType, setDnnType] = useState(dnns[0].id);
   const [dnnAugmentNegs, setDnnAugmentNegs] = useState(true);
   const [dnnPosTags, setDnnPosTags] = useState([]);
   const [dnnNegTags, setDnnNegTags] = useState([]);
   const [dnnIsTraining, setDnnIsTraining] = useState(false);
+  const [clusterStatus, setClusterStatus] = useState({});
+  const [clusterId, setClusterId] = useState(null);
+  const [modelId, setModelId] = useState(null);
+  const [modelEpoch, setModelEpoch] = useState(1);
+  const [statusIntervalId, setStatusIntervalId] = useState();
+  const [modelName, setModelName] = "kayvonf_04-06-2021";
+
+  const trainDnn = async () => {
+    let _clusterId = clusterId;
+
+    if (!_clusterId) {
+      // Start cluster
+      const startClusterUrl = new URL(`${endpoints.startCluster}`);
+      _clusterId = await fetch(startClusterUrl, {
+        method: "POST",
+      }).then(r => r.json().cluster_id);
+      setClusterId(_clusterId);
+
+      // Wait until cluster is booted
+      while (true) {
+        const clusterStatusUrl = new URL(`${endpoints.clusterStatus}/${_clusterId}`);
+        const _clusterStatus = await fetch(clusterStatusUrl, {
+          method: "GET",
+        }).then(r => r.json());
+        setClusterStatus(_clusterStatus);
+        if (_clusterStatus.ready) break;
+        await new Promise(r => setTimeout(r, 3000));  // 3 seconds
+      }
+    }
+
+    // Start training DNN
+    while (true) {
+      const url = new URL(`${endpoints.trainModel}/${datasetName}`);
+      url.search = new URLSearchParams({
+        model_name: "TEST_MODEL",
+        cluster_id: _clusterId,
+        bucket_name: "foragerml",
+        index_id: datasetInfo.index_id,
+        pos_tags: dnnPosTags.map(t => `${t.category}:${t.value}`),
+        neg_tags: dnnNegTags.map(t => `${t.category}:${t.value}`),
+        augment_negs: dnnAugmentNegs || dnnNegTags.length === 0,
+        aux_label_type: "imagenet",
+      }).toString();
+      const _modelId = await fetch(url, {
+        method: "POST",
+      }).then(r => r.json().model_id);
+
+      // Wait until DNN trains for 1 epoch
+      while (true) {
+        const modelStatusUrl = new URL(`${endpoints.modelStatus}/${_clusterId}`);
+        const _modelStatus = await fetch(url, {
+          method: "GET",
+        }).then(r => r.json());
+        setModelStatus(_modelStatus);
+        if (_modelStatus.has_model) break;
+        await new Promise(r => setTimeout(r, 3000));  // 3 seconds
+      }
+
+      setModelEpoch(modelEpoch + 1);
+    }
+  };
+
+  useEffect(() => {
+    if (dnnIsTraining) trainDnn();
+  }, [dnnIsTraining]);
 
   const setLabelModeCategories = (selection) => {
     if (selection.length === 0) {
@@ -426,15 +495,18 @@ const App = () => {
                 <kbd>4</kbd> <span className="rbt-token UNSURE">unsure</span>
               </span>
             </>}
-            {mode === "train" && (!!(dnnStatus) || true ? <>
+            {mode === "train" && (dnnIsTraining ? <>
               <div className="d-flex flex-row align-items-center">
                 <Spinner color="dark" className="my-1 mr-2" />
-                <span><b>Training</b> model <b>mihirg_04-06-21-7-22_zebra-crossing</b> with 14 positives, 39 negatives (Epoch 1)</span>
+                {clusterStatus.ready ?
+                  <span><b>Training</b> model <b>{modelName}</b> (Epoch {modelEpoch})</span> :
+                  <span><b>Starting cluster</b></span>
+                }
               </div>
               <Button
                 color="danger"
                 onClick={() => setDnnIsTraining(false)}
-                disabled={dnnIsTraining}
+                disabled={true}
               >Stop training</Button>
             </> : <>
               <FormGroup className="mb-0">

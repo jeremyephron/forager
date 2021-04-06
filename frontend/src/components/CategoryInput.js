@@ -63,7 +63,7 @@ const MyToken = forwardRef((props, ref) => {
         <StaticToken {...allProps} id={innerId} />}
       <Popover
           placement="top"
-          isOpen={active || isOpen}
+          isOpen={isOpen}
           target={innerId}
           trigger="hover"
           toggle={() => setIsOpen(!isOpen)}
