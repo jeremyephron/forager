@@ -119,4 +119,13 @@ urlpatterns = [
     path('api/get_category_counts_v2/<slug:dataset_name>',
          views.get_category_counts_v2,
          name='get_category_counts_v2'),
+    path('api/train_model_v2/<slug:dataset_name>',
+         views.create_model,
+         name='create_model'),
+    path('api/model_v2/<slug:model_id>',
+         views.get_model_status,
+         name='get_model_status'),
+    path('api/train_model_v2/<slug:dataset_name>',
+         views.create_model,
+         name='create_model'),
 ]

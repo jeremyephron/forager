@@ -9,6 +9,7 @@ import json
 import logging
 import operator
 import os
+import pickle
 from pathlib import Path
 import random
 import shutil
@@ -44,6 +45,7 @@ from index_jobs import (
     MapperReducer,
     Trainer,
     TrainingJob,
+    BGSplitTrainingJob,
     LocalFlatIndex,
 )
 from utils import CleanupDict
@@ -857,6 +859,7 @@ async def start_job(request):
     paths = request.json["paths"]
     identifiers = request.json["identifiers"]
 
+
     cluster = current_clusters[cluster_id]
     lock_id = current_clusters.lock(cluster_id)
     cluster_unlock_fn = functools.partial(current_clusters.unlock, cluster_id, lock_id)
@@ -895,6 +898,163 @@ async def stop_job(request):
     index_id = request.json["index_id"]
     app.add_task(current_indexes.cleanup_key(index_id))
     return resp.text("", status=204)
+
+
+
+# -> BGSPLIT-TRAIN
+
+current_models: CleanupDict[str, BGSplitTrainingJob] = CleanupDict(
+    lambda job: job.stop()
+)
+
+@app.route("/start_bgsplit_job", methods=["POST"])
+async def start_bgsplit_job(request):
+    # HACK(mihirg): sometimes we get empty identifiers (i.e., "") from the server that
+    # would otherwise cause a crash here; we should probably figure out why this is, but
+    # just filtering out for now.
+    pos_identifiers = list(filter(bool, request.json["pos_identifiers"]))
+    neg_identifiers = list(filter(bool, request.json["neg_identifiers"]))
+    augment_negs = bool(request.json["augment_negs"])
+    bucket = request.json["bucket"]
+    cluster_id = request.json["cluster_id"]
+    index_id = request.json["index_id"]
+    aux_labels_type = request.json["aux_labels_type"]
+
+    # Get cluster
+    cluster = current_clusters[cluster_id]
+    # lock_id = current_clusters.lock(cluster_id)
+    # cluster_unlock_fn = functools.partial(current_clusters.unlock, cluster_id, lock_id)
+    await asyncio.gather(cluster.ready.wait(), cluster.mounted.wait())
+
+    # Get index
+    index = await get_index(index_id)
+
+    # Get image paths from index
+    pos_paths = [index.labels[index.identifiers[i]] for i in pos_identifiers]
+    assert len(pos_paths) > 0
+    neg_paths = [index.labels[index.identifiers[i]] for i in neg_identifiers]
+    assert len(neg_paths) > 0
+
+    # Augment with randomly sampled negatives if requested
+    extra_neg_identifiers = []
+    num_extra_neg_vectors = config.BGSPLIT_NUM_NEGS_MULTIPLIER * len(pos_paths) - len(
+        neg_paths
+    )
+    unused_identifiers = (
+        index.get_identifier_set()
+        .difference(pos_identifiers)
+        .difference(neg_identifiers)
+    )
+    if augment_negs and num_extra_neg_vectors > 0:
+        extra_neg_identifiers = random.sample(
+            unused_identifiers, min(len(unused_identifiers), num_extra_neg_vectors)
+        )
+    extra_neg_paths = [index.labels[index.identifiers[i]] for i in extra_neg_identifiers]
+    assert len(neg_paths) + len(extra_neg_paths) > 0
+
+    unlabeled_paths = [index.labels[index.identifiers[i]] for i in unused_identifiers]
+
+    http_session = utils.create_unlimited_aiohttp_session()
+    # 1. If aux labels have not been generated, then generate them
+    alt = aux_labels_type
+    aux_labels_path = None
+    if alt == 'imagenet':
+        aux_labels_path = config.AUX_DIR_TMPL.format(index_id, alt)
+    else:
+        aux_labels_path = ''
+        assert alt == 'imagenet'
+
+    if not os.path.exists(aux_labels_path):
+        all_paths = [index.labels[index.identifiers[i]] for i in index.get_identifier_set()]
+        nproc = cluster.output["mapper_nproc"]
+        n_mappers = int(
+            cluster.output["num_mappers"] * config.MAPPER_REQUEST_MULTIPLE(nproc)
+           )
+        chunk_size = config.MAPPER_CHUNK_SIZE(nproc)
+        mapper_job = MapReduceJob(
+            MapperSpec(
+                url=cluster.output["mapper_url"],
+                n_mappers=n_mappers,
+            ),
+            MapperReducer(),
+            {"input_bucket": bucket,
+             "return_data": "predictions",
+             "return_type": "serialize"},
+            session=http_session,
+            n_retries=config.MAPPER_NUM_RETRIES,
+            chunk_size=chunk_size,
+            request_timeout=config.MAPPER_REQUEST_TIMEOUT,
+           )
+        logger.info(f"Map: started with {len(all_paths)} images")
+        task = mapper_job.start(all_paths)
+        while True:
+            prog = mapper_job.progress()
+            logger.info(f"Processed: {prog['n_processed']}/{prog['n_total']}, "
+                        f"elapsed: {prog['elapsed_time']}")
+            if prog['finished']:
+                break
+            await asyncio.sleep(5)
+        _, predictions = mapper_job.result
+        with open(aux_labels_path, 'wb') as f:
+            pickle.dump(predictions, f)
+
+    proc = await asyncio.create_subprocess_exec(
+        "gsutil",
+        "-m",
+        "cp",
+        "-r",
+        "-n",
+        aux_labels_path,
+        config.AUX_UPLOAD_GCS_PATH,
+    )
+    await proc.wait()
+
+    # 2. Train BG Split model 
+    trainers = [Trainer(url) for url in cluster.output["bgsplit_trainer_urls"]]
+    model_id = str(uuid.uuid4())
+
+    training_job = BGSplitTrainingJob(
+        pos_paths=pos_paths,
+        neg_paths=neg_paths + extra_neg_paths,
+        unlabeled_paths=unlabeled_paths,
+        aux_labels_path=aux_labels_path,
+        model_id=model_id,
+        trainer=trainers[0],
+        cluster_mount_parent_dir=cluster.mount_parent_dir,
+        session=http_session,
+    )
+    current_models[model_id] = training_job
+    training_job.start()
+    logger.info(
+        f"Train ({training_job.model_name}): started with "
+        f"{len(pos_paths)} positives, {len(neg_paths)} negatives, "
+        f"{len(extra_neg_paths)} auto negatives, and "
+        f"{len(unlabeled_paths)} unlabeled examples."
+    )
+
+    return resp.json({"model_id": model_id})
+
+
+@app.route(config.BGSPLIT_TRAINER_STATUS_ENDPOINT, methods=["PUT"])
+async def bgsplit_training_status(request):
+    model_id = request.json["model_id"]
+    if model_id in current_models:
+        await current_models[model_id].handle_training_status_update(request.json)
+    return resp.text("", status=204)
+
+
+@app.route("/bgsplit_job_status", methods=["GET"])
+async def bgsplit_job_status(request):
+    model_id = request.args["model_id"][0]
+    if model_id in current_models:
+        model = current_models[model_id]
+        status = model.status
+        status["has_model"] = model.ready.is_set()
+    else:
+        status = {"has_model": False}
+    return resp.json(status)
+
+
 
 
 # -> POST-BUILD
