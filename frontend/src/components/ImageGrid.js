@@ -22,7 +22,7 @@ const ImageGrid = ({ images, onClick, minRowHeight, imageAspectRatio, selectedPr
   return (
     <div className="image-grid" ref={ref}>
       {(width > 0) && images.map((im, i) =>
-        <a href="#" onClick={(e) => handleClick(e, i)}
+        <a href="#" key={i} onClick={(e) => handleClick(e, i)}
           style={{width: imageWidth, marginBottom: MARGIN, marginRight: MARGIN}}
         >
           <LazyLoad scrollContainer=".modal" height={imageHeight}>

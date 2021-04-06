@@ -7,19 +7,20 @@ import {
   ModalHeader,
   ModalBody,
 } from "reactstrap";
-import { Typeahead } from "react-bootstrap-typeahead";
 import ProgressiveImage from "react-progressive-image";
 import { faMousePointer } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
 import fromPairs from "lodash/fromPairs";
 import toPairs from "lodash/toPairs";
-import difference from "lodash/difference";
-import intersection from "lodash/intersection";
-import uniq from "lodash/uniq";
-import union from "lodash/union";
+import differenceWith from "lodash/differenceWith";
+import intersectionWith from "lodash/intersectionWith";
+import isEqual from "lodash/isEqual";
+import unionWith from "lodash/unionWith";
+import uniqWith from "lodash/uniqWith";
 
 import ImageGrid from "./ImageGrid";
+import CategoryInput from "./CategoryInput";
 
 const endpoints = fromPairs(toPairs({
   getAnnotations: 'get_annotations_v2',
@@ -45,6 +46,8 @@ const ClusterModal = ({
   setTags,
   username,
   setSubset,
+  labelCategory,
+  mode,
 }) => {
   const typeaheadRef = useRef();
 
@@ -140,8 +143,8 @@ const ClusterModal = ({
   if (selectedImage !== undefined) {
     selectedTags = getImageTags(selectedImage);
   } else if (selectedCluster !== undefined) {
-    selectedTags = intersection(...(selectedCluster.flatMap((im, i) =>
-      excludedImageIndexes[i] ? [] : [getImageTags(im)])));
+    selectedTags = intersectionWith(...(selectedCluster.flatMap((im, i) =>
+      excludedImageIndexes[i] ? [] : [getImageTags(im)])), isEqual);
   }
 
   // Add or remove tags whenever the typeahead value changes
@@ -160,22 +163,23 @@ const ClusterModal = ({
     });
   }
   const onTagsChanged = async (newTags) => {
-    newTags = uniq(newTags.map(t => (t.label || t)));
-    const added = difference(newTags, selectedTags);
-    const deleted = difference(selectedTags, newTags);
+    const added = differenceWith(newTags, selectedTags, isEqual);
+    const deleted = differenceWith(selectedTags, newTags, isEqual);
     const imageIds = (selectedImage !== undefined) ? [selectedImage.id] :
       selectedCluster.flatMap((im, i) => excludedImageIndexes[i] ? [] : [im.id]);
 
     let newAnnotations = {...annotations};
     for (const id of imageIds) {
-      newAnnotations[id] = union(difference(annotations[id], deleted), added);
+      const minusDeleted = differenceWith(annotations[id], deleted, isEqual);
+      let plusAdded = unionWith(minusDeleted, added, isEqual);
+      let deduplicated = uniqWith(plusAdded.reverse(), (a, b) => a.category === b.category);
+      newAnnotations[id] = deduplicated.reverse();
     }
     setIsLoading(true);
     setAnnotations(newAnnotations);
-    setTags(union(tags, added).sort());
 
-    let addPromises = added.map(async t => addAnnotations(t, "POSITIVE", imageIds));
-    let deletePromises = deleted.map(async t => addAnnotations(t, "TOMBSTONE", imageIds));
+    let addPromises = added.map(async t => addAnnotations(t.category, t.value, imageIds));
+    let deletePromises = deleted.map(async t => addAnnotations(t.category, "TOMBSTONE", imageIds));
     await Promise.all([...addPromises, ...deletePromises]);
 
     setIsLoading(false);
@@ -188,6 +192,7 @@ const ClusterModal = ({
   const handleKeyDown = useCallback((e) => {
     if (!isOpen) return;
     const { key } = e;
+    console.log(key);
     let caught = true;
     if (isClusterView && key === "ArrowDown") {
       // Switch to image view
@@ -229,6 +234,19 @@ const ClusterModal = ({
     } else if (key === "ArrowUp") {
       // Close modal
       setIsOpen(false);
+    } else if (mode === "label" && !!(labelCategory)) {
+      const number = parseInt(key);
+      if (number == 1) {
+        onTagsChanged([...selectedTags, {category: labelCategory, value: "POSITIVE"}]);
+      } else if (number == 2) {
+        onTagsChanged([...selectedTags, {category: labelCategory, value: "NEGATIVE"}]);
+      } else if (number == 3) {
+        onTagsChanged([...selectedTags, {category: labelCategory, value: "HARD_NEGATIVE"}]);
+      } else if (number == 4) {
+        onTagsChanged([...selectedTags, {category: labelCategory, value: "UNSURE"}]);
+      } else {
+        caught = false;
+      }
     } else if (key !== "ArrowDown") {
       caught = false;
     }
@@ -237,7 +255,7 @@ const ClusterModal = ({
       typeaheadRef.current.blur();
       typeaheadRef.current.hideMenu();
     }
-  }, [isOpen, isClusterView, isImageView, clusters, selection, setSelection, typeaheadRef, excludedImageIndexes]);
+  }, [isOpen, isClusterView, isImageView, clusters, selection, setSelection, typeaheadRef, excludedImageIndexes, selectedTags, annotations]);
 
   const handleTypeaheadKeyDown = (e) => {
     const { key } = e;
@@ -283,6 +301,7 @@ const ClusterModal = ({
 
         <ModalBody>
           <p>
+            <b>Key bindings:</b> &nbsp;
             <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to move between {(isImageView || isImageOnly) ? "images" : "clusters"}
             {isClusterView && <>,{" "}
               <kbd>&darr;</kbd> or <FontAwesomeIcon icon={faMousePointer} /> to go into image view,{" "}
@@ -294,19 +313,25 @@ const ClusterModal = ({
             {isSingletonCluster && <>,{" "}
               <kbd>&uarr;</kbd> to go back to query results</>}
           </p>
+          {mode === "label" && !!(labelCategory) && <p>
+            <b>Label mode:</b> &nbsp;<kbd>1</kbd> <span className="rbt-token POSITIVE">{labelCategory}</span>,{" "}
+            <kbd>2</kbd> <span className="rbt-token NEGATIVE">{labelCategory}</span>,{" "}
+            <kbd>3</kbd> <span className="rbt-token HARD_NEGATIVE">{labelCategory}</span>,{" "}
+            <kbd>4</kbd> <span className="rbt-token UNSURE">{labelCategory}</span>
+          </p>}
           <Form>
             <FormGroup className="d-flex flex-row align-items-center mb-2">
-              <Typeahead
-                multiple
+              {/* TODO(mihirg): Change tags -> categories in code for consistency of terminology */}
+              <CategoryInput
                 allowNew
                 id="image-tag-bar"
-                className="typeahead-bar"
                 placeholder="Image tags"
                 disabled={isReadOnly || (isClusterView && selectedCluster.length === Object.values(excludedImageIndexes).filter(Boolean).length)}
-                options={tags}
+                categories={tags}
+                setCategories={setTags}
                 selected={selectedTags}
-                onChange={onTagsChanged}
-                ref={typeaheadRef}
+                setSelected={onTagsChanged}
+                innerRef={typeaheadRef}
                 onBlur={() => typeaheadRef.current.hideMenu()}
                 onKeyDown={handleTypeaheadKeyDown}
               />
@@ -347,7 +372,7 @@ const ClusterModal = ({
                 <a href="#" className="text-secondary" onClick={excludeAll}>deselect all</a>){" "}
                 (thumbnails: {imageGridSizes.map((size, i) =>
                   <>
-                    <a href="#" className="text-secondary" onClick={(e) => setImageGridSize(size, e)}>{size.label}</a>
+                    <a key={i} href="#" className="text-secondary" onClick={(e) => setImageGridSize(size, e)}>{size.label}</a>
                     {(i < imageGridSizes.length - 1) ? ", " : ""}
                   </>
                 )})

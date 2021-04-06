@@ -4,8 +4,6 @@
 //
 // Place your own custom CSS or SCSS rules below this line, these rules will override any Bootstrap and theme variables.
 
-@import "typeahead-red";
-
 $primary-alt: mix($primary,$white,6%);
 $primary-alt-lighter: mix($primary,$white,2%);
 $primary-alt-darker: mix($primary,$white,8%);
@@ -80,7 +78,7 @@ html, body, #root, .main {
 }
 
 .query-container {
-  padding-top: 0.5rem;
+  padding-top: 1rem;
   padding-bottom: 1.25rem;
   position: sticky;
   top: 0;
@@ -94,6 +92,12 @@ html, body, #root, .main {
 
   .rc-slider {
     width: 10rem;
+  }
+}
+
+.mode-container {
+  select {
+    width: 12rem;
   }
 }
 
@@ -170,6 +174,54 @@ html, body, #root, .main {
 
 .text-monospace {
   letter-spacing: -1px;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+}
+
+.btn-light:disabled {
+  border: 1px solid mix($border-color, $white, 50%);
+}
+
+.rbt-token {
+  &.POSITIVE {
+    @extend .alert-success;
+    &.rbt-token-active {
+      background-color: $success;
+      color: white;
+    }
+  }
+
+  &.NEGATIVE {
+    @extend .alert-danger;
+    text-decoration: line-through;
+    &.rbt-token-active {
+      background-color: $danger;
+      color: white;
+    }
+  }
+
+  &.HARD_NEGATIVE {
+    @extend .alert-warning;
+    text-decoration: line-through;
+    &.rbt-token-active {
+      background-color: $warning;
+      color: white;
+    }
+  }
+
+  &.UNSURE {
+    @extend .alert-info;
+    &.rbt-token-active {
+      background-color: $info;
+      color: white;
+    }
+
+    &:after {
+      content: "?";
+    }
+  }
 }
 
 // .panel {

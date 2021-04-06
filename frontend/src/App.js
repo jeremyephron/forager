@@ -6,22 +6,22 @@ import {
   Button,
   Nav,
   Navbar,
+  NavItem,
+  NavLink,
   NavbarBrand,
-  Form,
   FormGroup,
   Input,
   Modal,
   ModalBody,
   Popover,
   PopoverBody,
+  Spinner,
 } from "reactstrap";
 import { Typeahead } from "react-bootstrap-typeahead";
 import { ReactSVG } from "react-svg";
 import Slider, { Range } from "rc-slider";
 import Emoji from "react-emoji-render";
-import TimeAgo from "javascript-time-ago";
 import ReactTimeAgo from "react-time-ago";
-import en from "javascript-time-ago/locale/en";
 
 import fromPairs from "lodash/fromPairs";
 import toPairs from "lodash/toPairs";
@@ -34,10 +34,9 @@ import {
   ClusterModal,
   ImageStack,
   SignInModal,
-  TagManagementModal
+  TagManagementModal,
+  CategoryInput,
 } from "./components";
-
-TimeAgo.addDefaultLocale(en)
 
 var disjointSet = require("disjoint-set");
 
@@ -51,6 +50,10 @@ const orderingModes = [
   {id: "id", label: "Dataset order"},
   {id: "svm", label: "SVM"},
   {id: "knn", label: "KNN", disabled: true},
+]
+
+const dnns = [
+  {id: "dnn", label: "DNN w/ BG Splitting"},
 ]
 
 const endpoints = fromPairs(toPairs({
@@ -120,6 +123,8 @@ const App = () => {
     setIsLoading(true);
   }, [datasetName]);
 
+  const setTags = (tags) => setDatasetInfo({...datasetInfo, categories: tags});
+
   // Run queries after dataset info has loaded and whenever user clicks "query" button
   const [source, setSource] = useState(sources[0].id);
   const [datasetIncludeTags, setDatasetIncludeTags] = useState([]);
@@ -149,8 +154,8 @@ const App = () => {
     const url = new URL(`${endpoints.trainSvm}/${datasetName}`);
     url.search = new URLSearchParams({
       index_id: datasetInfo.index_id,
-      pos_tags: svmPosTags,
-      neg_tags: svmNegTags,
+      pos_tags: svmPosTags.map(t => `${t.category}:${t.value}`),
+      neg_tags: svmNegTags.map(t => `${t.category}:${t.value}`),
       augment_negs: svmAugmentNegs,
     }).toString();
     const svmData = await fetch(url, {
@@ -171,8 +176,8 @@ const App = () => {
     let params = {
       num: 1000,
       index_id: datasetInfo.index_id,
-      include: datasetIncludeTags,
-      exclude: datasetExcludeTags,
+      include: datasetIncludeTags.map(t => `${t.category}:${t.value}`),
+      exclude: datasetExcludeTags.map(t => `${t.category}:${t.value}`),
       subset: subset.map(im => im.id),
     };
 
@@ -271,6 +276,32 @@ const App = () => {
   useEffect(recluster, [queryResultData, setClusters, orderByClusterSize]);
 
   //
+  // MODE
+  //
+  const [mode, setMode] = useState("explore");
+  const [labelModeCategories, setLabelModeCategories_] = useState([]);
+  const [dnnStatus, setDnnStatus] = useState(null);
+  const [dnnType, setDnnType] = useState(dnns[0].id);
+  const [dnnAugmentNegs, setDnnAugmentNegs] = useState(true);
+  const [dnnPosTags, setDnnPosTags] = useState([]);
+  const [dnnNegTags, setDnnNegTags] = useState([]);
+  const [dnnIsTraining, setDnnIsTraining] = useState(false);
+
+  const setLabelModeCategories = (selection) => {
+    if (selection.length === 0) {
+      setLabelModeCategories_([]);
+    } else {
+      let c = selection[selection.length - 1];
+      if (c.customOption) {  // new
+        c = c.label;
+        let newCategories = [...datasetInfo.categories, c];
+        setDatasetInfo({...datasetInfo, categories: newCategories.sort()});
+      }
+      setLabelModeCategories_([c]);
+    }
+  };
+
+  //
   // RENDERING
   //
 
@@ -304,15 +335,39 @@ const App = () => {
         clusters={clusters}
         findSimilar={findSimilar}
         tags={datasetInfo.categories}
-        setTags={(tags) => setDatasetInfo({...datasetInfo, categories: tags})}
+        setTags={setTags}
         username={username}
         setSubset={setSubset}
+        mode={mode}
+        labelCategory={labelModeCategories[0]}
       />
-      <Navbar color="primary" className="text-light mb-2" dark>
+      <Navbar color="primary-3" className="text-light justify-content-between" dark expand="sm">
         <Container fluid>
           <span>
             <NavbarBrand href="/">Forager</NavbarBrand>
             <NavbarBrand className="font-weight-normal" id="dataset-name">{datasetName}</NavbarBrand>
+          </span>
+          <span>
+            <Nav navbar>
+              <NavItem active={mode === "explore"}>
+                <NavLink href="#" onClick={(e) => {
+                  setMode("explore");
+                  e.preventDefault();
+                }}>Explore</NavLink>
+              </NavItem>
+              <NavItem active={mode === "label"}>
+                <NavLink href="#" onClick={(e) => {
+                  setMode("label");
+                  e.preventDefault();
+                }}>Label</NavLink>
+              </NavItem>
+              <NavItem active={mode === "train"}>
+                <NavLink href="#" onClick={(e) => {
+                  setMode("train");
+                  e.preventDefault();
+                }}>Train</NavLink>
+              </NavItem>
+            </Nav>
           </span>
           <div>
             <span className="mr-4" onClick={toggleTagManagement} style={{cursor: "pointer"}}>
@@ -348,13 +403,95 @@ const App = () => {
           <div><b>Index status:</b> {datasetInfo.index_id ? "Created" : "Not created"}</div>
         </PopoverBody>
       </Popover>
+      {mode !== "explore" && <div className="border-bottom py-2 mode-container">
+        <Container fluid>
+          <div className="d-flex flex-row align-items-center justify-content-between">
+            {mode === "label" && <>
+              <Typeahead
+                multiple
+                id="label-mode-bar"
+                className="typeahead-bar mr-2"
+                options={datasetInfo.categories}
+                placeholder="Category to label"
+                selected={labelModeCategories}
+                onChange={setLabelModeCategories}
+                newSelectionPrefix="New category: "
+                allowNew={true}
+              />
+              <span className="text-nowrap">
+                <b>Key bindings:</b> &nbsp;
+                <kbd>1</kbd> <span className="rbt-token POSITIVE">positive</span>,{" "}
+                <kbd>2</kbd> <span className="rbt-token NEGATIVE">negative</span>,{" "}
+                <kbd>3</kbd> <span className="rbt-token HARD_NEGATIVE">hard negative</span>,{" "}
+                <kbd>4</kbd> <span className="rbt-token UNSURE">unsure</span>
+              </span>
+            </>}
+            {mode === "train" && (!!(dnnStatus) || true ? <>
+              <div className="d-flex flex-row align-items-center">
+                <Spinner color="dark" className="my-1 mr-2" />
+                <span><b>Training</b> model <b>mihirg_04-06-21-7-22_zebra-crossing</b> with 14 positives, 39 negatives (Epoch 1)</span>
+              </div>
+              <Button
+                color="danger"
+                onClick={() => setDnnIsTraining(false)}
+                disabled={dnnIsTraining}
+              >Stop training</Button>
+            </> : <>
+              <FormGroup className="mb-0">
+                <select className="custom-select mr-2" value={dnnType} onChange={e => setDnnType(e.target.value)}>
+                  {dnns.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+                </select>
+                <ReactSVG className="icon" src="assets/arrow-caret.svg" />
+              </FormGroup>
+              <CategoryInput
+                id="dnn-pos-bar"
+                className="mr-2"
+                placeholder="Positive example tags"
+                disabled={dnnIsTraining}
+                categories={datasetInfo.categories}
+                setCategories={setTags}
+                selected={dnnPosTags}
+                setSelected={setDnnPosTags}
+              />
+              <CategoryInput
+                id="dnn-neg-bar"
+                className="mr-2"
+                placeholder="Negative example tags"
+                disabled={dnnIsTraining}
+                categories={datasetInfo.categories}
+                setCategories={setTags}
+                selected={dnnNegTags}
+                setSelected={setDnnNegTags}
+              />
+              <div className="my-2 custom-control custom-checkbox">
+                <input
+                  type="checkbox"
+                  className="custom-control-input"
+                  id="svm-augment-negs-checkbox"
+                  disabled={dnnNegTags.length === 0 || dnnIsTraining}
+                  checked={dnnAugmentNegs || dnnNegTags.length === 0}
+                  onChange={(e) => setDnnAugmentNegs(e.target.checked)}
+                />
+                <label className="custom-control-label text-nowrap mr-2" htmlFor="svm-augment-negs-checkbox">
+                  Automatically augment negative set
+                </label>
+              </div>
+              <Button
+                color="light"
+                onClick={() => setDnnIsTraining(true)}
+                disabled={dnnPosTags.length === 0 || dnnIsTraining}
+              >Start training</Button>
+            </>)}
+          </div>
+        </Container>
+      </div>}
       <div className="app">
         <div className="query-container sticky">
           <Container fluid>
-            <Form className="d-flex flex-row align-items-center">
+            <div className="d-flex flex-row align-items-center">
               <FormGroup className="mb-0">
-                <select className="custom-select mr-2" onChange={e => setSource(e.target.value)}>
-                  {sources.map((s) => <option value={s.id} selected={source === s.id}>{s.label}</option>)}
+                <select className="custom-select mr-2" value={source} onChange={e => setSource(e.target.value)}>
+                  {sources.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                 </select>
                 <ReactSVG className="icon" src="assets/arrow-caret.svg" />
               </FormGroup>
@@ -362,23 +499,22 @@ const App = () => {
                 if (source === "dataset") {
                   return (
                     <>
-                      <Typeahead
-                        multiple
+                      <CategoryInput
                         id="dataset-include-bar"
-                        className="typeahead-bar mr-2"
+                        className="mr-2"
                         placeholder="Tags to include"
-                        options={datasetInfo.categories}
+                        categories={datasetInfo.categories}
+                        setCategories={setTags}
                         selected={datasetIncludeTags}
-                        onChange={selected => setDatasetIncludeTags(selected)}
+                        setSelected={setDatasetIncludeTags}
                       />
-                      <Typeahead
-                        multiple
+                      <CategoryInput
                         id="dataset-exclude-bar"
-                        className="typeahead-bar rbt-red"
                         placeholder="Tags to exclude"
-                        options={datasetInfo.categories}
+                        categories={datasetInfo.categories}
+                        setCategories={setTags}
                         selected={datasetExcludeTags}
-                        onChange={selected => setDatasetExcludeTags(selected)}
+                        setSelected={setDatasetExcludeTags}
                       />
                     </>)
                 } else if (source === "google") {
@@ -393,18 +529,18 @@ const App = () => {
                 }
               })()}
               <FormGroup className="mb-0">
-                <select className="custom-select mx-2" id="ordering-mode" onChange={e => setOrderingMode(e.target.value)}>
-                  {orderingModes.map((m) => <option value={m.id} selected={orderingMode === m.id} disabled={m.disabled}>{m.label}</option>)}
+                <select className="custom-select mx-2" id="ordering-mode" value={orderingMode} onChange={e => setOrderingMode(e.target.value)}>
+                  {orderingModes.map((m) => <option key={m.id} value={m.id} disabled={m.disabled}>{m.label}</option>)}
                 </select>
                 <ReactSVG className="icon" src="assets/arrow-caret.svg" />
               </FormGroup>
               <Button
-                color="primary"
+                color="light"
                 onClick={() => setIsLoading(true)}
                 disabled={orderingMode === "svm" && !!!(trainedSvmData)}
               >Run query</Button>
-            </Form>
-            <Form className="mt-2 mb-1 d-flex flex-row-reverse justify-content-between">
+            </div>
+            <div className="mt-2 mb-1 d-flex flex-row-reverse justify-content-between">
               <div className="d-flex flex-row align-items-center">
                 <div className="custom-switch custom-control mr-4">
                   <Input type="checkbox" className="custom-control-input"
@@ -443,7 +579,7 @@ const App = () => {
                   <span aria-hidden="true">×</span><span className="sr-only">Remove</span>
                 </button>
               </div>}
-            </Form>
+            </div>
           </Container>
         </div>
         {orderingMode === "svm" && <Popover
@@ -456,13 +592,13 @@ const App = () => {
           popperClassName={`svm-popover ${isTraining ? "loading" : ""}`}
         >
           <PopoverBody>
-            <Form>
-              <Typeahead
-                multiple
+            <div>
+              <CategoryInput
                 id="svm-pos-bar"
-                className="typeahead-bar mt-1"
+                className="mt-1"
                 placeholder="Positive example tags"
-                options={datasetInfo.categories}
+                categories={datasetInfo.categories}
+                setCategories={setTags}
                 selected={svmPosTags}
                 disabled={isTraining}
                 onChange={selected => {
@@ -470,12 +606,12 @@ const App = () => {
                   setTrainedSvmData(null);
                 }}
               />
-              <Typeahead
-                multiple
+              <CategoryInput
                 id="svm-neg-bar"
-                className="typeahead-bar rbt-red mt-2 mb-1"
+                className="mt-2 mb-1"
                 placeholder="Negative example tags"
-                options={datasetInfo.categories}
+                categories={datasetInfo.categories}
+                setCategories={setTags}
                 selected={svmNegTags}
                 disabled={isTraining}
                 onChange={selected => {
@@ -515,7 +651,7 @@ const App = () => {
                 F1 {Number(2 * trainedSvmData.f1).toFixed(2)}){" "}
                 <ReactTimeAgo date={trainedSvmData.date} timeStyle="mini"/> ago
               </div>}
-            </Form>
+            </div>
           </PopoverBody>
         </Popover>}
         <Container fluid>
@@ -532,6 +668,7 @@ const App = () => {
                   }}
                   images={images}
                   showLabel={clusteringStrength > 0}
+                  key={i}
                 />
               )}
             </Col>
