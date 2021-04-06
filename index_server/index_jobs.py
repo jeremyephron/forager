@@ -210,10 +210,8 @@ class TrainingJob:
             n_vecs = int(
                 mapper_result.num_embeddings / mapper_result.num_images * n_vecs
             )
-        self.index_kwargs = auto_config(
-            d=config.EMBEDDING_DIM,
-            n_vecs=n_vecs,
-            max_ram=config.TRAINING_MAX_RAM,
+        self.model_kwargs = dict(
+            max_ram=config.BGSPLIT_TRAINING_MAX_RAM,
         )
         self.index_kwargs.update(
             vectors_per_index=config.INDEX_SUBINDEX_SIZE,
@@ -247,6 +245,9 @@ class TrainingJob:
             "elapsed_time": end_time - start_time,
             "profiling": self.profiling,
         }
+
+
+
 
     def start(self, mapper_result: MapperReducer.Result):
         self.started = True
@@ -392,3 +393,119 @@ class LocalFlatIndex:
             np.sqrt(a[i], out=a[:i])
             out[:i, i] = a[:i]
             out[i, :i] = a[:i]
+
+
+class BGSplitTrainingJob:
+    def __init__(
+        self,
+        pos_paths: List[str],
+        neg_paths: List[str],
+        unlabeled_paths: List[str],
+        aux_labels_path: str,
+        model_id: str,
+        trainer: Trainer,
+        cluster_mount_parent_dir: Path,
+        session: aiohttp.ClientSession,
+    ):
+        self.model_name = 'BGSPLIT'
+        self.pos_paths = pos_paths
+        self.neg_paths = neg_paths
+        self.unlabeled_paths = unlabeled_paths
+        self.aux_labels_path = aux_labels_path
+        self.model_id = model_id
+        self.trainer = trainer
+        self.cluster_mount_parent_dir = cluster_mount_parent_dir
+        self.session = session
+
+        self.started = False
+        self.finished = asyncio.Event()
+        self.model_dir: Optional[str] = None
+        self.profiling: Dict[str, float] = {}
+
+        self._failed_or_finished = asyncio.Condition()
+
+        # Will be initialized later
+        self.model_kwargs: Dict[str, Any] = {}
+        self._start_time: Optional[float] = None
+        self._end_time: Optional[float] = None
+        self._task: Optional[asyncio.Task] = None
+
+    def configure_model(self):
+        self.model_kwargs = dict(
+            max_ram=config.BGSPLIT_TRAINING_MAX_RAM,
+            aux_labels_path=self.aux_labels_path,
+        )
+
+    @property
+    def status(self):
+        end_time = self._end_time or time.time()
+        start_time = self._start_time or end_time
+        return {
+            "started": self.started,
+            "finished": self.finished.is_set(),
+            "elapsed_time": end_time - start_time,
+            "profiling": self.profiling,
+        }
+
+    def start(self):
+        self.started = True
+        self._task = self.run_in_background()
+
+    @utils.unasync_as_task
+    async def run_in_background(self):
+        self.configure_model()
+
+        async with self.trainer as trainer_url:
+            self._start_time = time.time()
+
+            # TODO(mihirg): Add exponential backoff/better error handling
+            try:
+                request = self._construct_request()
+
+                while not self.finished.is_set():
+                    async with self._failed_or_finished:
+                        async with self.session.post(
+                            trainer_url, json=request
+                        ) as response:
+                            if response.status != 200:
+                               continue
+                        await self._failed_or_finished.wait()
+            except asyncio.CancelledError:
+                pass
+            finally:
+                self._end_time = time.time()
+
+    async def stop(self):
+        if self._task is not None and not self._task.done():
+            self._task.cancel()
+            await self._task
+
+    async def handle_result(self, result: JSONType):
+        if result.get("success"):
+            self.model_dir = result["model_dir"]
+            self.model_checkpoint = result["model_checkpoint"]
+            self.profiling = result["profiling"]
+            self.finished.set()
+
+        async with self._failed_or_finished:
+            self._failed_or_finished.notify()
+
+    @property
+    def mounted_index_dir(self) -> Path:
+        assert self.model_dir is not None
+        return self.cluster_mount_parent_dir / self.model_dir.lstrip(os.sep)
+
+    def _construct_request(self) -> JSONType:
+        return {
+            "train_positive_paths": self.pos_paths,
+            "train_negative_paths": self.neg_paths,
+            "train_unlabeled_paths": self.unlabeled_paths,
+            "val_positive_paths": [],
+            "val_negative_paths": [],
+            "val_unlabeled_paths": [],
+            "model_kwargs": self.model_kwargs,
+
+            "model_id": self.model_id,
+            "model_name": self.model_name,
+            "notify_url": config.BGSPLIT_TRAINER_STATUS_CALLBACK,
+        }

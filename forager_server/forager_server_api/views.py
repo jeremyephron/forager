@@ -261,6 +261,80 @@ def delete_index(request, index_id):
 
 @api_view(['POST'])
 @csrf_exempt
+def create_model(request, dataset_name, dataset=None):
+    payload = json.loads(request.body)
+    cluster_id = payload['cluster_id']
+    bucket_name = payload['bucket']
+    index_id = payload['index_id']
+    pos_tags = parse_tag_set_from_query_string_v2(payload['pos_tags'])
+    neg_tags = parse_tag_set_from_query_string_v2(payload['neg_tags'])
+    augment_negs = bool(distutils.util.strtobool(payload['augment_negs']))
+    aux_label_type = payload['aux_label_type']
+
+    dataset = get_object_or_404(Dataset, name=dataset_name)
+    annotations = Annotation.objects.filter(
+        dataset_item__in=dataset.datasetitem_set.filter(),
+        label_category__in=tag_sets_to_category_list_v2(pos_tags, neg_tags),
+        label_type="klabel_frame",
+    )
+    tags_by_pk = get_tags_from_annotations_v2(annotations)
+
+    pos_dataset_item_pks = []
+    neg_dataset_item_pks = []
+    for pk, tags in tags_by_pk.items():
+        if any(t in pos_tags for t in tags):
+            pos_dataset_item_pks.append(pk)
+        elif any(t in neg_tags for t in tags):
+            neg_dataset_item_pks.append(pk)
+
+    pos_dataset_item_internal_identifiers = list(
+        DatasetItem.objects.filter(pk__in=pos_dataset_item_pks).values_list(
+            "identifier", flat=True
+        )
+    )
+    neg_dataset_item_internal_identifiers = list(
+        DatasetItem.objects.filter(pk__in=neg_dataset_item_pks).values_list(
+            "identifier", flat=True
+        )
+    )
+
+    params = {
+        "pos_identifiers": pos_dataset_item_internal_identifiers,
+        "neg_identifiers": neg_dataset_item_internal_identifiers,
+        "augment_negs": augment_negs,
+        "aux_labels_type": aux_label_type,
+        "bucket": bucket_name,
+        "cluster_id": cluster_id,
+        "index_id": index_id,
+    }
+    r = requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/start_bgsplit_job",
+        json=params,
+    )
+    response_data = r.json()
+    return JsonResponse({
+        "status": "success",
+        "model_id": response_data["model_id"],
+    })
+
+
+@api_view(['GET'])
+@csrf_exempt
+def get_model_status(request, model_id):
+    dataset_name = request.GET['dataset']
+
+    params = {"model_id": model_id}
+    r = requests.get(
+        settings.EMBEDDING_SERVER_ADDRESS + "/bgsplit_job_status",
+        params=params
+    )
+    response_data = r.json()
+
+    return JsonResponse(response_data)
+
+
+@api_view(['POST'])
+@csrf_exempt
 def create_dataset(request):
     try:
         data = json.loads(request.body)
