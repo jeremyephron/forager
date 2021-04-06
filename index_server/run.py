@@ -952,7 +952,8 @@ async def start_bgsplit_job(request):
     extra_neg_paths = [index.labels[index.identifiers[i]] for i in extra_neg_identifiers]
     assert len(neg_paths) + len(extra_neg_paths) > 0
 
-    unlabeled_paths = [index.labels[index.identifiers[i]] for i in unused_identifiers]
+    unlabeled_paths = [index.labels[index.identifiers[i]]
+                       for i in unused_identifiers[:1000]]
 
     http_session = utils.create_unlimited_aiohttp_session()
     # 1. If aux labels have not been generated, then generate them
@@ -1050,6 +1051,7 @@ async def bgsplit_job_status(request):
         model = current_models[model_id]
         status = model.status
         status["has_model"] = model.ready.is_set()
+        status["checkpoint_path"] = model.model_checkpoint
     else:
         status = {"has_model": False}
     return resp.json(status)

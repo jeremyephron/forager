@@ -27,3 +27,9 @@ class Annotation(models.Model):
 class EmbeddingSet(models.Model):
     dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE)
     index_name = models.CharField(max_length=1000)
+
+
+class DNNModel(models.Model):
+    name = models.SlugField(unique=True)
+    model_id = models.CharField(max_length=300, blank=True)
+    checkpoint_path = models.TextField(blank=True)
