@@ -10,7 +10,7 @@ variable "mapper_node_pool_name" {
 
 variable "mapper_num_nodes" {
   type    = number
-  default = 50
+  default = 1
 }
 
 variable "mapper_node_type" {
