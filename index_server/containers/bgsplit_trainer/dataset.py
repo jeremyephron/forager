@@ -1,4 +1,5 @@
 import torch
+import os.path
 
 from torch.utils.data import Dataset
 from torchvision import transforms, utils, io
@@ -18,7 +19,8 @@ class AuxiliaryDataset(Dataset):
              [-1] * len(unlabeled_paths)),
             dtype=torch.int)
         self.aux_labels = torch.tensor(
-            [auxiliary_labels[path] if path in auxiliary_labels else -1
+            [auxiliary_labels[os.path.basename(path)]
+             if path in auxiliary_labels else -1
              for path in positive_paths + negative_paths + unlabeled_paths],
             dtype=torch.int)
         self.transform = transform
