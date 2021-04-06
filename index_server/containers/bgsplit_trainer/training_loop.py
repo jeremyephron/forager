@@ -6,12 +6,13 @@ import sklearn.metrics
 import os.path
 from typing import Dict, List, Any
 from torch.utils.data import DataLoader
+from torchvision import transforms
 
-from .config import BATCH_SIZE, NUM_WORKERS
-from .model import Model
-from .dataset import AuxiliaryDataset
-from .warmup_scheduler import GradualWarmupScheduler
-from .util import download
+from config import BATCH_SIZE, NUM_WORKERS
+from model import Model
+from dataset import AuxiliaryDataset
+from warmup_scheduler import GradualWarmupScheduler
+from util import download
 
 
 class TrainingLoop(nn.Module):
@@ -36,8 +37,20 @@ class TrainingLoop(nn.Module):
         aux_labels = model_kwargs['aux_labels']
 
         # Setup dataset
-        train_transform = None
-        val_transform = None
+        train_transform = transforms.Compose([
+            transforms.RandomResizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406],
+                                 [0.229, 0.224, 0.225])
+        ])
+        val_transform = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406],
+                                 [0.229, 0.224, 0.225])
+        ])
         self.train_dataloader = DataLoader(
             AuxiliaryDataset(
                 positive_paths=train_positive_paths,
@@ -145,7 +158,7 @@ class TrainingLoop(nn.Module):
             loss_value.backward()
             self.optimizer.step()
 
-    def run(self, num_epochs):
+    def run(self, num_epochs=1):
         last_checkpoint_path = None
         for i in range(self.start_epoch, num_epochs):
             print(f'Train: Epoch {i}')

@@ -7,6 +7,7 @@ import requests
 import pickle
 import time
 import traceback
+import os.path
 from flask import Flask, request, abort
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Any
@@ -71,8 +72,12 @@ class TrainingJob:
         try:
             start_time = time.perf_counter()
 
+            aux_labels = {}
             with open(self.aux_labels_path, 'rb') as f:
                 auxiliary_labels = pickle.load(f)
+                for p, v in auxiliary_labels.items():
+                    aux_labels[os.path.basename(p)] = v
+                
             model_dir = config.MODEL_DIR_TMPL.format(
                 self.model_id, self.model_name)
             self.model_kwargs['aux_labels'] = auxiliary_labels
