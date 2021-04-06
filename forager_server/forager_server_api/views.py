@@ -1604,7 +1604,7 @@ def num_category_labels(dataset, category):
         "dataset_item", "label_category", "-created"
     ).distinct("dataset_item", "label_category")
 
-    n_labels = len(list(filter(
-        lambda x: json.loads(x.label_data)["value"] != LabelValue.TOMBSTONE, anns
-    )))
+    n_labels = sum(
+        1 for ann in anns if json.loads(ann.label_data)["value"] != LabelValue.TOMBSTONE
+    )
     return n_labels
