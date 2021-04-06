@@ -20,7 +20,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from pycocotools.coco import COCO
 
-from .models import Dataset, DatasetItem, Annotation
+from .models import Dataset, DatasetItem, Annotation, DNNModel
 
 class LabelValue(IntEnum):
     TOMBSTONE = -1
@@ -263,6 +263,7 @@ def delete_index(request, index_id):
 @csrf_exempt
 def create_model(request, dataset_name, dataset=None):
     payload = json.loads(request.body)
+    model_name = payload['model_name']
     cluster_id = payload['cluster_id']
     bucket_name = payload['bucket']
     index_id = payload['index_id']
@@ -312,6 +313,10 @@ def create_model(request, dataset_name, dataset=None):
         json=params,
     )
     response_data = r.json()
+
+    m = DNNModel(name=model_name, model_id=response_data['model_id'])
+    m.save()
+
     return JsonResponse({
         "status": "success",
         "model_id": response_data["model_id"],
@@ -329,6 +334,11 @@ def get_model_status(request, model_id):
         params=params
     )
     response_data = r.json()
+    if response_data["has_model"]:
+        # Index has been successfully created & uploaded -> persist
+        m = get_object_or_404(DNNModel, model_id=model_id)
+        m.checkpoint_path = response_data['checkpoint_path']
+        m.save()
 
     return JsonResponse(response_data)
 

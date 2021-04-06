@@ -4,6 +4,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import sklearn.metrics
 import os.path
+import logging
 from typing import Dict, List, Any
 from torch.utils.data import DataLoader
 from torchvision import transforms
@@ -14,6 +15,8 @@ from dataset import AuxiliaryDataset
 from warmup_scheduler import GradualWarmupScheduler
 from util import download
 
+logger = logging.getLogger("bgsplit")
+logger.setLevel(logging.DEBUG)
 
 class TrainingLoop(nn.Module):
     def __init__(
@@ -77,6 +80,8 @@ class TrainingLoop(nn.Module):
         num_aux_classes = len(torch.unique(list(aux_labels.values())))
         self.model = Model(num_main_classes=num_classes,
                            num_aux_classes=num_aux_classes)
+        self.model = self.model.cuda()
+        self.model = nn.DataParallel(self.model)
         self.main_loss = nn.CrossEntropyLoss()
         self.auxiliary_loss = nn.CrossEntropyLoss()
 
@@ -118,16 +123,19 @@ class TrainingLoop(nn.Module):
         main_preds = []
         aux_preds = []
         for images, main_labels, aux_labels in dataloader:
+            images = images.cuda()
+            main_labels = main_labels.cuda()
+            aux_labels = aux_labels.cuda()
             main_logits, aux_logits = self.model(images)
             main_loss_value = self.main_loss(main_logits, main_labels)
             aux_loss_value = self.auxiliary_loss(aux_logits, aux_labels)
             loss_value += (main_loss_value + aux_loss_value).item()
             main_pred = F.softmax(main_logits)
             aux_pred = F.softmax(main_logits)
-            main_preds += list(main_pred.argmax(dim=1)[:])
-            aux_preds += list(aux_pred.argmax(dim=1)[:])
-            main_gts += list(main_labels[:])
-            aux_gts += list(main_labels[:])
+            main_preds += list(main_pred.argmax(dim=1)[:].cpu().numpy())
+            aux_preds += list(aux_pred.argmax(dim=1)[:].cpu().numpy())
+            main_gts += list(main_labels[:].cpu().numpy())
+            aux_gts += list(main_labels[:].cpu().numpy())
         # Compute F1 score
         loss_value /= len(dataloader)
         main_prec, main_recall, _, _ = \
@@ -145,7 +153,13 @@ class TrainingLoop(nn.Module):
     def train(self):
         self.model.train()
         self.optimizer_scheduler.step()
+        logger.log('Starting train epoch')
         for images, main_labels, aux_labels in self.train_dataloader:
+            logger.log('Train batch')
+            images = images.cuda()
+            main_labels = main_labels.cuda()
+            aux_labels = aux_labels.cuda()
+
             main_logits, aux_logits = self.model(images)
             # Compute loss
             main_loss_value = self.main_loss(
