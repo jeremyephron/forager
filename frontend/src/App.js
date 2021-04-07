@@ -672,6 +672,7 @@ const App = () => {
                 categories={datasetInfo.categories}
                 setCategories={setTags}
                 selected={svmPosTags}
+                setSelected={setSvmPosTags}
                 disabled={isTraining}
                 onChange={selected => {
                   setSvmPosTags(selected);
@@ -685,6 +686,7 @@ const App = () => {
                 categories={datasetInfo.categories}
                 setCategories={setTags}
                 selected={svmNegTags}
+                setSelected={setSvmNegTags}
                 disabled={isTraining}
                 onChange={selected => {
                   setSvmNegTags(selected);
@@ -718,9 +720,9 @@ const App = () => {
               {!!(trainedSvmData) && <div className="mt-1">
                 Trained model ({trainedSvmData.num_positives} positives,{" "}
                 {trainedSvmData.num_negatives} negatives &mdash;{" "})
-                {/* precision {Number(trainedSvmData.precision).toFixed(2)}, */}
-                {/* recall {Number(trainedSvmData.recall).toFixed(2)}, */}
-                {/* F1 {Number(2 * trainedSvmData.f1).toFixed(2)}){" "} */}
+                precision {Number(trainedSvmData.precision).toFixed(2)},
+                recall {Number(trainedSvmData.recall).toFixed(2)},
+                F1 {Number(2 * trainedSvmData.f1).toFixed(2)}){" "}
                 <ReactTimeAgo date={trainedSvmData.date} timeStyle="mini"/> ago
               </div>}
             </div>
