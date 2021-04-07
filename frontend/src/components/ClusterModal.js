@@ -105,6 +105,12 @@ const ClusterModal = ({
     if (e) e.preventDefault();
   };
 
+  const excludeOpposite = (e) => {
+    setExcludedImageIndexes(fromPairs(selectedCluster.flatMap((_, i) =>
+      !!!(excludedImageIndexes[i]) ? [[i, true]] : [])));
+    if (e) e.preventDefault();
+  }
+
   useEffect(() => {
     excludeNone();
   }, [selectedCluster]);
@@ -369,7 +375,8 @@ const ClusterModal = ({
                 Selected {selectedCluster.length - Object.values(excludedImageIndexes).filter(Boolean).length}{" "}
                 of {selectedCluster.length} images (
                 <a href="#" className="text-secondary" onClick={excludeNone}>select all</a>,{" "}
-                <a href="#" className="text-secondary" onClick={excludeAll}>deselect all</a>){" "}
+                <a href="#" className="text-secondary" onClick={excludeAll}>deselect all</a>,{" "}
+                <a href="#" className="text-secondary" onClick={excludeOpposite}>toggle selection</a>){" "}
                 (thumbnails: {imageGridSizes.map((size, i) =>
                   <>
                     <a key={i} href="#" className="text-secondary" onClick={(e) => setImageGridSize(size, e)}>{size.label}</a>
