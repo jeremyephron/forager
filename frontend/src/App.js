@@ -42,7 +42,7 @@ var disjointSet = require("disjoint-set");
 
 const sources = [
   {id: "dataset", label: "Dataset"},
-  // {id: "google", label: "Google"},
+  {id: "google", label: "Google"},
 ]
 
 const orderingModes = [
@@ -413,7 +413,7 @@ const App = () => {
       <Navbar color="primary-3" className="text-light justify-content-between" dark expand="sm">
         <Container fluid>
           <span>
-            <NavbarBrand href="/">Forager</NavbarBrand>
+            <NavbarBrand href="/"><b>Forager</b></NavbarBrand>
             <NavbarBrand className="font-weight-normal" id="dataset-name">{datasetName}</NavbarBrand>
           </span>
           <span>
