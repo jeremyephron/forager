@@ -340,6 +340,7 @@ const ClusterModal = ({
                 innerRef={typeaheadRef}
                 onBlur={() => typeaheadRef.current.hideMenu()}
                 onKeyDown={handleTypeaheadKeyDown}
+                deduplicateByCategory
               />
               {(isClusterView) ?
                 <Button color="light" className="ml-2" onClick={() => setSubset(selectedCluster)}>

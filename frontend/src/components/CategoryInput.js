@@ -7,8 +7,16 @@ import {
 import { Typeahead, useToken, ClearButton } from "react-bootstrap-typeahead";
 import cx from "classnames";
 
+import isEqual from "lodash/isEqual";
 import uniqWith from "lodash/uniqWith";
 import union from "lodash/union";
+
+const LABEL_VALUES = [
+  ["POSITIVE", "positive"],
+  ["NEGATIVE", "negative"],
+  ["HARD_NEGATIVE", "hard negative"],
+  ["UNSURE", "unsure"],
+];
 
 const InteractiveToken = forwardRef((
   { active, children, className, onRemove, tabIndex, ...props },
@@ -70,26 +78,36 @@ const MyToken = forwardRef((props, ref) => {
           fade={false}
         >
         <PopoverBody>
-          <div><a href="#" onClick={(e) => onValueClick("POSITIVE", index, e)} className="rbt-token POSITIVE">positive</a></div>
-          <div><a href="#" onClick={(e) => onValueClick("NEGATIVE", index, e)} className="rbt-token NEGATIVE">negative</a></div>
-          <div><a href="#" onClick={(e) => onValueClick("HARD_NEGATIVE", index, e)} className="rbt-token HARD_NEGATIVE">hard negative</a></div>
-          <div><a href="#" onClick={(e) => onValueClick("UNSURE", index, e)} className="rbt-token UNSURE">unsure</a></div>
+          {LABEL_VALUES.map(([value, name]) => (
+            <div><a href="#" onClick={(e) => onValueClick(value, index, e)} className={`rbt-token ${value}`}>{name}</a></div>
+          ))}
         </PopoverBody>
       </Popover>
     </>
   );
 });
 
-const CategoryInput = ({ id, categories, className, selected, setSelected, setCategories, innerRef, ...props }) => {
-  const options = categories.flatMap(category => {
-    return selected.some(s => s.category === category) ?  // remove already-labeled categories
-       [] : [{category, value: "POSITIVE"}];
-  });
+const CategoryInput = ({ id, categories, className, selected, setSelected, setCategories, innerRef, deduplicateByCategory, ...props }) => {
+  let options;
+  if (deduplicateByCategory) {
+    options = categories.flatMap(category =>
+      selected.some(s => s.category === category) ?
+      [] : [{category, value: LABEL_VALUES[0][0]}]);
+  } else {
+    options = categories.flatMap(category => {
+      for (const [value] of LABEL_VALUES) {
+        const proposal = {category, value: value};
+        if (!selected.some(s => isEqual(s, proposal))) return [proposal];
+      }
+      return [];
+    });
+  }
 
   const onChange = (selected) => {
     let newSelected = selected.map(
-      s => s.customOption ? {category: s.category, value: "POSITIVE"} : s);
-    newSelected = uniqWith(newSelected, (a, b) => a.category === b.category);
+      s => s.customOption ? {category: s.category, value: LABEL_VALUES[0][0]} : s);
+    newSelected = uniqWith(newSelected, deduplicateByCategory ?
+                           ((a, b) => a.category === b.category) : isEqual)
     setCategories(union(categories, newSelected.map(s => s.category)).sort());
     setSelected(newSelected);
   };
