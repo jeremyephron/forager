@@ -1477,7 +1477,7 @@ async def train_svm_v2(request):
             "svm_vector": utils.numpy_to_base64(w),
             "precision": precision,
             "recall": recall,
-            "f1": 2 * precision * recall / (precision + recall),
+            # "f1": 2 * precision * recall / (precision + recall),
             "num_positives": len(pos_vectors),
             "num_negatives": len(neg_vectors) + len(extra_neg_vectors),
         }
