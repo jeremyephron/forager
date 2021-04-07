@@ -859,7 +859,6 @@ async def start_job(request):
     paths = request.json["paths"]
     identifiers = request.json["identifiers"]
 
-
     cluster = current_clusters[cluster_id]
     lock_id = current_clusters.lock(cluster_id)
     cluster_unlock_fn = functools.partial(current_clusters.unlock, cluster_id, lock_id)
@@ -900,12 +899,12 @@ async def stop_job(request):
     return resp.text("", status=204)
 
 
-
 # -> BGSPLIT-TRAIN
 
 current_models: CleanupDict[str, BGSplitTrainingJob] = CleanupDict(
     lambda job: job.stop()
 )
+
 
 @app.route("/start_bgsplit_job", methods=["POST"])
 async def start_bgsplit_job(request):
@@ -949,28 +948,33 @@ async def start_bgsplit_job(request):
         extra_neg_identifiers = random.sample(
             unused_identifiers, min(len(unused_identifiers), num_extra_neg_vectors)
         )
-    extra_neg_paths = [index.labels[index.identifiers[i]] for i in extra_neg_identifiers]
+    extra_neg_paths = [
+        index.labels[index.identifiers[i]] for i in extra_neg_identifiers
+    ]
     assert len(neg_paths) + len(extra_neg_paths) > 0
 
-    unlabeled_paths = [index.labels[index.identifiers[i]]
-                       for i in unused_identifiers[:1000]]
+    unlabeled_paths = [
+        index.labels[index.identifiers[i]] for i in unused_identifiers[:1000]
+    ]
 
     http_session = utils.create_unlimited_aiohttp_session()
     # 1. If aux labels have not been generated, then generate them
     alt = aux_labels_type
     aux_labels_path = None
-    if alt == 'imagenet':
+    if alt == "imagenet":
         aux_labels_path = config.AUX_DIR_TMPL.format(index_id, alt)
     else:
-        aux_labels_path = ''
-        assert alt == 'imagenet'
+        aux_labels_path = ""
+        assert alt == "imagenet"
 
     if not os.path.exists(aux_labels_path):
-        all_paths = [index.labels[index.identifiers[i]] for i in index.get_identifier_set()]
+        all_paths = [
+            index.labels[index.identifiers[i]] for i in index.get_identifier_set()
+        ]
         nproc = cluster.output["mapper_nproc"]
         n_mappers = int(
             cluster.output["num_mappers"] * config.MAPPER_REQUEST_MULTIPLE(nproc)
-           )
+        )
         chunk_size = config.MAPPER_CHUNK_SIZE(nproc)
         mapper_job = MapReduceJob(
             MapperSpec(
@@ -978,25 +982,29 @@ async def start_bgsplit_job(request):
                 n_mappers=n_mappers,
             ),
             MapperReducer(),
-            {"input_bucket": bucket,
-             "return_data": "predictions",
-             "return_type": "serialize"},
+            {
+                "input_bucket": bucket,
+                "return_data": "predictions",
+                "return_type": "serialize",
+            },
             session=http_session,
             n_retries=config.MAPPER_NUM_RETRIES,
             chunk_size=chunk_size,
             request_timeout=config.MAPPER_REQUEST_TIMEOUT,
-           )
+        )
         logger.info(f"Map: started with {len(all_paths)} images")
         task = mapper_job.start(all_paths)
         while True:
             prog = mapper_job.progress()
-            logger.info(f"Processed: {prog['n_processed']}/{prog['n_total']}, "
-                        f"elapsed: {prog['elapsed_time']}")
-            if prog['finished']:
+            logger.info(
+                f"Processed: {prog['n_processed']}/{prog['n_total']}, "
+                f"elapsed: {prog['elapsed_time']}"
+            )
+            if prog["finished"]:
                 break
             await asyncio.sleep(5)
         _, predictions = mapper_job.result
-        with open(aux_labels_path, 'wb') as f:
+        with open(aux_labels_path, "wb") as f:
             pickle.dump(predictions, f)
 
     proc = await asyncio.create_subprocess_exec(
@@ -1010,7 +1018,7 @@ async def start_bgsplit_job(request):
     )
     await proc.wait()
 
-    # 2. Train BG Split model 
+    # 2. Train BG Split model
     trainers = [Trainer(url) for url in cluster.output["bgsplit_trainer_urls"]]
     model_id = str(uuid.uuid4())
 
@@ -1055,8 +1063,6 @@ async def bgsplit_job_status(request):
     else:
         status = {"has_model": False}
     return resp.json(status)
-
-
 
 
 # -> POST-BUILD
@@ -1477,7 +1483,7 @@ async def train_svm_v2(request):
             "svm_vector": utils.numpy_to_base64(w),
             "precision": precision,
             "recall": recall,
-            # "f1": 2 * precision * recall / (precision + recall),
+            "f1": 2 * precision * recall / (precision + recall),
             "num_positives": len(pos_vectors),
             "num_negatives": len(neg_vectors) + len(extra_neg_vectors),
         }
