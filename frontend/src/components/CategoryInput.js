@@ -11,6 +11,7 @@ import isEqual from "lodash/isEqual";
 import uniqWith from "lodash/uniqWith";
 import union from "lodash/union";
 
+// TODO(mihirg): Combine with this same constant in other places
 const LABEL_VALUES = [
   ["POSITIVE", "Positive"],
   ["NEGATIVE", "Negative"],
