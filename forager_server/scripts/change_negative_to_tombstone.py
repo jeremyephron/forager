@@ -3,6 +3,9 @@ from enum import IntEnum
 import json
 
 
+DATASET_NAME = "waymo_train_central"
+
+
 class LabelValue(IntEnum):
     TOMBSTONE = -1
     POSITIVE = 1
@@ -11,7 +14,7 @@ class LabelValue(IntEnum):
     UNSURE = 4
 
 
-dataset = Dataset.objects.get(name="waymo_train_central")
+dataset = Dataset.objects.get(name=DATASET_NAME)
 annotations = Annotation.objects.filter(
     dataset_item__in=dataset.datasetitem_set.filter(),
     label_type="klabel_frame",
