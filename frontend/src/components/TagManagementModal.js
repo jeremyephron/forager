@@ -73,7 +73,7 @@ const TagManagementModal = ({
     const m = orderAscending ? 1 : -1;
 
     if (orderBy === kOrderBy.name) {
-      copy.sort((a, b) => m * (a.tag < b.tag ? -1 : 1));
+      copy.sort((a, b) => m * (a.tag.toLowerCase() < b.tag.toLowerCase() ? -1 : 1));
     } else {
       for (const [value] of LABEL_VALUES) {
         if (orderBy === kOrderBy[value]) {
