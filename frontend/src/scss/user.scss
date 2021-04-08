@@ -195,19 +195,21 @@ html, body, #root, .main {
   }
 
   &.NEGATIVE {
-    @extend .alert-danger;
+    background-color: #ffe7e8;
+    color: #ff0500;
     text-decoration: line-through;
     &.rbt-token-active {
-      background-color: $danger;
+      background-color: #ff0500;
       color: white;
     }
   }
 
   &.HARD_NEGATIVE {
-    @extend .alert-warning;
+    background-color: #fce4e9;
+    color: #ec5a79;
     text-decoration: line-through;
     &.rbt-token-active {
-      background-color: $warning;
+      background-color: #ec5a79;
       color: white;
     }
   }
