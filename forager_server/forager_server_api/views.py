@@ -1599,6 +1599,6 @@ def get_category_counts_v2(request, dataset_name):
     for ann in anns:
         label_data = json.loads(ann.label_data)
         value = LabelValue(label_data["value"])
-        anns[ann.label_category][value.name] += 1
+        n_labeled[ann.label_category][value.name] += 1
 
     return JsonResponse({"numLabeled": n_labeled})
