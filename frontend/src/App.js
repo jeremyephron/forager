@@ -40,11 +40,6 @@ import {
 
 var disjointSet = require("disjoint-set");
 
-const sources = [
-  {id: "dataset", label: "Dataset"},
-  {id: "google", label: "Google"},
-]
-
 const orderingModes = [
   {id: "random", label: "Random order"},
   {id: "id", label: "Dataset order"},
@@ -130,7 +125,6 @@ const App = () => {
   const setTags = (tags) => setDatasetInfo({...datasetInfo, categories: tags});
 
   // Run queries after dataset info has loaded and whenever user clicks "query" button
-  const [source, setSource] = useState(sources[0].id);
   const [datasetIncludeTags, setDatasetIncludeTags] = useState([]);
   const [datasetExcludeTags, setDatasetExcludeTags] = useState([]);
   const [googleQuery, setGoogleQuery] = useState("");
@@ -185,15 +179,15 @@ const App = () => {
       subset: subset.map(im => im.id),
     };
 
-    if (source === "dataset" && (orderingMode === "id" || orderingMode === "random")) {
+    if (orderingMode === "id" || orderingMode === "random") {
       url = new URL(`${endpoints.getNextImages}/${datasetName}`);
       url.search = new URLSearchParams({...params, order: orderingMode}).toString();
-    } else if (source === "dataset" && orderingMode === "knn") {
+    } else if (orderingMode === "knn") {
       url = new URL(`${endpoints.queryKnn}/${datasetName}`);
       url.search = new URLSearchParams({...params,
         image_ids: [knnImage.id]
       }).toString();
-    } else if (source === "dataset" && orderingMode === "svm") {
+    } else if (orderingMode === "svm") {
       url = new URL(`${endpoints.querySvm}/${datasetName}`);
       url.search = new URLSearchParams({...params,
         svm_vector: trainedSvmData.svm_vector,
@@ -201,7 +195,7 @@ const App = () => {
         score_max: svmScoreRange[1] / 100,
       }).toString();
     } else {
-      console.error(`Query type (${source}, ${orderingMode}) not implemented`);
+      console.error(`Query type (${orderingMode}) not implemented`);
       return;
     }
     const results = await fetch(url, {
@@ -561,45 +555,23 @@ const App = () => {
         <div className="query-container sticky">
           <Container fluid>
             <div className="d-flex flex-row align-items-center">
-              <FormGroup className="mb-0">
-                <select className="custom-select mr-2" value={source} onChange={e => setSource(e.target.value)}>
-                  {sources.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-                </select>
-                <ReactSVG className="icon" src="assets/arrow-caret.svg" />
-              </FormGroup>
-              {(() => {
-                if (source === "dataset") {
-                  return (
-                    <>
-                      <CategoryInput
-                        id="dataset-include-bar"
-                        className="mr-2"
-                        placeholder="Tags to include"
-                        categories={datasetInfo.categories}
-                        setCategories={setTags}
-                        selected={datasetIncludeTags}
-                        setSelected={setDatasetIncludeTags}
-                      />
-                      <CategoryInput
-                        id="dataset-exclude-bar"
-                        placeholder="Tags to exclude"
-                        categories={datasetInfo.categories}
-                        setCategories={setTags}
-                        selected={datasetExcludeTags}
-                        setSelected={setDatasetExcludeTags}
-                      />
-                    </>)
-                } else if (source === "google") {
-                  return (
-                    <Input
-                      type="text"
-                      placeholder="Query"
-                      value={googleQuery}
-                      onChange={e => setGoogleQuery(e.target.value)}
-                    />
-                  )
-                }
-              })()}
+              <CategoryInput
+                id="dataset-include-bar"
+                className="mr-2"
+                placeholder="Tags to include"
+                categories={datasetInfo.categories}
+                setCategories={setTags}
+                selected={datasetIncludeTags}
+                setSelected={setDatasetIncludeTags}
+              />
+              <CategoryInput
+                id="dataset-exclude-bar"
+                placeholder="Tags to exclude"
+                categories={datasetInfo.categories}
+                setCategories={setTags}
+                selected={datasetExcludeTags}
+                setSelected={setDatasetExcludeTags}
+              />
               <FormGroup className="mb-0">
                 <select className="custom-select mx-2" id="ordering-mode" value={orderingMode} onChange={e => setOrderingMode(e.target.value)}>
                   {orderingModes.map((m) => <option key={m.id} value={m.id} disabled={m.disabled}>{m.label}</option>)}
