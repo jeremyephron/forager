@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import time
 import uuid
+import logging
 
 from typing import Any, Callable, Dict, List, Optional, Set
 
@@ -21,6 +22,7 @@ from knn.reducers import Reducer
 
 import config
 
+logger = logging.getLogger("index_server")
 
 class MapperReducer(Reducer):
     @dataclass
@@ -272,6 +274,7 @@ class TrainingJob:
                             if response.status != 200:
                                 continue
                         await self._failed_or_finished.wait()
+                    await asyncio.sleep(5)
             except asyncio.CancelledError:
                 pass
             finally:
@@ -419,6 +422,8 @@ class BGSplitTrainingJob:
 
         self.started = False
         self.finished = asyncio.Event()
+        self.failed = asyncio.Event()
+        self.failure_reason: Optional[str] = None
         self.model_dir: Optional[str] = None
         self.profiling: Dict[str, float] = {}
 
@@ -443,6 +448,8 @@ class BGSplitTrainingJob:
         return {
             "started": self.started,
             "finished": self.finished.is_set(),
+            "failed": self.failed.is_set(),
+            "failure_reasoon": self.failure_reason,
             "elapsed_time": end_time - start_time,
             "profiling": self.profiling,
         }
@@ -468,6 +475,7 @@ class BGSplitTrainingJob:
                             trainer_url, json=request
                         ) as response:
                             if response.status != 200:
+                               await asyncio.sleep(5)
                                continue
                         await self._failed_or_finished.wait()
             except asyncio.CancelledError:
@@ -481,10 +489,16 @@ class BGSplitTrainingJob:
             await self._task
 
     async def handle_result(self, result: JSONType):
+        logger.debug(f"Train ({self.model_name}): recieved status update {result}")
         if result.get("success"):
             self.model_dir = result["model_dir"]
             self.model_checkpoint = result["model_checkpoint"]
             self.profiling = result["profiling"]
+            self.finished.set()
+
+        if result.get("failed"):
+            self.failure_reason = result["reason"] if "reason" in result else None
+            self.failed.set()
             self.finished.set()
 
         async with self._failed_or_finished:

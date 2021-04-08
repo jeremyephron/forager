@@ -216,7 +216,8 @@ class MapReduceJob:
                 }
                 for k, v in self._profiling.items()
             },
-            "mapper_utilization": dict(enumerate(self._n_chunks_per_mapper.values())),
+            "mapper_utilization": dict(enumerate(
+                self._n_chunks_per_mapper.values())),
         }
 
     @property

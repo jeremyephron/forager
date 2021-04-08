@@ -929,9 +929,12 @@ async def start_bgsplit_job(request):
     index = await get_index(index_id)
 
     # Get image paths from index
-    pos_paths = [index.labels[index.identifiers[i]] for i in pos_identifiers]
+    gcs_root_path = os.path.join(config.GCS_PUBLIC_ROOT_URL, bucket)
+    pos_paths = [os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
+                 for i in pos_identifiers]
     assert len(pos_paths) > 0
-    neg_paths = [index.labels[index.identifiers[i]] for i in neg_identifiers]
+    neg_paths = [os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
+                 for i in neg_identifiers]
     assert len(neg_paths) > 0
 
     # Augment with randomly sampled negatives if requested
@@ -948,29 +951,25 @@ async def start_bgsplit_job(request):
         extra_neg_identifiers = random.sample(
             unused_identifiers, min(len(unused_identifiers), num_extra_neg_vectors)
         )
-    extra_neg_paths = [
-        index.labels[index.identifiers[i]] for i in extra_neg_identifiers
-    ]
+    extra_neg_paths = [os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
+                       for i in extra_neg_identifiers]
     assert len(neg_paths) + len(extra_neg_paths) > 0
 
-    unlabeled_paths = [
-        index.labels[index.identifiers[i]] for i in unused_identifiers[:1000]
-    ]
+    unlabeled_paths = [os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
+                       for i in list(unused_identifiers)[:1000]]
 
     http_session = utils.create_unlimited_aiohttp_session()
     # 1. If aux labels have not been generated, then generate them
     alt = aux_labels_type
-    aux_labels_path = None
-    if alt == "imagenet":
-        aux_labels_path = config.AUX_DIR_TMPL.format(index_id, alt)
+    aux_labels_local_path = None
+    if alt == 'imagenet':
+        aux_labels_local_path = config.AUX_DIR_TMPL.format(index_id, alt)
     else:
-        aux_labels_path = ""
-        assert alt == "imagenet"
+        aux_labels_local_path = ''
+        assert alt == 'imagenet'
 
-    if not os.path.exists(aux_labels_path):
-        all_paths = [
-            index.labels[index.identifiers[i]] for i in index.get_identifier_set()
-        ]
+    if not os.path.exists(aux_labels_local_path):
+        all_paths = [index.labels[index.identifiers[i]] for i in index.get_identifier_set()]
         nproc = cluster.output["mapper_nproc"]
         n_mappers = int(
             cluster.output["num_mappers"] * config.MAPPER_REQUEST_MULTIPLE(nproc)
@@ -1007,15 +1006,17 @@ async def start_bgsplit_job(request):
         with open(aux_labels_path, "wb") as f:
             pickle.dump(predictions, f)
 
+    aux_labels_gcs_path = config.AUX_GCS_TMPL.format(index_id, alt)
     proc = await asyncio.create_subprocess_exec(
         "gsutil",
         "-m",
         "cp",
         "-r",
         "-n",
-        aux_labels_path,
-        config.AUX_UPLOAD_GCS_PATH,
+        aux_labels_local_path,
+        aux_labels_gcs_path,
     )
+    aux_labels_gcs_path = config.AUX_GCS_PUBLIC_TMPL.format(index_id, alt)
     await proc.wait()
 
     # 2. Train BG Split model
@@ -1026,7 +1027,7 @@ async def start_bgsplit_job(request):
         pos_paths=pos_paths,
         neg_paths=neg_paths + extra_neg_paths,
         unlabeled_paths=unlabeled_paths,
-        aux_labels_path=aux_labels_path,
+        aux_labels_path=aux_labels_gcs_path,
         model_id=model_id,
         trainer=trainers[0],
         cluster_mount_parent_dir=cluster.mount_parent_dir,
@@ -1048,7 +1049,7 @@ async def start_bgsplit_job(request):
 async def bgsplit_training_status(request):
     model_id = request.json["model_id"]
     if model_id in current_models:
-        await current_models[model_id].handle_training_status_update(request.json)
+        await current_models[model_id].handle_result(request.json)
     return resp.text("", status=204)
 
 
@@ -1058,10 +1059,10 @@ async def bgsplit_job_status(request):
     if model_id in current_models:
         model = current_models[model_id]
         status = model.status
-        status["has_model"] = model.ready.is_set()
+        status["has_model"] = status['finished'] and not status['failed']
         status["checkpoint_path"] = model.model_checkpoint
     else:
-        status = {"has_model": False}
+        status = {"has_model": False, "failed": False}
     return resp.json(status)
 
 

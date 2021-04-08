@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import sklearn.metrics
+import os
 import os.path
 import logging
 from typing import Dict, List, Any
@@ -18,7 +19,7 @@ from util import download
 logger = logging.getLogger("bgsplit")
 logger.setLevel(logging.DEBUG)
 
-class TrainingLoop(nn.Module):
+class TrainingLoop():
     def __init__(
             self,
             model_kwargs: Dict[str, Any],
@@ -27,13 +28,13 @@ class TrainingLoop(nn.Module):
             train_unlabeled_paths: List[str],
             val_positive_paths: List[str],
             val_negative_paths: List[str],
-            val_unlabeled_paths: List[str],
-            aux_labels: Dict[str, int]):
+            val_unlabeled_paths: List[str]):
         '''The training loop for background splitting models.'''
         batch_size = BATCH_SIZE
         num_workers = NUM_WORKERS
         self.val_frequency = model_kwargs.get('val_frequency', 1)
         self.checkpoint_frequency = model_kwargs.get('checkpoint_frequency', 1)
+        self.use_cuda = model_kwargs.get('use_cuda', True)
         assert 'model_dir' in model_kwargs
         self.model_dir = model_kwargs['model_dir']
         assert 'aux_labels' in model_kwargs
@@ -43,14 +44,14 @@ class TrainingLoop(nn.Module):
         train_transform = transforms.Compose([
             transforms.RandomResizedCrop(224),
             transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
+            transforms.ConvertImageDtype(torch.float32),
             transforms.Normalize([0.485, 0.456, 0.406],
                                  [0.229, 0.224, 0.225])
         ])
         val_transform = transforms.Compose([
             transforms.Resize(256),
             transforms.CenterCrop(224),
-            transforms.ToTensor(),
+            transforms.ConvertImageDtype(torch.float32),
             transforms.Normalize([0.485, 0.456, 0.406],
                                  [0.229, 0.224, 0.225])
         ])
@@ -64,7 +65,7 @@ class TrainingLoop(nn.Module):
             batch_size=batch_size,
             shuffle=True,
             num_workers=num_workers)
-        self.validate_dataloader = DataLoader(
+        self.val_dataloader = DataLoader(
             AuxiliaryDataset(
                 positive_paths=val_positive_paths,
                 negative_paths=val_negative_paths,
@@ -77,13 +78,15 @@ class TrainingLoop(nn.Module):
 
         # Setup model
         num_classes = 2
-        num_aux_classes = len(torch.unique(list(aux_labels.values())))
+        num_aux_classes = self.train_dataloader.dataset.num_auxiliary_classes
         self.model = Model(num_main_classes=num_classes,
                            num_aux_classes=num_aux_classes)
-        self.model = self.model.cuda()
+        if self.use_cuda:
+            self.model = self.model.cuda()
         self.model = nn.DataParallel(self.model)
         self.main_loss = nn.CrossEntropyLoss()
         self.auxiliary_loss = nn.CrossEntropyLoss()
+        self.start_epoch = 0
 
         # Setup optimizer
         optim_params = dict(
@@ -108,11 +111,12 @@ class TrainingLoop(nn.Module):
         if not restart:
             self.start_epoch = checkpoint_state['epoch']
 
-    def save_checkpoint(self, checkpoint_path: str):
+    def save_checkpoint(self, epoch, checkpoint_path: str):
         state = dict(
-            epoch=self.epoch,
+            epoch=epoch,
             state_dict=self.model.state_dict,
         )
+        os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
         torch.save(state, checkpoint_path)
 
     def _validate(self, dataloader):
@@ -123,9 +127,10 @@ class TrainingLoop(nn.Module):
         main_preds = []
         aux_preds = []
         for images, main_labels, aux_labels in dataloader:
-            images = images.cuda()
-            main_labels = main_labels.cuda()
-            aux_labels = aux_labels.cuda()
+            if self.use_cuda:
+                images = images.cuda()
+                main_labels = main_labels.cuda()
+                aux_labels = aux_labels.cuda()
             main_logits, aux_logits = self.model(images)
             main_loss_value = self.main_loss(main_logits, main_labels)
             aux_loss_value = self.auxiliary_loss(aux_logits, aux_labels)
@@ -137,28 +142,35 @@ class TrainingLoop(nn.Module):
             main_gts += list(main_labels[:].cpu().numpy())
             aux_gts += list(main_labels[:].cpu().numpy())
         # Compute F1 score
-        loss_value /= len(dataloader)
-        main_prec, main_recall, _, _ = \
-            sklearn.metrics.precision_recall_fscore_support(
-                main_gts, main_preds)
-        aux_prec, aux_recall, _, _ = \
-            sklearn.metrics.precision_recall_fscore_support(
-                main_gts, main_preds)
-        print(f'main: prec: {main_prec:.3f}, recall: {main_recall:.3f}')
-        print(f'aux:  prec: {aux_prec:.3f}, recall: {aux_recall:.3f}')
+        if len(dataloader) > 0:
+            loss_value /= (len(dataloader) + 1e-10)
+            main_prec, main_recall, _, _ = \
+                sklearn.metrics.precision_recall_fscore_support(
+                    main_gts, main_preds)
+            aux_prec, aux_recall, _, _ = \
+                sklearn.metrics.precision_recall_fscore_support(
+                    main_gts, main_preds)
+        else:
+            loss_value = 0
+            main_prec = -1
+            main_recall = -1
+            aux_prec = -1
+            aux_recall = -1
+        logger.info(f'main: prec: {main_prec:.3f}, recall: {main_recall:.3f}')
+        logger.info(f'aux:  prec: {aux_prec:.3f}, recall: {aux_recall:.3f}')
 
     def validate(self):
         self._validate(self.val_dataloader)
 
     def train(self):
         self.model.train()
-        self.optimizer_scheduler.step()
-        logger.log('Starting train epoch')
+        logger.info('Starting train epoch')
         for images, main_labels, aux_labels in self.train_dataloader:
-            logger.log('Train batch')
-            images = images.cuda()
-            main_labels = main_labels.cuda()
-            aux_labels = aux_labels.cuda()
+            logger.debug('Train batch')
+            if self.use_cuda:
+                images = images.cuda()
+                main_labels = main_labels.cuda()
+                aux_labels = aux_labels.cuda()
 
             main_logits, aux_logits = self.model(images)
             # Compute loss
@@ -171,18 +183,20 @@ class TrainingLoop(nn.Module):
             self.optimizer.zero_grad()
             loss_value.backward()
             self.optimizer.step()
+            self.optimizer_scheduler.step()
 
     def run(self, num_epochs=1):
         last_checkpoint_path = None
         for i in range(self.start_epoch, num_epochs):
-            print(f'Train: Epoch {i}')
+            logger.info(f'Train: Epoch {i}')
             self.train()
             if i % self.val_frequency == 0 or i == num_epochs - 1:
-                print(f'Validate: Epoch {i}')
+                logger.info(f'Validate: Epoch {i}')
                 self.validate()
             if i % self.checkpoint_frequency == 0 or i == num_epochs - 1:
-                print(f'Checkpoint: Epoch {i}')
+                logger.info(f'Checkpoint: Epoch {i}')
                 last_checkpoint_path = os.path.join(
                     self.model_dir, f'checkpoint_{i:03}.pth')
-                self.save_checkpoint(last_checkpoint_path)
+                self.save_checkpoint(i, last_checkpoint_path)
         return last_checkpoint_path
+

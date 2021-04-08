@@ -17,12 +17,12 @@ class AuxiliaryDataset(Dataset):
             ([1] * len(positive_paths) +
              [0] * len(negative_paths) +
              [-1] * len(unlabeled_paths)),
-            dtype=torch.int)
+            dtype=torch.long)
         self.aux_labels = torch.tensor(
             [auxiliary_labels[os.path.basename(path)]
              if path in auxiliary_labels else -1
              for path in positive_paths + negative_paths + unlabeled_paths],
-            dtype=torch.int)
+            dtype=torch.long)
         self.transform = transform
 
     @property
@@ -37,9 +37,11 @@ class AuxiliaryDataset(Dataset):
         main_label = self.main_labels[index]
         aux_label = self.aux_labels[index]
         if path.startswith('http'):
-            data = util.download(path)
-            image = io.decode_image(data, mode=io.ImageReadMode.ImageReadMode.RGB)
+            data = torch.tensor(
+                list(util.download(path)),
+                dtype=torch.uint8)
+            image = io.decode_image(data, mode=io.image.ImageReadMode.RGB)
         else:
-            image = io.read_image(path, mode=io.ImageReadMode.ImageReadMode.RGB)
+            image = io.read_image(path, mode=io.image.ImageReadMode.RGB)
         image = self.transform(image) if self.transform else image
         return image, main_label, aux_label

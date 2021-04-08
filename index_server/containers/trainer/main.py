@@ -121,15 +121,17 @@ class TrainingJob:
             return self._done
 
     def run(self):
-        # TODO(mihirg): Figure out how to handle errors like OOMs and CUDA errors,
-        # maybe start a subprocess?
+        # TODO(mihirg): Figure out how to handle errors like OOMs and CUDA
+        # errors maybe start a subprocess?
         try:
             start_time = time.perf_counter()
-            paths = (path_tmpl.format(self.reduction) for path_tmpl in self.path_tmpls)
+            paths = (path_tmpl.format(self.reduction)
+                     for path_tmpl in self.path_tmpls)
             embeddings, num_paths_read = load(paths, self.sample_rate)
 
             train_start_time = time.perf_counter()
-            index_dir = config.INDEX_DIR_TMPL.format(self.index_id, self.index_name)
+            index_dir = config.INDEX_DIR_TMPL.format(
+                self.index_id, self.index_name)
             train(embeddings, self.index_kwargs, index_dir)
 
             end_time = time.perf_counter()
