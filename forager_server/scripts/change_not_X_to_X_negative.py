@@ -40,11 +40,9 @@ new_anns = []
 for i, ann in enumerate(annotations):
     if i % 100 == 0:
         print(i)
-
     data = json.loads(ann.label_data)
     if data["value"] != LabelValue.POSITIVE:
         continue
-
     new_anns.append(
         Annotation(
             dataset_item=ann.dataset_item,
@@ -56,3 +54,4 @@ for i, ann in enumerate(annotations):
     )
 
 Annotation.objects.bulk_create(new_anns)
+print(f"Inserted {len(new_anns)} new annotations")
