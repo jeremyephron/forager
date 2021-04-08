@@ -97,10 +97,19 @@ spec:
         name: ${local.bgsplit_trainer_app_name}
         resources:
           limits:
+            cpu: "28"
+            memory: "100G"
             nvidia.com/gpu: ${var.bgsplit_trainer_gpus}
+          requests:
+            cpu: "28"
+            memory: "100G"
         env:
         - name: PORT
           value: "${local.bgsplit_trainer_internal_port}"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: PYTHONIOENCODING
+          value: "UTF-8"
         ports:
         - containerPort: ${local.bgsplit_trainer_internal_port}
         volumeMounts:
@@ -116,6 +125,8 @@ spec:
       - name: ${local.nfs_volume_name}
         persistentVolumeClaim:
           claimName: ${kubernetes_persistent_volume_claim.nfs_claim.metadata.0.name}
+      hostIPC: true
+
 YAML
 
   depends_on = [google_container_cluster.cluster, google_container_node_pool.bgsplit_trainer_np]

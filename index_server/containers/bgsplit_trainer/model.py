@@ -2,12 +2,39 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision as vision
+import torchvision.models.resnet
+
+class ResNetBackbone(vision.models.resnet.ResNet):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        return x
+
+def resnet50(pretrained) -> ResNetBackbone:
+    arch = 'resnet50'
+    model = ResNetBackbone(vision.models.resnet.Bottleneck, [3, 4, 6, 3])
+    if pretrained:
+        state_dict = torch.hub.load_state_dict_from_url(
+            vision.models.resnet.model_urls[arch],
+            progress=True)
+        model.load_state_dict(state_dict)
+    return model
 
 class Model(nn.Module):
     def __init__(self, num_main_classes, num_aux_classes):
         super(Model, self).__init__()
-        self.backbone = vision.models.resnet50(pretrained=True)
-        backbone_feature_dim = 0
+        self.backbone = resnet50(pretrained=True)
+        backbone_feature_dim = self.backbone.fc.in_features
         self.main_head = nn.Linear(backbone_feature_dim, num_main_classes)
         self.auxiliary_head = nn.Linear(backbone_feature_dim, num_aux_classes)
 
