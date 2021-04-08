@@ -205,11 +205,11 @@ html, body, #root, .main {
   }
 
   &.HARD_NEGATIVE {
-    background-color: #fce4e9;
-    color: #ec5a79;
+    background-color: #fce4f3;
+    color: #ec5ab5;
     text-decoration: line-through;
     &.rbt-token-active {
-      background-color: #ec5a79;
+      background-color: #ec5ab5;
       color: white;
     }
   }
