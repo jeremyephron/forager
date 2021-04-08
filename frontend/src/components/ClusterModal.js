@@ -33,6 +33,14 @@ const imageGridSizes = [
   {label: "large", size: 375},
 ];
 
+// TODO(mihirg): Combine with this same constant in other places
+const LABEL_VALUES = [
+  ["POSITIVE", "Positive"],
+  ["NEGATIVE", "Negative"],
+  ["HARD_NEGATIVE", "Hard Negative"],
+  ["UNSURE", "Unsure"],
+];
+
 const ClusterModal = ({
   isOpen,
   setIsOpen,
@@ -198,7 +206,8 @@ const ClusterModal = ({
   const handleKeyDown = useCallback((e) => {
     if (!isOpen) return;
     const { key } = e;
-    console.log(key);
+    const keyAsNumber = parseInt(key);
+
     let caught = true;
     if (isClusterView && key === "ArrowDown") {
       // Switch to image view
@@ -240,19 +249,8 @@ const ClusterModal = ({
     } else if (key === "ArrowUp") {
       // Close modal
       setIsOpen(false);
-    } else if (mode === "label" && !!(labelCategory)) {
-      const number = parseInt(key);
-      if (number == 1) {
-        onTagsChanged([...selectedTags, {category: labelCategory, value: "POSITIVE"}]);
-      } else if (number == 2) {
-        onTagsChanged([...selectedTags, {category: labelCategory, value: "NEGATIVE"}]);
-      } else if (number == 3) {
-        onTagsChanged([...selectedTags, {category: labelCategory, value: "HARD_NEGATIVE"}]);
-      } else if (number == 4) {
-        onTagsChanged([...selectedTags, {category: labelCategory, value: "UNSURE"}]);
-      } else {
-        caught = false;
-      }
+    } else if (mode === "label" && !!(labelCategory) && keyAsNumber >= 1 && keyAsNumber <= LABEL_VALUES.length) {
+      onTagsChanged([...selectedTags, {category: labelCategory, value: LABEL_VALUES[keyAsNumber - 1][0]}]);
     } else if (key !== "ArrowDown") {
       caught = false;
     }
@@ -320,10 +318,12 @@ const ClusterModal = ({
               <kbd>&uarr;</kbd> to go back to query results</>}
           </p>
           {mode === "label" && !!(labelCategory) && <p>
-            <b>Label mode:</b> &nbsp;<kbd>1</kbd> <span className="rbt-token POSITIVE">{labelCategory}</span>,{" "}
-            <kbd>2</kbd> <span className="rbt-token NEGATIVE">{labelCategory}</span>,{" "}
-            <kbd>3</kbd> <span className="rbt-token HARD_NEGATIVE">{labelCategory}</span>,{" "}
-            <kbd>4</kbd> <span className="rbt-token UNSURE">{labelCategory}</span>
+            <b>Label mode:</b> &nbsp;
+            {LABEL_VALUES.map(([value], i) =>
+              <>
+                <kbd>{i + 1}</kbd> <span className={`rbt-token ${value}`}>{labelCategory}</span>
+                {i < LABEL_VALUES.length - 1 && ", "}
+              </>)}
           </p>}
           <Form>
             <FormGroup className="d-flex flex-row align-items-center mb-2">

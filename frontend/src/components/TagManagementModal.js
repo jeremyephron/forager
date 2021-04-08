@@ -32,6 +32,7 @@ const endpoints = fromPairs(toPairs({
   getCategoryCounts: 'get_category_counts_v2',
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
+// TODO(mihirg): Combine with this same constant in other places
 const LABEL_VALUES = [
   ["POSITIVE", "Positive"],
   ["NEGATIVE", "Negative"],

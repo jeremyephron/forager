@@ -40,16 +40,24 @@ import {
 
 var disjointSet = require("disjoint-set");
 
+// TODO(mihirg): Combine with this same constant in other places
+const LABEL_VALUES = [
+  ["POSITIVE", "Positive"],
+  ["NEGATIVE", "Negative"],
+  ["HARD_NEGATIVE", "Hard Negative"],
+  ["UNSURE", "Unsure"],
+];
+
 const orderingModes = [
   {id: "random", label: "Random order"},
   {id: "id", label: "Dataset order"},
   {id: "svm", label: "SVM"},
   {id: "knn", label: "KNN", disabled: true},
-]
+];
 
 const dnns = [
   {id: "dnn", label: "DNN w/ BG Splitting"},
-]
+];
 
 const endpoints = fromPairs(toPairs({
   getDatasetInfo: "get_dataset_info_v2",
@@ -483,10 +491,11 @@ const App = () => {
               />
               <span className="text-nowrap">
                 <b>Key bindings:</b> &nbsp;
-                <kbd>1</kbd> <span className="rbt-token POSITIVE">positive</span>,{" "}
-                <kbd>2</kbd> <span className="rbt-token NEGATIVE">negative</span>,{" "}
-                <kbd>3</kbd> <span className="rbt-token HARD_NEGATIVE">hard negative</span>,{" "}
-                <kbd>4</kbd> <span className="rbt-token UNSURE">unsure</span>
+                {LABEL_VALUES.map(([value, name], i) =>
+                  <>
+                    <kbd>{i + 1}</kbd> <span className={`rbt-token ${value}`}>{name.toLowerCase()}</span>
+                    {i < LABEL_VALUES.length - 1 && ", "}
+                  </>)}
               </span>
             </>}
             {mode === "train" && (dnnIsTraining ? <>
