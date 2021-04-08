@@ -154,7 +154,7 @@ const App = () => {
       index_id: datasetInfo.index_id,
       pos_tags: svmPosTags.map(t => `${t.category}:${t.value}`),
       neg_tags: svmNegTags.map(t => `${t.category}:${t.value}`),
-      augment_negs: svmAugmentNegs || svmNegTags.length === 0,
+      augment_negs: svmAugmentNegs,
     }).toString();
     const svmData = await fetch(url, {
       method: "GET",
@@ -324,7 +324,7 @@ const App = () => {
         index_id: datasetInfo.index_id,
         pos_tags: dnnPosTags.map(t => `${t.category}:${t.value}`),
         neg_tags: dnnNegTags.map(t => `${t.category}:${t.value}`),
-        augment_negs: dnnAugmentNegs || dnnNegTags.length === 0,
+        augment_negs: dnnAugmentNegs,
         aux_label_type: "imagenet",
       }).toString();
       const _modelId = await fetch(url, {
@@ -534,8 +534,8 @@ const App = () => {
                   type="checkbox"
                   className="custom-control-input"
                   id="svm-augment-negs-checkbox"
-                  disabled={dnnNegTags.length === 0 || dnnIsTraining}
-                  checked={dnnAugmentNegs || dnnNegTags.length === 0}
+                  disabled={dnnIsTraining}
+                  checked={dnnAugmentNegs}
                   onChange={(e) => setDnnAugmentNegs(e.target.checked)}
                 />
                 <label className="custom-control-label text-nowrap mr-2" htmlFor="svm-augment-negs-checkbox">
@@ -545,7 +545,7 @@ const App = () => {
               <Button
                 color="light"
                 onClick={() => setDnnIsTraining(true)}
-                disabled={dnnPosTags.length === 0 || dnnIsTraining}
+                disabled={dnnPosTags.length === 0 || (dnnNegTags.length === 0 && !dnnAugmentNegs) || dnnIsTraining}
               >Start training</Button>
             </>)}
           </div>
@@ -671,22 +671,21 @@ const App = () => {
                   type="checkbox"
                   className="custom-control-input"
                   id="svm-augment-negs-checkbox"
-                  disabled={svmNegTags.length === 0 || isTraining}
-                  checked={svmAugmentNegs || svmNegTags.length === 0}
+                  disabled={isTraining}
+                  checked={svmAugmentNegs}
                   onChange={(e) => {
                     setSvmAugmentNegs(e.target.checked);
                     setTrainedSvmData(null);
                   }}
                 />
                 <label className="custom-control-label" htmlFor="svm-augment-negs-checkbox">
-                  Automatically augment negative set with random examples (
-                  {svmNegTags.length === 0 ? "required if no explicit negative examples" : "recommended"})
+                  Automatically augment negative set
                 </label>
               </div>
               <Button
                 color="light"
                 onClick={() => setIsTraining(true)}
-                disabled={svmPosTags.length === 0 || isTraining}
+                disabled={svmPosTags.length === 0 || (svmNegTags.length === 0 && !svmAugmentNegs) || isTraining}
                 className="mb-1 w-100"
               >Train</Button>
               {!!(trainedSvmData) && <div className="mt-1">
