@@ -32,9 +32,16 @@ const endpoints = fromPairs(toPairs({
   getCategoryCounts: 'get_category_counts_v2',
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
+const LABEL_VALUES = [
+  ["POSITIVE", "Positive"],
+  ["NEGATIVE", "Negative"],
+  ["HARD_NEGATIVE", "Hard Negative"],
+  ["UNSURE", "Unsure"],
+];
+
 const TableContainer = styled.div`
   height: 70vh;
-  overflow: auto;  
+  overflow: auto;
 `;
 
 const TagManagementModal = ({
@@ -51,10 +58,9 @@ const TagManagementModal = ({
   const [categoryCounts, setCategoryCounts] = useState({});
   const [preventCountReload, setPreventCountReload] = useState(false);
 
-  const kOrderBy = {name: 0, count: 1};
-  const kOrderDir = {asc: 0, desc: 1};
+  const kOrderBy = fromPairs(["name", 0].concat(LABEL_VALUES.map(([value], i) => [value, i + 1])));
   const [orderBy, setOrderBy] = useState(kOrderBy.name);
-  const [orderDir, setOrderDir] = useState(kOrderDir.asc);
+  const [orderAscending, setOrderAscending] = useState(false);
 
   const [confirmIsOpen, setConfirmIsOpen] = useState(false);
   const [confirmCategory, setConfirmCategory] = useState(null);
@@ -63,18 +69,16 @@ const TagManagementModal = ({
 
   const sortCategories = (arr) => {
     const copy = arr.slice(0);
+    const m = orderAscending ? 1 : -1;
 
     if (orderBy === kOrderBy.name) {
-      if (orderDir === kOrderDir.asc) {
-        copy.sort((a, b) => a.tag < b.tag ? -1 : 1);
-      } else {
-        copy.sort((a, b) => b.tag < a.tag ? -1 : 1);
-      }
-    } else { // orderBy === kOrderBy.count
-      if (orderDir === kOrderDir.asc) {
-        copy.sort((a, b) => categoryCounts[a.tag] - categoryCounts[b.tag]);
-      } else {
-        copy.sort((a, b) => categoryCounts[b.tag] - categoryCounts[a.tag]);
+      copy.sort((a, b) => m * (a.tag < b.tag ? -1 : 1));
+    } else {
+      for (const [value] of LABEL_VALUES) {
+        if (orderBy === kOrderBy[value]) {
+          copy.sort((a, b) => m * (categoryCounts[a.tag][value] - categoryCounts[b.tag][value]));
+          break;
+        }
       }
     }
 
@@ -83,10 +87,10 @@ const TagManagementModal = ({
 
   const changeOrdering = (by) => {
     if (by === orderBy) {
-      setOrderDir(orderDir === kOrderDir.asc ? kOrderDir.desc : kOrderDir.asc);
+      setOrderAscending(!orderAscending);
     } else {
       setOrderBy(by);
-      setOrderDir(kOrderDir.asc)
+      setOrderAscending(true);
     }
   };
 
@@ -190,12 +194,13 @@ const TagManagementModal = ({
 
   useEffect(() => {
     setCategories(prev => sortCategories(prev))
-  }, [categoryCounts, orderBy, orderDir]);
+  }, [categoryCounts, orderBy, orderAscending]);
 
   const tableBodyFromTags = () => {
     return (
       <tbody>
         {categories.map((obj, i) => {
+          const counts = categoryCounts[datasetInfo.categories[obj.srcIdx]] || {};
           return (
             <tr key={obj.srcIdx}>
               <td>
@@ -208,7 +213,7 @@ const TagManagementModal = ({
                   onBlur={(e) => updateCategoryByIndex(e, i, obj.srcIdx)}
                 />
               </td>
-              <td>{categoryCounts[datasetInfo.categories[obj.srcIdx]]}</td>
+              {LABEL_VALUES.map(([value]) => <td>{counts[value] || 0}</td>)}
               <td>
                 <Button close disabled={isReadOnly} onClick={(e) => {
                     setConfirmCategory(obj.tag);
@@ -231,6 +236,7 @@ const TagManagementModal = ({
       toggle={toggle}
       modalTransition={{ timeout: 25 }}
       backdropTransition={{ timeout: 75 }}
+      size="lg"
     >
       <ModalHeader>Manage Tags</ModalHeader>
       <ModalBody>
@@ -240,14 +246,16 @@ const TagManagementModal = ({
               <tr>
                 <th style={{cursor: "pointer"}} onClick={() => changeOrdering(kOrderBy.name)}>
                   Tag Name <FontAwesomeIcon icon={
-                    orderBy !== kOrderBy.name ? faSort : (orderDir === kOrderDir.asc ? faSortUp : faSortDown)
+                    orderBy !== kOrderBy.name ? faSort : (orderAscending ? faSortUp : faSortDown)
                   } />
                 </th>
-                <th style={{cursor: "pointer"}} onClick={() => changeOrdering(kOrderBy.count)}>
-                  # Images <FontAwesomeIcon icon={
-                    orderBy !== kOrderBy.count ? faSort : (orderDir === kOrderDir.asc ? faSortUp : faSortDown)
-                  } />
-                </th>
+                {LABEL_VALUES.map(([value, name]) => (
+                  <th style={{cursor: "pointer"}} onClick={() => changeOrdering(kOrderBy[value])}>
+                    # {name} <FontAwesomeIcon icon={
+                      orderBy !== kOrderBy[value] ? faSort : (orderAscending ? faSortUp : faSortDown)
+                    } />
+                  </th>
+                ))}
               </tr>
             </thead>
             {tableBodyFromTags()}

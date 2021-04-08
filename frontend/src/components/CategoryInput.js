@@ -12,10 +12,10 @@ import uniqWith from "lodash/uniqWith";
 import union from "lodash/union";
 
 const LABEL_VALUES = [
-  ["POSITIVE", "positive"],
-  ["NEGATIVE", "negative"],
-  ["HARD_NEGATIVE", "hard negative"],
-  ["UNSURE", "unsure"],
+  ["POSITIVE", "Positive"],
+  ["NEGATIVE", "Negative"],
+  ["HARD_NEGATIVE", "Hard Negative"],
+  ["UNSURE", "Unsure"],
 ];
 
 const InteractiveToken = forwardRef((
@@ -79,7 +79,7 @@ const MyToken = forwardRef((props, ref) => {
         >
         <PopoverBody>
           {LABEL_VALUES.map(([value, name]) => (
-            <div><a href="#" onClick={(e) => onValueClick(value, index, e)} className={`rbt-token ${value}`}>{name}</a></div>
+            <div><a href="#" onClick={(e) => onValueClick(value, index, e)} className={`rbt-token ${value}`}>{name.toLowerCase()}</a></div>
           ))}
         </PopoverBody>
       </Popover>
