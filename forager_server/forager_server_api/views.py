@@ -1545,9 +1545,6 @@ def add_annotations_v2(request):
 
     res = {"created": len(image_identifiers)}
 
-    # if value == LabelValue.TOMBSTONE:
-    #     res["removed"] = num_category_labels(dataset_items[0].dataset, category) == 0
-
     return JsonResponse(res)
 
 
@@ -1589,22 +1586,19 @@ def get_category_counts_v2(request, dataset_name):
     payload = json.loads(request.body)
     categories = payload["categories"]
 
-    n_labeled = {
-        category: num_category_labels(dataset, category) for category in categories
-    }
-    return JsonResponse({"numLabeled": n_labeled})
-
-
-def num_category_labels(dataset, category):
     anns = Annotation.objects.filter(
         dataset_item__in=dataset.datasetitem_set.filter(),
-        label_category__exact=category,
+        label_category__in=categories,
         label_type__exact="klabel_frame",
     ).order_by(
         "dataset_item", "label_category", "-created"
     ).distinct("dataset_item", "label_category")
 
-    n_labels = sum(
-        1 for ann in anns if json.loads(ann.label_data)["value"] != LabelValue.TOMBSTONE
-    )
-    return n_labels
+    # TODO(mihirg): Exclude tombstones?
+    n_labeled = {c: {value.name: 0 for value in LabelValue} for c in categories}
+    for ann in anns:
+        label_data = json.loads(ann.label_data)
+        value = LabelValue(label_data["value"])
+        anns[ann.label_category][value.name] += 1
+
+    return JsonResponse({"numLabeled": n_labeled})
