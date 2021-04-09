@@ -930,11 +930,15 @@ async def start_bgsplit_job(request):
 
     # Get image paths from index
     gcs_root_path = os.path.join(config.GCS_PUBLIC_ROOT_URL, bucket)
-    pos_paths = [os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
-                 for i in pos_identifiers]
+    pos_paths = [
+        os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
+        for i in pos_identifiers
+    ]
     assert len(pos_paths) > 0
-    neg_paths = [os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
-                 for i in neg_identifiers]
+    neg_paths = [
+        os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
+        for i in neg_identifiers
+    ]
     assert len(neg_paths) > 0
 
     # Augment with randomly sampled negatives if requested
@@ -951,25 +955,31 @@ async def start_bgsplit_job(request):
         extra_neg_identifiers = random.sample(
             unused_identifiers, min(len(unused_identifiers), num_extra_neg_vectors)
         )
-    extra_neg_paths = [os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
-                       for i in extra_neg_identifiers]
+    extra_neg_paths = [
+        os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
+        for i in extra_neg_identifiers
+    ]
     assert len(neg_paths) + len(extra_neg_paths) > 0
 
-    unlabeled_paths = [os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
-                       for i in list(unused_identifiers)[:1000]]
+    unlabeled_paths = [
+        os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
+        for i in list(unused_identifiers)[:1000]
+    ]
 
     http_session = utils.create_unlimited_aiohttp_session()
     # 1. If aux labels have not been generated, then generate them
     alt = aux_labels_type
     aux_labels_local_path = None
-    if alt == 'imagenet':
+    if alt == "imagenet":
         aux_labels_local_path = config.AUX_DIR_TMPL.format(index_id, alt)
     else:
-        aux_labels_local_path = ''
-        assert alt == 'imagenet'
+        aux_labels_local_path = ""
+        assert alt == "imagenet"
 
     if not os.path.exists(aux_labels_local_path):
-        all_paths = [index.labels[index.identifiers[i]] for i in index.get_identifier_set()]
+        all_paths = [
+            index.labels[index.identifiers[i]] for i in index.get_identifier_set()
+        ]
         nproc = cluster.output["mapper_nproc"]
         n_mappers = int(
             cluster.output["num_mappers"] * config.MAPPER_REQUEST_MULTIPLE(nproc)
@@ -1059,7 +1069,7 @@ async def bgsplit_job_status(request):
     if model_id in current_models:
         model = current_models[model_id]
         status = model.status
-        status["has_model"] = status['finished'] and not status['failed']
+        status["has_model"] = status["finished"] and not status["failed"]
         status["checkpoint_path"] = model.model_checkpoint
     else:
         status = {"has_model": False, "failed": False}
@@ -1485,6 +1495,11 @@ async def train_svm_v2(request):
     predicted = model.predict(training_features)
     precision = precision_score(training_labels, predicted)
     recall = (recall_score(training_labels, predicted),)
+
+    print(w)
+    print(predicted)
+    print(precision)
+    print(recall)
 
     return resp.json(
         {
