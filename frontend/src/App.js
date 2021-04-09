@@ -305,9 +305,10 @@ const App = () => {
     if (!_clusterId) {
       // Start cluster
       const startClusterUrl = new URL(`${endpoints.startCluster}`);
-      _clusterId = await fetch(startClusterUrl, {
+      var clusterResponse = await fetch(startClusterUrl, {
         method: "POST",
-      }).then(r => r.json().cluster_id);
+      }).then(r => r.json());
+      _clusterId = clusterResponse.cluster_id;
       setClusterId(_clusterId);
 
       // Wait until cluster is booted
@@ -325,24 +326,29 @@ const App = () => {
     // Start training DNN
     while (true) {
       const url = new URL(`${endpoints.trainModel}/${datasetName}`);
-      url.search = new URLSearchParams({
+      console.log(dnnAugmentNegs);
+      const body = {
         model_name: "TEST_MODEL",
         cluster_id: _clusterId,
-        bucket_name: "foragerml",
+        bucket: "foragerml",
         index_id: datasetInfo.index_id,
-        pos_tags: dnnPosTags.map(t => `${t.category}:${t.value}`),
-        neg_tags: dnnNegTags.map(t => `${t.category}:${t.value}`),
-        augment_negs: dnnAugmentNegs,
+        pos_tags: dnnPosTags.map(t => `${t.category}:${t.value}`).join(","),
+        neg_tags: dnnNegTags.map(t => `${t.category}:${t.value}`).join(","),
+        augment_negs: dnnAugmentNegs == "on" ? 'true' : 'false',
         aux_label_type: "imagenet",
-      }).toString();
+      }
       const _modelId = await fetch(url, {
         method: "POST",
-      }).then(r => r.json().model_id);
+        body: JSON.stringify(body),
+        headers: {
+          'Content-type': 'application/json; charset=UTF-8'
+        }
+      }).then(r => r.json()).then(r => r.model_id);
 
       // Wait until DNN trains for 1 epoch
       while (true) {
         const modelStatusUrl = new URL(`${endpoints.modelStatus}/${_clusterId}`);
-        const _modelStatus = await fetch(url, {
+        const _modelStatus = await fetch(modelStatusUrl, {
           method: "GET",
         }).then(r => r.json());
         setModelStatus(_modelStatus);
