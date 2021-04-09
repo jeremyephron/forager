@@ -1447,8 +1447,6 @@ async def train_svm_v2(request):
     # HACK(mihirg): sometimes we get empty identifiers (i.e., "") from the server that
     # would otherwise cause a crash here; we should probably figure out why this is, but
     # just filtering out for now.
-    print(request.json)
-
     pos_identifiers = list(filter(bool, request.json["pos_identifiers"]))
     neg_identifiers = list(filter(bool, request.json["neg_identifiers"]))
     augment_negs = bool(request.json["augment_negs"])
@@ -1478,8 +1476,6 @@ async def train_svm_v2(request):
     extra_neg_vectors = index.get_embeddings(extra_neg_identifiers)
     assert len(neg_vectors) + len(extra_neg_vectors) > 0
 
-    print(len(pos_vectors), len(neg_vectors), len(extra_neg_vectors))
-
     # Train SVM and return serialized vector
     training_features = np.concatenate((pos_vectors, neg_vectors, extra_neg_vectors))
     training_labels = np.array(
@@ -1488,18 +1484,10 @@ async def train_svm_v2(request):
     model = svm.LinearSVC(C=0.1)
     model.fit(training_features, training_labels)
 
-    print(training_features)
-    print(training_labels)
-
     w = np.array(model.coef_[0] * 1000, dtype=np.float32)
     predicted = model.predict(training_features)
     precision = precision_score(training_labels, predicted)
-    recall = (recall_score(training_labels, predicted),)
-
-    print(w)
-    print(predicted)
-    print(precision)
-    print(recall)
+    recall = recall_score(training_labels, predicted)
 
     return resp.json(
         {
