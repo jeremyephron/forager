@@ -4,11 +4,12 @@ from google.cloud import storage
 from enum import IntEnum
 import json
 import os
+import operator
 import random
 import requests
 import urllib.request
 
-from typing import List, Union
+from typing import List, Union, NamedTuple
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.db.models import Q, QuerySet
@@ -28,6 +29,7 @@ class LabelValue(IntEnum):
     NEGATIVE = 2
     HARD_NEGATIVE = 3
     UNSURE = 4
+    CUSTOM = 5
 
 def nest_anns(anns, nest_category=True, nest_lf=True):
     if nest_category and nest_lf:
@@ -1171,7 +1173,7 @@ def active_batch(request, dataset_name):
 #
 
 
-Tag = namedtuple("Tag", "category value")
+Tag = namedtuple("Tag", "category value")  # type: NamedTuple[str, str]
 
 
 def parse_tag_set_from_query_string_v2(s):
@@ -1181,7 +1183,7 @@ def parse_tag_set_from_query_string_v2(s):
         if not part:
             continue
         category, value_str = part.split(":")
-        ts.add(Tag(category, LabelValue[value_str]))
+        ts.add(Tag(category, value_str))
     return ts
 
 
@@ -1209,7 +1211,10 @@ def get_tags_from_annotations_v2(annotations):
             value = LabelValue(label_data["value"])
             if value == LabelValue.TOMBSTONE:
                 continue
-            tags_by_pk[di_pk].append(Tag(cat, value))
+            value_str = (
+                label_data["custom_value"] if value == LabelValue.CUSTOM else value.name
+            )
+            tags_by_pk[di_pk].append(Tag(cat, value_str))
     return tags_by_pk
 
 
@@ -1474,13 +1479,19 @@ def get_dataset_info_v2(request, dataset_name):
     ).distinct("dataset_item", "label_category")
 
     # Unique categories that have at least one non-tombstone label
-    categories = sorted(
-        {
-            ann.label_category
-            for ann in annotations
-            if json.loads(ann.label_data)["value"] != LabelValue.TOMBSTONE
-        }
-    )
+    categories_and_custom_values = {}
+    for ann in annotations:
+        label_data = json.loads(ann.label_data)
+        if label_data["value"] == LabelValue.TOMBSTONE:
+            continue
+        custom_value_set = categories_and_custom_values.setdefault(
+            ann.label_category, set()
+        )
+        if "custom_value" in label_data:
+            custom_value_set.add(label_data["custom_value"])
+    categories_and_custom_values = {
+        k: sorted(v) for k, v in categories_and_custom_values.items()
+    }
 
     model_objs = DNNModel.objects.filter(
         dataset=dataset
@@ -1495,7 +1506,7 @@ def get_dataset_info_v2(request, dataset_name):
 
     return JsonResponse(
         {
-            "categories": categories,
+            "categories": categories_and_custom_values,
             "models": models,
             "index_id": dataset.index_id,
             "num_images": dataset.datasetitem_set.filter(google=False).count(),
@@ -1520,7 +1531,7 @@ def get_annotations_v2(request):
     # ).distinct("dataset_item", "label_category")
     tags_by_pk = get_tags_from_annotations_v2(annotations)
     annotations_by_pk = {
-        pk: [{"category": t.category, "value": t.value.name} for t in sorted(tags)]
+        pk: [{"category": t.category, "value": t.value} for t in sorted(tags)]
         for pk, tags in tags_by_pk.items()
     }
     return JsonResponse(annotations_by_pk)
@@ -1528,7 +1539,7 @@ def get_annotations_v2(request):
 
 # TODO(mihirg): Consider filtering by, e.g., major version in methods that query
 # Annotations
-ANN_VERSION = "2.0.1"
+ANN_VERSION = "2.0.2"
 
 
 @api_view(["POST"])
@@ -1542,15 +1553,20 @@ def add_annotations_v2(request):
     user = payload["user"]
     category = payload["category"]
     value_str = payload["value"]
-    value = int(LabelValue[value_str])
-    annotation = json.dumps(
-        {
-            "type": 0,  # full-frame
-            "value": value,
-            "mode": "tag" if len(image_identifiers) == 1 else "tag-bulk",
-            "version": ANN_VERSION,
-        }
-    )
+    try:
+        value, custom_value = int(LabelValue[value_str]), None
+    except KeyError:
+        value, custom_value = LabelValue.CUSTOM, value_str
+
+    annotation_data = {
+        "type": 0,  # full-frame
+        "value": value,
+        "mode": "tag" if len(image_identifiers) == 1 else "tag-bulk",
+        "version": ANN_VERSION,
+    }
+    if custom_value:
+        annotation_data["custom_value"] = custom_value
+    annotation = json.dumps(annotation_data)
 
     dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
     Annotation.objects.bulk_create(
