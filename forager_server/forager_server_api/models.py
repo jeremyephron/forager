@@ -30,6 +30,8 @@ class EmbeddingSet(models.Model):
 
 
 class DNNModel(models.Model):
-    name = models.SlugField(unique=True)
-    model_id = models.CharField(max_length=300, blank=True)
+    dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE)
+    name = models.SlugField()
+    model_id = models.CharField(max_length=300, blank=True, unique=True)
     checkpoint_path = models.TextField(blank=True)
+    last_updated = models.DateTimeField(auto_now=True)

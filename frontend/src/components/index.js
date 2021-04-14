@@ -5,3 +5,4 @@ export { default as ImageStack } from "./ImageStack.js";
 export { default as SignInModal } from "./SignInModal.js";
 export { default as TagManagementModal } from "./TagManagementModal.js";
 export { default as CategoryInput } from "./CategoryInput.js";
+export { default as FeatureInput } from "./FeatureInput.js";

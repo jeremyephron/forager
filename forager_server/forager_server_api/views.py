@@ -271,6 +271,7 @@ def create_model(request, dataset_name, dataset=None):
     neg_tags = parse_tag_set_from_query_string_v2(payload['neg_tags'])
     augment_negs = bool(distutils.util.strtobool(payload['augment_negs']))
     aux_label_type = payload['aux_label_type']
+    resume_model_id = payload.get('resume', None)
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
     annotations = Annotation.objects.filter(
@@ -299,14 +300,23 @@ def create_model(request, dataset_name, dataset=None):
         )
     )
 
+    if resume_model_id:
+        resume_model_path = (
+            get_object_or_404(DNNModel, model_id=resume_model_id)
+            .checkpoint_path)
+    else:
+        resume_model_path = None
+
     params = {
         "pos_identifiers": pos_dataset_item_internal_identifiers,
         "neg_identifiers": neg_dataset_item_internal_identifiers,
         "augment_negs": augment_negs,
         "aux_labels_type": aux_label_type,
+        "model_name": model_name,
         "bucket": bucket_name,
         "cluster_id": cluster_id,
         "index_id": index_id,
+        "resume_from": resume_model_path,
     }
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/start_bgsplit_job",
@@ -314,7 +324,10 @@ def create_model(request, dataset_name, dataset=None):
     )
     response_data = r.json()
 
-    m = DNNModel(name=model_name, model_id=response_data['model_id'])
+    m = DNNModel(
+        dataset=dataset,
+        name=model_name,
+        model_id=response_data['model_id'])
     m.save()
 
     return JsonResponse({
@@ -326,8 +339,6 @@ def create_model(request, dataset_name, dataset=None):
 @api_view(['GET'])
 @csrf_exempt
 def get_model_status(request, model_id):
-    dataset_name = request.GET['dataset']
-
     params = {"model_id": model_id}
     r = requests.get(
         settings.EMBEDDING_SERVER_ADDRESS + "/bgsplit_job_status",
@@ -1471,9 +1482,21 @@ def get_dataset_info_v2(request, dataset_name):
         }
     )
 
+    model_objs = DNNModel.objects.filter(
+        dataset=dataset
+    ).order_by(
+        "name", "-last_updated"
+    ).distinct("name")
+    models = [
+        {'name': m.name,
+         'model_id': m.model_id,
+         'timestamp': m.last_updated}
+        for m in model_objs]
+
     return JsonResponse(
         {
             "categories": categories,
+            "models": models,
             "index_id": dataset.index_id,
             "num_images": dataset.datasetitem_set.filter(google=False).count(),
             "num_google": dataset.datasetitem_set.filter(google=True).count(),

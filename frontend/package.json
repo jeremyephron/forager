@@ -20,6 +20,7 @@
     "react-scripts": "^4.0.2",
     "react-svg": "^11.2.3",
     "react-time-ago": "^6.2.2",
+    "react-useinterval": "^1.0.2",
     "reactstrap": "^8.7.1",
     "styled-components": "^5.2.1",
     "use-resize-observer": "^7.0.0"

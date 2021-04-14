@@ -6,7 +6,9 @@ import sklearn.metrics
 import os
 import os.path
 import logging
-from typing import Dict, List, Any
+import time
+import math
+from typing import Dict, List, Any, Callable
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
@@ -14,7 +16,7 @@ from config import BATCH_SIZE, NUM_WORKERS
 from model import Model
 from dataset import AuxiliaryDataset
 from warmup_scheduler import GradualWarmupScheduler
-from util import download
+from util import download, EMA
 
 logger = logging.getLogger("bgsplit")
 logger.setLevel(logging.DEBUG)
@@ -28,7 +30,8 @@ class TrainingLoop():
             train_unlabeled_paths: List[str],
             val_positive_paths: List[str],
             val_negative_paths: List[str],
-            val_unlabeled_paths: List[str]):
+            val_unlabeled_paths: List[str],
+            notify_callback: Callable[[Dict[str, Any]], None]=lambda x: None):
         '''The training loop for background splitting models.'''
         batch_size = BATCH_SIZE
         num_workers = NUM_WORKERS
@@ -39,6 +42,7 @@ class TrainingLoop():
         self.model_dir = model_kwargs['model_dir']
         assert 'aux_labels' in model_kwargs
         aux_labels = model_kwargs['aux_labels']
+        self.notify_callback = notify_callback
 
         # Setup dataset
         train_transform = transforms.Compose([
@@ -87,6 +91,8 @@ class TrainingLoop():
         self.main_loss = nn.CrossEntropyLoss()
         self.auxiliary_loss = nn.CrossEntropyLoss()
         self.start_epoch = 0
+        self.end_epoch = 1
+        self.current_epoch = 0
 
         # Setup optimizer
         optim_params = dict(
@@ -105,16 +111,47 @@ class TrainingLoop():
         if resume_from:
             self.load_checkpoint(resume_from)
 
+        # Variables for estimating run-time
+        self.train_batch_time = EMA(0)
+        self.val_batch_time = EMA(0)
+        self.train_batches_per_epoch = (
+            len(self.train_dataloader.dataset) /
+            self.train_dataloader.batch_size)
+        self.val_batches_per_epoch = (
+            len(self.val_dataloader.dataset) /
+            self.val_dataloader.batch_size)
+        self.train_batch_idx = 0
+        self.val_batch_idx = 0
+        print(self.train_batch_time)
+
+    def _notify(self):
+        epochs_left = self.end_epoch - self.current_epoch - 1
+        num_train_batches_left = (
+            epochs_left * self.train_batches_per_epoch +
+            self.train_batches_per_epoch - self.train_batch_idx - 1
+        )
+        num_val_batches_left = (
+            (1 + round(epochs_left / self.val_frequency)) * self.val_batches_per_epoch +
+            self.val_batches_per_epoch - self.val_batch_idx - 1
+        )
+        time_left = (
+            num_train_batches_left * self.train_batch_time.value +
+            num_val_batches_left * self.val_batch_time.value)
+        logger.debug('Send notify')
+        self.notify_callback(**{"training_time_left": time_left})
+
     def load_checkpoint(self, path: str, restart: bool=True):
         checkpoint_state = torch.load(path)
         self.model.load_state_dict(checkpoint_state['state_dict'])
         if not restart:
             self.start_epoch = checkpoint_state['epoch']
+            self.current_epoch = self.start_epoch
+            self.end_epoch = self.start_epoch + 1
 
     def save_checkpoint(self, epoch, checkpoint_path: str):
         state = dict(
             epoch=epoch,
-            state_dict=self.model.state_dict,
+            state_dict=self.model.state_dict(),
         )
         os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
         torch.save(state, checkpoint_path)
@@ -126,7 +163,10 @@ class TrainingLoop():
         aux_gts = []
         main_preds = []
         aux_preds = []
-        for images, main_labels, aux_labels in dataloader:
+        for batch_idx, (images, main_labels, aux_labels) in enumerate(
+                dataloader):
+            batch_start = time.perf_counter()
+            self.val_batch_idx = batch_idx
             if self.use_cuda:
                 images = images.cuda()
                 main_labels = main_labels.cuda()
@@ -141,6 +181,8 @@ class TrainingLoop():
             aux_preds += list(aux_pred.argmax(dim=1)[:].cpu().numpy())
             main_gts += list(main_labels[:].cpu().numpy())
             aux_gts += list(main_labels[:].cpu().numpy())
+            batch_end = time.perf_counter()
+            self.val_batch_time += (batch_end - batch_start)
         # Compute F1 score
         if len(dataloader) > 0:
             loss_value /= (len(dataloader) + 1e-10)
@@ -165,7 +207,12 @@ class TrainingLoop():
     def train(self):
         self.model.train()
         logger.info('Starting train epoch')
-        for images, main_labels, aux_labels in self.train_dataloader:
+        load_start = time.perf_counter()
+        for batch_idx, (images, main_labels, aux_labels) in enumerate(
+                self.train_dataloader):
+            load_end = time.perf_counter()
+            batch_start = time.perf_counter()
+            self.train_batch_idx = batch_idx
             logger.debug('Train batch')
             if self.use_cuda:
                 images = images.cuda()
@@ -184,19 +231,28 @@ class TrainingLoop():
             loss_value.backward()
             self.optimizer.step()
             self.optimizer_scheduler.step()
+            batch_end = time.perf_counter()
+            total_batch_time = (batch_end - batch_start)
+            total_load_time = (load_end - load_start)
+            self.train_batch_time += total_batch_time + total_load_time
+            logger.debug(f'Train batch time: {self.train_batch_time.value}, '
+                         f'this batch time: {total_batch_time}, '
+                         f'this load time: {total_load_time}')
+            self._notify()
+            load_start = time.perf_counter()
 
-    def run(self, num_epochs=1):
+    def run(self):
         last_checkpoint_path = None
-        for i in range(self.start_epoch, num_epochs):
+        for i in range(self.start_epoch, self.end_epoch):
             logger.info(f'Train: Epoch {i}')
+            self.current_epoch = i
             self.train()
-            if i % self.val_frequency == 0 or i == num_epochs - 1:
+            if i % self.val_frequency == 0 or i == self.end_epoch - 1:
                 logger.info(f'Validate: Epoch {i}')
                 self.validate()
-            if i % self.checkpoint_frequency == 0 or i == num_epochs - 1:
+            if i % self.checkpoint_frequency == 0 or i == self.end_epoch - 1:
                 logger.info(f'Checkpoint: Epoch {i}')
                 last_checkpoint_path = os.path.join(
                     self.model_dir, f'checkpoint_{i:03}.pth')
                 self.save_checkpoint(i, last_checkpoint_path)
         return last_checkpoint_path
-

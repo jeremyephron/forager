@@ -9,6 +9,7 @@ import logging
 import os.path
 import json
 import sys
+import types
 import numpy as np
 from flask import Flask, request, abort
 from dataclasses import dataclass, field
@@ -28,7 +29,7 @@ logger.addHandler(handler)
 
 # Step 3: Call webhook to indicate completion
 @backoff.on_exception(backoff.expo, requests.exceptions.RequestException)
-def notify(url: str, payload: Dict[str, str]):
+def notify(url: str, payload: Dict[str, Any]):
     r = requests.put(url, data=json.dumps(payload))
     r.raise_for_status()
 
@@ -57,22 +58,25 @@ class TrainingJob:
         thread = threading.Thread(target=self.run, daemon=True)
         thread.start()
 
+    def notify_status(
+            self, success: bool=False, failed: bool=False, **kwargs):
+        data={
+            "model_id": self.model_id,
+            "model_name": self.model_name,
+            "success": success,
+            "failed": failed,
+            **kwargs,
+        }
+        logger.debug(f'Sending notify: {data}')
+        notify(self.notify_url, data)
+
     def finish(self, success: bool, failed: bool=False, **kwargs):
         with self._done_lock:
             if self._done:
                 return
             self._done = True
 
-        notify(
-            self.notify_url,
-            {
-                "model_id": self.model_id,
-                "model_name": self.model_name,
-                "success": success,
-                "failed": failed,
-                **kwargs,
-            },
-        )
+        self.notify_status(success=success, failed=failed, **kwargs)
         self._lock.release()
 
     @property
@@ -93,7 +97,6 @@ class TrainingJob:
             auxiliary_labels = pickle.loads(data)
             for p, v in auxiliary_labels.items():
                 aux_labels[os.path.basename(p)] = v
-                
             model_dir = config.MODEL_DIR_TMPL.format(
                 self.model_id, self.model_name)
             self.model_kwargs['aux_labels'] = auxiliary_labels
@@ -111,6 +114,7 @@ class TrainingJob:
                 val_positive_paths=self.val_positive_paths,
                 val_negative_paths=self.val_negative_paths,
                 val_unlabeled_paths=self.val_unlabeled_paths,
+                notify_callback=self.notify_status
             )
             logger.info('Running training')
             self.last_checkpoint_path = loop.run()
@@ -119,6 +123,7 @@ class TrainingJob:
             logger.exception(f'Exception: {traceback.print_exc()}')
             self.finish(False, failed=True, reason=str(e))
         else:
+            logger.info('Finished training')
             self.finish(
                 True,
                 model_dir=model_dir,

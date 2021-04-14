@@ -915,9 +915,11 @@ async def start_bgsplit_job(request):
     neg_identifiers = list(filter(bool, request.json["neg_identifiers"]))
     augment_negs = bool(request.json["augment_negs"])
     bucket = request.json["bucket"]
+    model_name = request.json["model_name"]
     cluster_id = request.json["cluster_id"]
     index_id = request.json["index_id"]
     aux_labels_type = request.json["aux_labels_type"]
+    resume_from = request.json["resume_from"]
 
     # Get cluster
     cluster = current_clusters[cluster_id]
@@ -1029,6 +1031,7 @@ async def start_bgsplit_job(request):
         unlabeled_paths=unlabeled_paths,
         aux_labels_path=aux_labels_gcs_path,
         model_id=model_id,
+        resume_from=resume_from,
         trainer=trainers[0],
         cluster_mount_parent_dir=cluster.mount_parent_dir,
         session=http_session,

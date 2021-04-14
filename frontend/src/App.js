@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import useInterval from 'react-useinterval';
 import {
   Container,
   Row,
@@ -36,6 +37,7 @@ import {
   SignInModal,
   TagManagementModal,
   CategoryInput,
+  FeatureInput,
 } from "./components";
 
 var disjointSet = require("disjoint-set");
@@ -122,12 +124,15 @@ const App = () => {
   });
   const [popoverOpen, setPopoverOpen] = useState(false);
 
-  useEffect(async () => {
-    const url = new URL(`${endpoints.getDatasetInfo}/${datasetName}`);
-    setDatasetInfo(await fetch(url, {
-      method: "GET",
-    }).then(r => r.json()));
-    setIsLoading(true);
+  useEffect(() => {
+    const getDatasetInfo = async () => {
+      const url = new URL(`${endpoints.getDatasetInfo}/${datasetName}`);
+      setDatasetInfo(await fetch(url, {
+        method: "GET",
+      }).then(r => r.json()));
+      setIsLoading(true);
+    }
+    getDatasetInfo();
   }, [datasetName]);
 
   const setTags = (tags) => setDatasetInfo({...datasetInfo, categories: tags});
@@ -144,6 +149,7 @@ const App = () => {
   const [svmAugmentNegs, setSvmAugmentNegs] = useState(true);
   const [svmPosTags, setSvmPosTags] = useState([]);
   const [svmNegTags, setSvmNegTags] = useState([]);
+  const [svmFeature, setSvmFeature] = useState([]);
 
   const [knnImage, setKnnImage] = useState({});
   const [subset, setSubset_] = useState([]);
@@ -291,72 +297,107 @@ const App = () => {
   const [dnnAugmentNegs, setDnnAugmentNegs] = useState(true);
   const [dnnPosTags, setDnnPosTags] = useState([]);
   const [dnnNegTags, setDnnNegTags] = useState([]);
-  const [dnnIsTraining, setDnnIsTraining] = useState(false);
-  const [clusterStatus, setClusterStatus] = useState({});
+  const [requestDnnTraining, setRequestDnnTraining] = useState(false);
   const [clusterId, setClusterId] = useState(null);
+  const [clusterCreating, setClusterCreating] = useState(false);
+  const [clusterStatus, setClusterStatus] = useState({});
   const [modelId, setModelId] = useState(null);
+  const [dnnIsTraining, setDnnIsTraining] = useState(false);
   const [modelEpoch, setModelEpoch] = useState(1);
   const [statusIntervalId, setStatusIntervalId] = useState();
-  const [modelName, setModelName] = "kayvonf_04-06-2021";
+  const [modelName, setModelName] = useState("kayvonf_04-06-2021");
 
-  const trainDnn = async () => {
+  useEffect(async () => {
     let _clusterId = clusterId;
-
-    if (!_clusterId) {
+    if (requestDnnTraining && !_clusterId) {
       // Start cluster
       const startClusterUrl = new URL(`${endpoints.startCluster}`);
-      _clusterId = await fetch(startClusterUrl, {
+      var clusterResponse = await fetch(startClusterUrl, {
         method: "POST",
-      }).then(r => r.json().cluster_id);
+      }).then(r => r.json());
+
+      _clusterId = clusterResponse.cluster_id;
+
       setClusterId(_clusterId);
-
-      // Wait until cluster is booted
-      while (true) {
-        const clusterStatusUrl = new URL(`${endpoints.clusterStatus}/${_clusterId}`);
-        const _clusterStatus = await fetch(clusterStatusUrl, {
-          method: "GET",
-        }).then(r => r.json());
-        setClusterStatus(_clusterStatus);
-        if (_clusterStatus.ready) break;
-        await new Promise(r => setTimeout(r, 3000));  // 3 seconds
-      }
+      setClusterCreating(true);
     }
+  }, [requestDnnTraining, clusterId]);
 
+  const checkClusterStatus = async () => {
+    // Wait until cluster is booted
+    const clusterStatusUrl = new URL(`${endpoints.clusterStatus}/${clusterId}`);
+    const _clusterStatus = await fetch(clusterStatusUrl, {
+      method: "GET",
+    }).then(r => r.json());
+    setClusterStatus(_clusterStatus);
+    if (_clusterStatus.ready) {
+      setClusterCreating(false);
+    }
+  }
+  useInterval(checkClusterStatus, clusterCreating ? 3000 : null);
+
+  const startTrainingNewDnn = () => {
+    setModelEpoch(0);
+    setModelId(null);
+    setDnnIsTraining(false);
+    setRequestDnnTraining(true);
+  };
+
+  const stopTrainingDnn = () => {
+    setRequestDnnTraining(false);
+  };
+
+  const trainDnnEpoch = async () => {
+    let _clusterId = clusterId;
     // Start training DNN
-    while (true) {
-      const url = new URL(`${endpoints.trainModel}/${datasetName}`);
-      url.search = new URLSearchParams({
-        model_name: "TEST_MODEL",
-        cluster_id: _clusterId,
-        bucket_name: "foragerml",
-        index_id: datasetInfo.index_id,
-        pos_tags: dnnPosTags.map(t => `${t.category}:${t.value}`),
-        neg_tags: dnnNegTags.map(t => `${t.category}:${t.value}`),
-        augment_negs: dnnAugmentNegs,
-        aux_label_type: "imagenet",
-      }).toString();
-      const _modelId = await fetch(url, {
-        method: "POST",
-      }).then(r => r.json().model_id);
-
-      // Wait until DNN trains for 1 epoch
-      while (true) {
-        const modelStatusUrl = new URL(`${endpoints.modelStatus}/${_clusterId}`);
-        const _modelStatus = await fetch(url, {
-          method: "GET",
-        }).then(r => r.json());
-        setModelStatus(_modelStatus);
-        if (_modelStatus.has_model) break;
-        await new Promise(r => setTimeout(r, 3000));  // 3 seconds
-      }
-
-      setModelEpoch(modelEpoch + 1);
+    const url = new URL(`${endpoints.trainModel}/${datasetName}`);
+    let body = {
+      model_name: modelName,
+      cluster_id: _clusterId,
+      bucket: "foragerml",
+      index_id: datasetInfo.index_id,
+      pos_tags: dnnPosTags.map(t => `${t.category}:${t.value}`).join(","),
+      neg_tags: dnnNegTags.map(t => `${t.category}:${t.value}`).join(","),
+      augment_negs: dnnAugmentNegs.toString(),
+      aux_label_type: "imagenet",
     }
+    if (modelId) {
+      body.resume = modelId;
+    }
+    const _modelId = await fetch(url, {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: {
+        'Content-type': 'application/json; charset=UTF-8'
+      }
+    }).then(r => r.json()).then(r => r.model_id);
+    setModelId(_modelId);
+    setDnnIsTraining(true);
   };
 
   useEffect(() => {
-    if (dnnIsTraining) trainDnn();
-  }, [dnnIsTraining]);
+    if (requestDnnTraining && clusterId && !dnnIsTraining) {
+      trainDnnEpoch();
+    }
+  }, [requestDnnTraining, clusterId, dnnIsTraining]);
+
+  const checkDnnStatus = async () => {
+      // Wait until DNN trains for 1 epoch
+    const modelStatusUrl = new URL(`${endpoints.modelStatus}/${modelId}`);
+    const _modelStatus = await fetch(modelStatusUrl, {
+      method: "GET",
+    }).then(r => r.json());
+    setModelStatus(_modelStatus);
+    if (_modelStatus.has_model) {
+      setDnnIsTraining(false);
+      setModelEpoch(modelEpoch + 1);
+    }
+    if (_modelStatus.failed) {
+      setRequestDnnTraining(false);
+      setDnnIsTraining(false);
+    }
+  };
+  useInterval(checkDnnStatus, dnnIsTraining ? 3000 : null)
 
   const setLabelModeCategories = (selection) => {
     if (selection.length === 0) {
@@ -498,18 +539,17 @@ const App = () => {
                   </>)}
               </span>
             </>}
-            {mode === "train" && (dnnIsTraining ? <>
+            {mode === "train" && (requestDnnTraining ? <>
               <div className="d-flex flex-row align-items-center">
                 <Spinner color="dark" className="my-1 mr-2" />
                 {clusterStatus.ready ?
-                  <span><b>Training</b> model <b>{modelName}</b> (Epoch {modelEpoch})</span> :
+                  <span><b>Training</b> model <b>{modelName}</b> (Epoch {modelEpoch}), Time left: {modelStatus.training_time_left && modelStatus.training_time_left >= 0 ? new Date(Math.max(modelStatus.training_time_left, 0) * 1000).toISOString().substr(11, 8) : 'estimating...'} </span> :
                   <span><b>Starting cluster</b></span>
                 }
               </div>
               <Button
                 color="danger"
-                onClick={() => setDnnIsTraining(false)}
-                disabled={true}
+                onClick={stopTrainingDnn}
               >Stop training</Button>
             </> : <>
               <FormGroup className="mb-0">
@@ -522,7 +562,7 @@ const App = () => {
                 id="dnn-pos-bar"
                 className="mr-2"
                 placeholder="Positive example tags"
-                disabled={dnnIsTraining}
+                disabled={requestDnnTraining}
                 categories={datasetInfo.categories}
                 setCategories={setTags}
                 selected={dnnPosTags}
@@ -532,7 +572,7 @@ const App = () => {
                 id="dnn-neg-bar"
                 className="mr-2"
                 placeholder="Negative example tags"
-                disabled={dnnIsTraining}
+                disabled={requestDnnTraining}
                 categories={datasetInfo.categories}
                 setCategories={setTags}
                 selected={dnnNegTags}
@@ -543,7 +583,7 @@ const App = () => {
                   type="checkbox"
                   className="custom-control-input"
                   id="svm-augment-negs-checkbox"
-                  disabled={dnnIsTraining}
+                  disabled={requestDnnTraining}
                   checked={dnnAugmentNegs}
                   onChange={(e) => setDnnAugmentNegs(e.target.checked)}
                 />
@@ -553,10 +593,11 @@ const App = () => {
               </div>
               <Button
                 color="light"
-                onClick={() => setDnnIsTraining(true)}
-                disabled={dnnPosTags.length === 0 || (dnnNegTags.length === 0 && !dnnAugmentNegs) || dnnIsTraining}
+                onClick={startTrainingNewDnn}
+                disabled={dnnPosTags.length === 0 || (dnnNegTags.length === 0 && !dnnAugmentNegs) || requestDnnTraining}
               >Start training</Button>
-            </>)}
+              {modelStatus.failed ? <div className="my-12">{modelStatus.failure_reason}</div> : null }
+              </>)}
           </div>
         </Container>
       </div>}
@@ -674,7 +715,18 @@ const App = () => {
                   setTrainedSvmData(null);
                 }}
               />
-
+              <FeatureInput
+                id="svm-feature-bar"
+                className="mt-3 mb-2"
+                placeholder="Features to train on"
+                disabled={isTraining}
+                features={datasetInfo.models}
+                selected={svmFeature}
+                onChange={selected => {
+                  setSvmFeature(selected);
+                  setTrainedSvmData(null);
+                }}
+              />
               <div className="my-2 custom-control custom-checkbox">
                 <input
                   type="checkbox"

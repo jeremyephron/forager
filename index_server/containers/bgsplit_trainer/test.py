@@ -16,6 +16,7 @@ def main():
         [os.path.join('https://storage.googleapis.com/foragerml', x)
          for x in payload['train_unlabeled_paths']]
     payload['_lock'] = working_lock
+    payload['model_kwargs']['use_cuda'] = False
     current_job = TrainingJob(**payload)
     current_job.start()
 

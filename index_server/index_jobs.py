@@ -406,6 +406,7 @@ class BGSplitTrainingJob:
         unlabeled_paths: List[str],
         aux_labels_path: str,
         model_id: str,
+        resume_from: Optional[str],
         trainer: Trainer,
         cluster_mount_parent_dir: Path,
         session: aiohttp.ClientSession,
@@ -416,6 +417,7 @@ class BGSplitTrainingJob:
         self.unlabeled_paths = unlabeled_paths
         self.aux_labels_path = aux_labels_path
         self.model_id = model_id
+        self.resume_from = resume_from
         self.trainer = trainer
         self.cluster_mount_parent_dir = cluster_mount_parent_dir
         self.session = session
@@ -426,6 +428,7 @@ class BGSplitTrainingJob:
         self.failure_reason: Optional[str] = None
         self.model_dir: Optional[str] = None
         self.profiling: Dict[str, float] = {}
+        self.model_checkpoint: Optional[str] = None
 
         self._failed_or_finished = asyncio.Condition()
 
@@ -434,11 +437,13 @@ class BGSplitTrainingJob:
         self._start_time: Optional[float] = None
         self._end_time: Optional[float] = None
         self._task: Optional[asyncio.Task] = None
+        self._training_time_left: Optional[float] = None
 
     def configure_model(self):
         self.model_kwargs = dict(
             max_ram=config.BGSPLIT_TRAINING_MAX_RAM,
             aux_labels_path=self.aux_labels_path,
+            resume_from=self.resume_from,
         )
 
     @property
@@ -449,8 +454,9 @@ class BGSplitTrainingJob:
             "started": self.started,
             "finished": self.finished.is_set(),
             "failed": self.failed.is_set(),
-            "failure_reasoon": self.failure_reason,
+            "failure_reason": self.failure_reason,
             "elapsed_time": end_time - start_time,
+            "training_time_left": self._training_time_left or -1,
             "profiling": self.profiling,
         }
 
@@ -500,6 +506,8 @@ class BGSplitTrainingJob:
             self.failure_reason = result["reason"] if "reason" in result else None
             self.failed.set()
             self.finished.set()
+
+        self._training_time_left = result.get("training_time_left", None)
 
         async with self._failed_or_finished:
             self._failed_or_finished.notify()
