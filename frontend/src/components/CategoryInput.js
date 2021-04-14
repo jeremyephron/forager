@@ -68,7 +68,6 @@ const MyToken = forwardRef((props, ref) => {
   const allProps = useToken(props);
   const {
     disabled,
-    readOnly,
     active,
     innerId,
     onRemove,
@@ -83,7 +82,7 @@ const MyToken = forwardRef((props, ref) => {
 
   return (
     <>
-      {!disabled && !readOnly ?
+      {!disabled ?
         <InteractiveToken {...allProps} ref={ref} id={innerId} /> :
         <StaticToken {...allProps} id={innerId} />}
       <Popover
@@ -170,11 +169,12 @@ const CategoryInput = ({ id, categories, className, selected, setSelected, setCa
     e.preventDefault();
   };
 
-  const renderToken = (option, { onRemove }, index) => {
+  const renderToken = (option, { onRemove, disabled, key }, index) => {
     const isCustom = !LABEL_VALUES.some(([value]) => value === option.value);
     return (
       <MyToken
-        key={index}
+        key={key}
+        disabled={disabled}
         innerId={`${id}-rbt-token-${index}`}
         className={isCustom ? "CUSTOM" : option.value}
         onRemove={onRemove}

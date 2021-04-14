@@ -151,6 +151,8 @@ const App = () => {
   const [svmAugmentNegs, setSvmAugmentNegs] = useState(true);
   const [svmPosTags, setSvmPosTags] = useState([]);
   const [svmNegTags, setSvmNegTags] = useState([]);
+  const [svmAugmentIncludeTags, setSvmAugmentIncludeTags] = useState([]);
+  const [svmAugmentExcludeTags, setSvmAugmentExcludeTags] = useState([]);
   const [svmFeature, setSvmFeature] = useState([]);
 
   const [knnImage, setKnnImage] = useState({});
@@ -171,6 +173,8 @@ const App = () => {
       pos_tags: svmPosTags.map(t => `${t.category}:${t.value}`),
       neg_tags: svmNegTags.map(t => `${t.category}:${t.value}`),
       augment_negs: svmAugmentNegs,
+      include: svmAugmentIncludeTags.map(t => `${t.category}:${t.value}`),
+      exclude: svmAugmentExcludeTags.map(t => `${t.category}:${t.value}`),
     }).toString();
     const svmData = await fetch(url, {
       method: "GET",
@@ -708,9 +712,8 @@ const App = () => {
                 categories={datasetInfo.categories}
                 setCategories={setCategories}
                 selected={svmPosTags}
-                setSelected={setSvmPosTags}
                 disabled={isTraining}
-                onChange={selected => {
+                setSelected={selected => {
                   setSvmPosTags(selected);
                   setTrainedSvmData(null);
                 }}
@@ -722,25 +725,24 @@ const App = () => {
                 categories={datasetInfo.categories}
                 setCategories={setCategories}
                 selected={svmNegTags}
-                setSelected={setSvmNegTags}
                 disabled={isTraining}
-                onChange={selected => {
+                setSelected={selected => {
                   setSvmNegTags(selected);
                   setTrainedSvmData(null);
                 }}
               />
-              <FeatureInput
-                id="svm-feature-bar"
-                className="mt-3 mb-2"
-                placeholder="Features to train on"
-                disabled={isTraining}
-                features={datasetInfo.models}
-                selected={svmFeature}
-                onChange={selected => {
-                  setSvmFeature(selected);
-                  setTrainedSvmData(null);
-                }}
-              />
+              {/* <FeatureInput */}
+              {/*   id="svm-feature-bar" */}
+              {/*   className="mt-3 mb-2" */}
+              {/*   placeholder="Features to train on" */}
+              {/*   disabled={isTraining} */}
+              {/*   features={datasetInfo.models} */}
+              {/*   selected={svmFeature} */}
+              {/*   onChange={selected => { */}
+              {/*     setSvmFeature(selected); */}
+              {/*     setTrainedSvmData(null); */}
+              {/*   }} */}
+              {/* /> */}
               <div className="mt-2 custom-control custom-checkbox">
                 <input
                   type="checkbox"
@@ -757,6 +759,34 @@ const App = () => {
                   Automatically augment negative set
                 </label>
               </div>
+              {svmAugmentNegs && <>
+                <CategoryInput
+                  id="svm-augment-negs-include-bar"
+                  className="mt-2"
+                  placeholder="Tags to include in auto-negative pool"
+                  categories={datasetInfo.categories}
+                  setCategories={setCategories}
+                  selected={svmAugmentIncludeTags}
+                  disabled={isTraining}
+                  setSelected={selected => {
+                    setSvmAugmentIncludeTags(selected);
+                    setTrainedSvmData(null);
+                  }}
+                />
+                <CategoryInput
+                  id="svm-augment-negs-exclude-bar"
+                  className="mt-2 mb-1"
+                  placeholder="Tags to exclude from auto-negative pool"
+                  categories={datasetInfo.categories}
+                  setCategories={setCategories}
+                  selected={svmAugmentExcludeTags}
+                  disabled={isTraining}
+                  setSelected={selected => {
+                    setSvmAugmentExcludeTags(selected);
+                    setTrainedSvmData(null);
+                  }}
+                />
+              </>}
               <Button
                 color="light"
                 onClick={() => setIsTraining(true)}
