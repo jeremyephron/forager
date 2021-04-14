@@ -11,6 +11,8 @@ https://docs.djangoproject.com/en/3.1/ref/settings/
 """
 
 from pathlib import Path
+import json
+import os.path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -19,17 +21,30 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.1/howto/deployment/checklist/
 
+django_settings_path = os.path.expanduser('~/forager/django_settings.json')
+if os.path.exists(django_settings_path):
+    with open(django_settings_path, 'r') as f:
+        django_settings = json.load(f)
+else:
+    django_settings = {
+        'secret_key': 's&*+2lskkfm0l&ni9rd873xhy3tdb_04*w3cpon9*)1m8ehtib',
+        'allowed_hosts': [],
+        'db': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        },
+    }
+
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 's&*+2lskkfm0l&ni9rd873xhy3tdb_04*w3cpon9*)1m8ehtib'
+SECRET_KEY = django_settings['secret_key']
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = django_settings['allowed_hosts']
 
 
 # Application definition
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -79,10 +94,7 @@ WSGI_APPLICATION = 'forager_server.wsgi.application'
 # https://docs.djangoproject.com/en/3.1/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': django_settings['db']
 }
 
 
@@ -126,8 +138,10 @@ STATIC_URL = '/static/'
 
 # source of the frontend requests
 CORS_ALLOW_CREDENTIALS = True
-CORS_ORIGIN_WHITELIST = ['http://127.0.0.1:3000', 'http://localhost:3000']
-CSRF_TRUSTED_ORIGINS  = ['127.0.0.1', 'localhost']
+CORS_ORIGIN_WHITELIST = (
+    ['http://127.0.0.1:3000', 'http://localhost:3000'] +
+    ['http://' + h + ':4000' for h in ALLOWED_HOSTS])
+CSRF_TRUSTED_ORIGINS  = ['127.0.0.1', 'localhost'] + ALLOWED_HOSTS
 SESSION_COOKIE_SAMESITE = 'None' # as a string
 SESSION_COOKIE_SECURE = True
 
