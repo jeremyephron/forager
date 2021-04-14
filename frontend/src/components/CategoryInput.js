@@ -190,6 +190,22 @@ const CategoryInput = ({ id, categories, className, selected, setSelected, setCa
       </MyToken>
     );
   };
+
+  return (
+    <Typeahead
+      id={id}
+      multiple
+      className={`typeahead-bar ${className || ""}`}
+      options={options}
+      selected={selected}
+      onChange={onChange}
+      renderToken={renderToken}
+      labelKey="category"
+      newSelectionPrefix="New category: "
+      ref={innerRef}
+      {...props}
+    />
+  );
 }
 
 export default CategoryInput;
