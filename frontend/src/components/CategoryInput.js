@@ -1,4 +1,4 @@
-import React, { forwardRef, useState } from "react";
+import React, { forwardRef, useState, useMemo } from "react";
 import {
   Popover,
   PopoverBody,
@@ -8,8 +8,11 @@ import { Typeahead, useToken, ClearButton } from "react-bootstrap-typeahead";
 import cx from "classnames";
 
 import isEqual from "lodash/isEqual";
+import sortBy from "lodash/sortBy";
 import uniqWith from "lodash/uniqWith";
 import union from "lodash/union";
+
+import NewModeInput from "./NewModeInput";
 
 // TODO(mihirg): Combine with this same constant in other places
 const LABEL_VALUES = [
@@ -63,7 +66,20 @@ const StaticToken = ({ children, className, disabled, href }) => {
 const MyToken = forwardRef((props, ref) => {
   const [isOpen, setIsOpen] = useState(false);
   const allProps = useToken(props);
-  const { disabled, readOnly, active, innerId, onRemove, onValueClick, index } = allProps;
+  const {
+    disabled,
+    readOnly,
+    active,
+    innerId,
+    onRemove,
+    onValueClick,
+    index,
+    customValues,
+    category,
+    categories,
+    setCategories,
+    allowNewModes,
+  } = allProps;
 
   return (
     <>
@@ -78,26 +94,53 @@ const MyToken = forwardRef((props, ref) => {
           toggle={() => setIsOpen(!isOpen)}
           fade={false}
         >
-        <PopoverBody>
-          {LABEL_VALUES.map(([value, name]) => (
-            <div><a href="#" onClick={(e) => onValueClick(value, index, e)} className={`rbt-token ${value}`}>{name.toLowerCase()}</a></div>
-          ))}
+        <PopoverBody onClick={e => e.stopPropagation()}>
+          {LABEL_VALUES.map(([value, name]) =>
+            <div>
+              <a
+                href="#"
+                onClick={(e) => onValueClick(value, index, e)}
+                className={`rbt-token ${value}`}
+              >
+                {name.toLowerCase()}
+              </a>
+            </div>)}
+          {customValues.map(name =>
+            <div>
+              <a
+                href="#"
+                onClick={(e) => onValueClick(name, index, e)}
+                className="rbt-token CUSTOM"
+              >
+                {name.toLowerCase()}
+              </a>
+            </div>)}
+          {allowNewModes && <div>
+            <NewModeInput
+              category={category}
+              categories={categories}
+              setCategories={setCategories}
+            />
+          </div>}
         </PopoverBody>
       </Popover>
     </>
   );
 });
 
-const CategoryInput = ({ id, categories, className, selected, setSelected, setCategories, innerRef, deduplicateByCategory, ...props }) => {
+const CategoryInput = ({ id, categories, className, selected, setSelected, setCategories, innerRef, deduplicateByCategory, allowNewModes, ...props }) => {
   let options;
+
+  const sortedCategories = useMemo(() => sortBy(Object.entries(categories), ([c]) => c.toLowerCase()), [categories]);
+
   if (deduplicateByCategory) {
-    options = categories.flatMap(category =>
+    options = sortedCategories.flatMap(([category]) =>
       selected.some(s => s.category === category) ?
       [] : [{category, value: LABEL_VALUES[0][0]}]);
   } else {
-    options = categories.flatMap(category => {
-      for (const [value] of LABEL_VALUES) {
-        const proposal = {category, value: value};
+    options = sortedCategories.flatMap(([category, custom_values]) => {
+      for (const value of [...LABEL_VALUES, ...custom_values]) {
+        const proposal = {category, value: Array.isArray(value) ? value[0] : value};
         if (!selected.some(s => isEqual(s, proposal))) return [proposal];
       }
       return [];
@@ -105,11 +148,18 @@ const CategoryInput = ({ id, categories, className, selected, setSelected, setCa
   }
 
   const onChange = (selected) => {
-    let newSelected = selected.map(
-      s => s.customOption ? {category: s.category, value: LABEL_VALUES[0][0]} : s);
+    let newSelected = selected.map(s => {
+      if (s.customOption) {  // added
+        let newCategories = {...categories};
+        newCategories[s.category] = [];  // no custom values to start
+        setCategories(newCategories);
+
+        return {category: s.category, value: LABEL_VALUES[0][0]};
+      }
+      return s;
+    });
     newSelected = uniqWith(newSelected, deduplicateByCategory ?
-                           ((a, b) => a.category === b.category) : isEqual)
-    setCategories(union(categories, newSelected.map(s => s.category)).sort());
+                           ((a, b) => a.category === b.category) : isEqual);
     setSelected(newSelected);
   };
 
@@ -120,18 +170,26 @@ const CategoryInput = ({ id, categories, className, selected, setSelected, setCa
     e.preventDefault();
   };
 
-  const renderToken = (option, { onRemove }, index) => (
-    <MyToken
-      key={index}
-      innerId={`${id}-rbt-token-${index}`}
-      className={option.value}
-      onRemove={onRemove}
-      option={option}
-      index={index}
-      onValueClick={onValueClick}>
-      {option.category}
-    </MyToken>
-  );
+  const renderToken = (option, { onRemove }, index) => {
+    const isCustom = !LABEL_VALUES.some(([value]) => value === option.value);
+    return (
+      <MyToken
+        key={index}
+        innerId={`${id}-rbt-token-${index}`}
+        className={isCustom ? "CUSTOM" : option.value}
+        onRemove={onRemove}
+        option={option}
+        index={index}
+        onValueClick={onValueClick}
+        customValues={categories[option.category] || []}
+        category={option.category}
+        categories={categories}
+        setCategories={setCategories}
+        allowNewModes={allowNewModes}>
+        {option.category}{isCustom ? ` (${option.value})` : ""}
+      </MyToken>
+    );
+  };
 
   return (
     <Typeahead

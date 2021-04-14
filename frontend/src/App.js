@@ -25,6 +25,7 @@ import Emoji from "react-emoji-render";
 import ReactTimeAgo from "react-time-ago";
 
 import fromPairs from "lodash/fromPairs";
+import sortBy from "lodash/sortBy";
 import toPairs from "lodash/toPairs";
 
 import "react-bootstrap-typeahead/css/Typeahead.css";
@@ -38,6 +39,7 @@ import {
   TagManagementModal,
   CategoryInput,
   FeatureInput,
+  NewModeInput,
 } from "./components";
 
 var disjointSet = require("disjoint-set");
@@ -135,7 +137,7 @@ const App = () => {
     getDatasetInfo();
   }, [datasetName]);
 
-  const setTags = (tags) => setDatasetInfo({...datasetInfo, categories: tags});
+  const setCategories = (categories) => setDatasetInfo({...datasetInfo, categories});
 
   // Run queries after dataset info has loaded and whenever user clicks "query" button
   const [datasetIncludeTags, setDatasetIncludeTags] = useState([]);
@@ -406,8 +408,10 @@ const App = () => {
       let c = selection[selection.length - 1];
       if (c.customOption) {  // new
         c = c.label;
-        let newCategories = [...datasetInfo.categories, c];
-        setDatasetInfo({...datasetInfo, categories: newCategories.sort()});
+
+        let newCategories = {...datasetInfo.categories};
+        newCategories[c] = [];  // no custom values to start
+        setCategories(newCategories);
       }
       setLabelModeCategories_([c]);
     }
@@ -432,8 +436,8 @@ const App = () => {
         isOpen={tagManagementIsOpen}
         toggle={toggleTagManagement}
         datasetName={datasetName}
-        datasetInfo={datasetInfo}
-        setDatasetInfo={setDatasetInfo}
+        datasetCategories={datasetInfo.categories}
+        setDatasetCategories={setCategories}
         username={username}
         isReadOnly={!!!(username)}
       />
@@ -447,7 +451,7 @@ const App = () => {
         clusters={clusters}
         findSimilar={findSimilar}
         tags={datasetInfo.categories}
-        setTags={setTags}
+        setCategories={setCategories}
         username={username}
         setSubset={setSubset}
         mode={mode}
@@ -523,21 +527,31 @@ const App = () => {
                 multiple
                 id="label-mode-bar"
                 className="typeahead-bar mr-2"
-                options={datasetInfo.categories}
+                options={sortBy(Object.keys(datasetInfo.categories), c => c.toLowerCase())}
                 placeholder="Category to label"
                 selected={labelModeCategories}
                 onChange={setLabelModeCategories}
                 newSelectionPrefix="New category: "
                 allowNew={true}
               />
-              <span className="text-nowrap">
-                <b>Key bindings:</b> &nbsp;
+              <div className="text-nowrap">
                 {LABEL_VALUES.map(([value, name], i) =>
                   <>
-                    <kbd>{i + 1}</kbd> <span className={`rbt-token ${value}`}>{name.toLowerCase()}</span>
-                    {i < LABEL_VALUES.length - 1 && ", "}
+                    <kbd>{(i + 1) % 10}</kbd> <span className={`rbt-token ${value}`}>{name.toLowerCase()}</span>&nbsp;
                   </>)}
-              </span>
+                {labelModeCategories.length > 0 &&
+                  (datasetInfo.categories[labelModeCategories[0]] || []).map((name, i) =>
+                  <>
+                    <kbd>{(LABEL_VALUES.length + i + 1) % 10}</kbd> <span className="rbt-token CUSTOM">{name}</span>&nbsp;
+                  </>)}
+                {labelModeCategories.length > 0 &&
+                  <NewModeInput
+                    category={labelModeCategories[0]}
+                    categories={datasetInfo.categories}
+                    setCategories={setCategories}
+                  />
+                }
+              </div>
             </>}
             {mode === "train" && (requestDnnTraining ? <>
               <div className="d-flex flex-row align-items-center">
@@ -564,7 +578,7 @@ const App = () => {
                 placeholder="Positive example tags"
                 disabled={requestDnnTraining}
                 categories={datasetInfo.categories}
-                setCategories={setTags}
+                setCategories={setCategories}
                 selected={dnnPosTags}
                 setSelected={setDnnPosTags}
               />
@@ -574,7 +588,7 @@ const App = () => {
                 placeholder="Negative example tags"
                 disabled={requestDnnTraining}
                 categories={datasetInfo.categories}
-                setCategories={setTags}
+                setCategories={setCategories}
                 selected={dnnNegTags}
                 setSelected={setDnnNegTags}
               />
@@ -582,12 +596,12 @@ const App = () => {
                 <input
                   type="checkbox"
                   className="custom-control-input"
-                  id="svm-augment-negs-checkbox"
+                  id="dnn-augment-negs-checkbox"
                   disabled={requestDnnTraining}
                   checked={dnnAugmentNegs}
                   onChange={(e) => setDnnAugmentNegs(e.target.checked)}
                 />
-                <label className="custom-control-label text-nowrap mr-2" htmlFor="svm-augment-negs-checkbox">
+                <label className="custom-control-label text-nowrap mr-2" htmlFor="dnn-augment-negs-checkbox">
                   Automatically augment negative set
                 </label>
               </div>
@@ -610,7 +624,7 @@ const App = () => {
                 className="mr-2"
                 placeholder="Tags to include"
                 categories={datasetInfo.categories}
-                setCategories={setTags}
+                setCategories={setCategories}
                 selected={datasetIncludeTags}
                 setSelected={setDatasetIncludeTags}
               />
@@ -618,7 +632,7 @@ const App = () => {
                 id="dataset-exclude-bar"
                 placeholder="Tags to exclude"
                 categories={datasetInfo.categories}
-                setCategories={setTags}
+                setCategories={setCategories}
                 selected={datasetExcludeTags}
                 setSelected={setDatasetExcludeTags}
               />
@@ -692,7 +706,7 @@ const App = () => {
                 className="mt-1"
                 placeholder="Positive example tags"
                 categories={datasetInfo.categories}
-                setCategories={setTags}
+                setCategories={setCategories}
                 selected={svmPosTags}
                 setSelected={setSvmPosTags}
                 disabled={isTraining}
@@ -706,7 +720,7 @@ const App = () => {
                 className="mt-2 mb-1"
                 placeholder="Negative example tags"
                 categories={datasetInfo.categories}
-                setCategories={setTags}
+                setCategories={setCategories}
                 selected={svmNegTags}
                 setSelected={setSvmNegTags}
                 disabled={isTraining}
@@ -727,7 +741,7 @@ const App = () => {
                   setTrainedSvmData(null);
                 }}
               />
-              <div className="my-2 custom-control custom-checkbox">
+              <div className="mt-2 custom-control custom-checkbox">
                 <input
                   type="checkbox"
                   className="custom-control-input"
@@ -747,7 +761,7 @@ const App = () => {
                 color="light"
                 onClick={() => setIsTraining(true)}
                 disabled={svmPosTags.length === 0 || (svmNegTags.length === 0 && !svmAugmentNegs) || isTraining}
-                className="mb-1 w-100"
+                className="mt-2 mb-1 w-100"
               >Train</Button>
               {!!(trainedSvmData) && <div className="mt-1">
                 Trained model ({trainedSvmData.num_positives} positives,{" "}

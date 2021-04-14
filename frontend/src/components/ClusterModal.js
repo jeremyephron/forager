@@ -20,6 +20,7 @@ import unionWith from "lodash/unionWith";
 import uniqWith from "lodash/uniqWith";
 
 import ImageGrid from "./ImageGrid";
+import NewModeInput from "./NewModeInput";
 import CategoryInput from "./CategoryInput";
 
 const endpoints = fromPairs(toPairs({
@@ -51,7 +52,7 @@ const ClusterModal = ({
   clusters,
   findSimilar,
   tags,
-  setTags,
+  setCategories,
   username,
   setSubset,
   labelCategory,
@@ -103,24 +104,8 @@ const ClusterModal = ({
   const [excludedImageIndexes, setExcludedImageIndexes] = useState({});
   const [imageGridSize, setImageGridSize_] = useState(imageGridSizes[0]);
 
-  const excludeNone = (e) => {
-    setExcludedImageIndexes({});
-    if (e) e.preventDefault();
-  };
-
-  const excludeAll = (e) => {
-    setExcludedImageIndexes(fromPairs(selectedCluster.map((_, i) => [i, true])));
-    if (e) e.preventDefault();
-  };
-
-  const excludeOpposite = (e) => {
-    setExcludedImageIndexes(fromPairs(selectedCluster.flatMap((_, i) =>
-      !!!(excludedImageIndexes[i]) ? [[i, true]] : [])));
-    if (e) e.preventDefault();
-  }
-
   useEffect(() => {
-    excludeNone();
+    setExcludedImageIndexes({});  // Select all
   }, [selectedCluster]);
 
   const handleGalleryClick = (e, i) => {
@@ -179,6 +164,7 @@ const ClusterModal = ({
   const onTagsChanged = async (newTags) => {
     const added = differenceWith(newTags, selectedTags, isEqual);
     const deleted = differenceWith(selectedTags, newTags, isEqual);
+    const deletedNotChanged = differenceWith(deleted, added, (a, b) => a.category === b.category);
     const imageIds = (selectedImage !== undefined) ? [selectedImage.id] :
       selectedCluster.flatMap((im, i) => excludedImageIndexes[i] ? [] : [im.id]);
 
@@ -193,7 +179,7 @@ const ClusterModal = ({
     setAnnotations(newAnnotations);
 
     let addPromises = added.map(async t => addAnnotations(t.category, t.value, imageIds));
-    let deletePromises = deleted.map(async t => addAnnotations(t.category, "TOMBSTONE", imageIds));
+    let deletePromises = deletedNotChanged.map(async t => addAnnotations(t.category, "TOMBSTONE", imageIds));
     await Promise.all([...addPromises, ...deletePromises]);
 
     setIsLoading(false);
@@ -249,9 +235,32 @@ const ClusterModal = ({
     } else if (key === "ArrowUp") {
       // Close modal
       setIsOpen(false);
-    } else if (mode === "label" && !!(labelCategory) && keyAsNumber >= 1 && keyAsNumber <= LABEL_VALUES.length) {
-      onTagsChanged([...selectedTags, {category: labelCategory, value: LABEL_VALUES[keyAsNumber - 1][0]}]);
-    } else if (key !== "ArrowDown") {
+    } else if (mode === "label" && !!(labelCategory) && !isNaN(keyAsNumber)) {
+      // Label mode
+      let boundValue;
+      if (keyAsNumber >= 1 && keyAsNumber <= LABEL_VALUES.length) {
+        boundValue = LABEL_VALUES[keyAsNumber - 1][0];
+        caught = true;
+      } else {
+        const customIndex = (keyAsNumber === 0 ? 10 : keyAsNumber) - LABEL_VALUES.length - 1;
+        boundValue = (tags[labelCategory] || [])[customIndex];
+      }
+      if (boundValue !== undefined) {
+        onTagsChanged([...selectedTags, {category: labelCategory, value: boundValue}]);
+      } else {
+        caught = false;
+      }
+    } else if (isClusterView && key === "s") {
+      // Select all
+      setExcludedImageIndexes({});
+    } else if (isClusterView && key === "i") {
+      // Invert selection
+      setExcludedImageIndexes(fromPairs(selectedCluster.flatMap((_, i) =>
+        !!!(excludedImageIndexes[i]) ? [[i, true]] : [])));
+    } else if (isClusterView && key === "d") {
+      // Deselect all
+      setExcludedImageIndexes(fromPairs(selectedCluster.map((_, i) => [i, true])));
+    } else if (key === "ArrowDown") { } else {
       caught = false;
     }
     if (caught) {
@@ -263,7 +272,7 @@ const ClusterModal = ({
 
   const handleTypeaheadKeyDown = (e) => {
     const { key } = e;
-    if (key === "s") e.stopPropagation();
+    if (key === "s" || key === "i" || key === "d") e.stopPropagation();
   }
 
   useEffect(() => {
@@ -310,21 +319,30 @@ const ClusterModal = ({
             {isClusterView && <>,{" "}
               <kbd>&darr;</kbd> or <FontAwesomeIcon icon={faMousePointer} /> to go into image view,{" "}
               <kbd>&uarr;</kbd> to go back to query results,{" "}
-              <kbd>shift</kbd> <FontAwesomeIcon icon={faMousePointer} /> to toggle image selection</>}
+              <kbd>shift</kbd> <FontAwesomeIcon icon={faMousePointer} /> to toggle image selection,{" "}
+              <kbd>s</kbd> to select all, <kbd>i</kbd> to invert selection, <kbd>d</kbd> to deselect all</>}
             {isImageView && <>,{" "}
               <kbd>&uarr;</kbd> to go back to cluster view,{" "}
               <kbd>s</kbd> or <FontAwesomeIcon icon={faMousePointer} /> to toggle image selection</>}
             {isSingletonCluster && <>,{" "}
               <kbd>&uarr;</kbd> to go back to query results</>}
           </p>
-          {mode === "label" && !!(labelCategory) && <p>
+          {mode === "label" && (labelCategory ? <p>
             <b>Label mode:</b> &nbsp;
             {LABEL_VALUES.map(([value], i) =>
               <>
-                <kbd>{i + 1}</kbd> <span className={`rbt-token ${value}`}>{labelCategory}</span>
-                {i < LABEL_VALUES.length - 1 && ", "}
+                <kbd>{i + 1}</kbd> <span className={`rbt-token ${value}`}>{labelCategory}</span>&nbsp;
               </>)}
-          </p>}
+            {(tags[labelCategory] || []).map((name, i) =>
+              <>
+                <kbd>{(LABEL_VALUES.length + i + 1) % 10}</kbd> <span className="rbt-token CUSTOM">{labelCategory} ({name})</span>&nbsp;
+              </>)}
+            <NewModeInput
+              category={labelCategory}
+              categories={tags}
+              setCategories={setCategories}
+            />
+          </p> : <p><b>Label mode:</b> No category specified</p>)}
           <Form>
             <FormGroup className="d-flex flex-row align-items-center mb-2">
               {/* TODO(mihirg): Change tags -> categories in code for consistency of terminology */}
@@ -334,13 +352,14 @@ const ClusterModal = ({
                 placeholder="Image tags"
                 disabled={isReadOnly || (isClusterView && selectedCluster.length === Object.values(excludedImageIndexes).filter(Boolean).length)}
                 categories={tags}
-                setCategories={setTags}
+                setCategories={setCategories}
                 selected={selectedTags}
                 setSelected={onTagsChanged}
                 innerRef={typeaheadRef}
                 onBlur={() => typeaheadRef.current.hideMenu()}
                 onKeyDown={handleTypeaheadKeyDown}
                 deduplicateByCategory
+                allowNewModes
               />
               {(isClusterView) ?
                 <Button color="light" className="ml-2" onClick={() => setSubset(selectedCluster)}>
@@ -361,10 +380,7 @@ const ClusterModal = ({
                   const selected = !!!(excludedImageIndexes[selection.image]);
                   return (
                     <a href="#" onClick={(e) => toggleImageSelection(selection.image, e)} className="selectable-image">
-                      <img className="w-100" src={src} />
-                      <div className={`state rbt-token alert-${selected ? "success": "secondary"}`}>
-                        {selected ? "S" : "Not s"}elected
-                      </div>
+                      <img className="w-100" src={src} className={selected ? "selected" : ""} />
                     </a>);
                 } else {
                   return <img className="main w-100" src={src} />;
@@ -374,11 +390,7 @@ const ClusterModal = ({
             <>
               <div className="mb-1 text-small text-secondary font-weight-normal">
                 Selected {selectedCluster.length - Object.values(excludedImageIndexes).filter(Boolean).length}{" "}
-                of {selectedCluster.length} images (
-                <a href="#" className="text-secondary" onClick={excludeNone}>select all</a>,{" "}
-                <a href="#" className="text-secondary" onClick={excludeAll}>deselect all</a>,{" "}
-                <a href="#" className="text-secondary" onClick={excludeOpposite}>toggle selection</a>){" "}
-                (thumbnails: {imageGridSizes.map((size, i) =>
+                of {selectedCluster.length} images (thumbnails: {imageGridSizes.map((size, i) =>
                   <>
                     <a key={i} href="#" className="text-secondary" onClick={(e) => setImageGridSize(size, e)}>{size.label}</a>
                     {(i < imageGridSizes.length - 1) ? ", " : ""}

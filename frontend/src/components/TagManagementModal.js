@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   Button,
   Form,
@@ -38,6 +38,7 @@ const LABEL_VALUES = [
   ["NEGATIVE", "Negative"],
   ["HARD_NEGATIVE", "Hard Negative"],
   ["UNSURE", "Unsure"],
+  ["CUSTOM", "Other"],
 ];
 
 const TableContainer = styled.div`
@@ -49,11 +50,13 @@ const TagManagementModal = ({
   isOpen,
   toggle,
   datasetName,
-  datasetInfo,
-  setDatasetInfo,
+  datasetCategories,
+  setDatasetCategories,
   username,
   isReadOnly
 }) => {
+  const categoryList = useMemo(() => Object.keys(datasetCategories), [datasetCategories]);
+
   // TODO: store with redux
   const [categories, setCategories] = useState([]);
   const [categoryCounts, setCategoryCounts] = useState({});
@@ -61,7 +64,7 @@ const TagManagementModal = ({
 
   const kOrderBy = fromPairs(["name", 0].concat(LABEL_VALUES.map(([value], i) => [value, i + 1])));
   const [orderBy, setOrderBy] = useState(kOrderBy.name);
-  const [orderAscending, setOrderAscending] = useState(false);
+  const [orderAscending, setOrderAscending] = useState(true);
 
   const [confirmIsOpen, setConfirmIsOpen] = useState(false);
   const [confirmCategory, setConfirmCategory] = useState(null);
@@ -108,12 +111,12 @@ const TagManagementModal = ({
     if (isReadOnly) return;
 
     const newTag = categories[idx].tag;
-    const oldTag = datasetInfo.categories[srcIdx];
+    const oldTag = categoryList[srcIdx];
     if (newTag === oldTag) {
       return;
     }
 
-    if (datasetInfo.categories.find((name) => name === newTag) !== undefined) {
+    if (categoryList.find((name) => name === newTag) !== undefined) {
       e.target.setCustomValidity(`"${newTag}" already exists`);
       e.target.reportValidity();
       categories[idx].tag = oldTag;
@@ -135,9 +138,8 @@ const TagManagementModal = ({
     }).then(res => res.json());
 
     setPreventCountReload(true);
-    const categoriesCopy = categories.map((obj, i) => obj.tag);
-    categoriesCopy.sort();
-    setDatasetInfo({...datasetInfo, categories: categoriesCopy});
+    const newDatasetCategories = fromPairs(categories.map(obj => [obj.tag, datasetCategories[obj.tag]]));
+    setDatasetCategories(newDatasetCategories);
 
     delete Object.assign(categoryCounts, {[newTag]: categoryCounts[oldTag]})[oldTag];
     setCategoryCounts(categoryCounts);
@@ -163,12 +165,13 @@ const TagManagementModal = ({
     setCategoryCounts(categoryCounts);
 
     setPreventCountReload(true);
-    datasetInfo.categories.splice(categories[idx].srcIdx, 1);
-    setDatasetInfo({...datasetInfo, categories: datasetInfo.categories.slice(0)});
+    let newDatasetCategories = {...datasetCategories};
+    delete newDatasetCategories[tag];
+    setDatasetCategories(newDatasetCategories);
   };
 
   useEffect(async () => {
-    setCategories(sortCategories(datasetInfo.categories.map(
+    setCategories(sortCategories(categoryList.map(
       (tag, i) => ({tag, srcIdx: i})
     )));
 
@@ -180,7 +183,7 @@ const TagManagementModal = ({
     const url = new URL(endpoints.getCategoryCounts + `/${datasetName}`);
     const body = {
       user: username,
-      categories: datasetInfo.categories,
+      categories: categoryList,
     };
     const res = await fetch(url, {
       method: "POST",
@@ -191,7 +194,7 @@ const TagManagementModal = ({
     if (res['numLabeled'] !== undefined) {
       setCategoryCounts(res['numLabeled']);
     }
-  }, [datasetInfo.categories]);
+  }, [categoryList]);
 
   useEffect(() => {
     setCategories(prev => sortCategories(prev))
@@ -201,7 +204,7 @@ const TagManagementModal = ({
     return (
       <tbody>
         {categories.map((obj, i) => {
-          const counts = categoryCounts[datasetInfo.categories[obj.srcIdx]] || {};
+          const counts = categoryCounts[categoryList[obj.srcIdx]] || {};
           return (
             <tr key={obj.srcIdx}>
               <td>

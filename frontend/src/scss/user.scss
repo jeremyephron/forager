@@ -53,22 +53,27 @@ html, body, #root, .main {
       left: 10px;
     }
   }
+
+  img.main {
+    border: 5px solid white;
+  }
+
+  a.selectable-image img {
+    width: 100%;
+  }
 }
 
-.image-grid {
-  a {
-    display: inline-block;
+.image-grid a {
+  display: inline-block;
+}
 
-    img {
-      transition: opacity 0.2s;
+.image-grid a, a.selectable-image {
+  img {
+    border-radius: 3px;
+    border: 5px solid white;
 
-      &:not(.selected) {
-        opacity: 0.5;
-      }
-    }
-
-    &:hover img:not(.selected) {
-      opacity: 0.75;
+    &.selected {
+      border-color: $warning;
     }
   }
 }
@@ -99,6 +104,13 @@ html, body, #root, .main {
   select {
     width: 12rem;
   }
+}
+
+.new-mode-input {
+  width: 8rem;
+  padding-left: 0.6rem;
+  padding-right: 0.6rem;
+  display: inline;
 }
 
 .stack-grid {
@@ -224,6 +236,10 @@ html, body, #root, .main {
     &:after {
       content: "?";
     }
+  }
+
+  &.CUSTOM {
+    color: #007bff;
   }
 }
 
