@@ -1480,7 +1480,7 @@ async def train_svm_v2(request):
     w = np.array(model.coef_[0] * 1000, dtype=np.float32)
     predicted = model.predict(training_features)
     precision = precision_score(training_labels, predicted)
-    recall = (recall_score(training_labels, predicted),)
+    recall = recall_score(training_labels, predicted)
 
     return resp.json(
         {
