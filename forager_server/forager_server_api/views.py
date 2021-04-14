@@ -1235,9 +1235,6 @@ def filtered_images_v2(
     exclude_tags = parse_tag_set_from_query_string_v2(request.GET.get("exclude"))
     subset_ids = [i for i in request.GET.get("subset", "").split(",") if i]
 
-    print(include_tags)
-    print(exclude_tags)
-
     filter_kwargs = {}
     if path_filter:
         filter_kwargs["path__in"] = path_filter
@@ -1402,7 +1399,6 @@ def train_svm_v2(request, dataset_name):
         all_eligible = filtered_images_v2(
             request, dataset, exclude_pks=pos_dataset_item_pks + neg_dataset_item_pks
         )
-        print(len(all_eligible))
         neg_dataset_item_pks.extend(
             randomly_sample_images_v2(all_eligible, num_extra_negs)
         )
