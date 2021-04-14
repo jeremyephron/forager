@@ -4,7 +4,6 @@ from google.cloud import storage
 from enum import IntEnum
 import json
 import os
-import operator
 import random
 import requests
 import urllib.request
@@ -1218,8 +1217,19 @@ def get_tags_from_annotations_v2(annotations):
     return tags_by_pk
 
 
+def randomly_sample_images_v2(all_images, n):
+    if isinstance(all_images, QuerySet):
+        all_image_pks = list(all_images.values_list("pk", flat=True))
+    else:
+        all_image_pks = [di.pk for di in all_images]
+    sample_image_pks = random.sample(
+        all_image_pks, min(len(all_image_pks), n)
+    )
+    return sample_image_pks
+
+
 def filtered_images_v2(
-    request, dataset, path_filter=None
+    request, dataset, path_filter=None, exclude_pks=None
 ) -> Union[List[DatasetItem], QuerySet]:
     include_tags = parse_tag_set_from_query_string_v2(request.GET.get("include"))
     exclude_tags = parse_tag_set_from_query_string_v2(request.GET.get("exclude"))
@@ -1232,7 +1242,10 @@ def filtered_images_v2(
         filter_kwargs["pk__in"] = subset_ids
     dataset_items = DatasetItem.objects.filter(
         dataset=dataset, google=False, **filter_kwargs
-    ).order_by("pk")
+    )
+    if exclude_pks:
+        dataset_items = dataset_items.exclude(pk__in=exclude_pks)
+    dataset_items.order_by("pk")
 
     if not include_tags and not exclude_tags:
         return dataset_items
@@ -1377,6 +1390,19 @@ def train_svm_v2(request, dataset_name):
         elif any(t in neg_tags for t in tags):
             neg_dataset_item_pks.append(pk)
 
+    # Augment with randomly sampled negatives if requested
+    num_extra_negs = settings.SVM_NUM_NEGS_MULTIPLIER * len(
+        pos_dataset_item_pks
+    ) - len(neg_dataset_item_pks)
+    if augment_negs and num_extra_negs > 0:
+        # Uses "include" and "exclude" category sets from GET request
+        all_eligible = filtered_images_v2(
+            request, dataset, exclude_pks=pos_dataset_item_pks + neg_dataset_item_pks
+        )
+        neg_dataset_item_pks.extend(
+            randomly_sample_images_v2(all_eligible, num_extra_negs)
+        )
+
     pos_dataset_item_internal_identifiers = list(
         DatasetItem.objects.filter(pk__in=pos_dataset_item_pks).values_list(
             "identifier", flat=True
@@ -1448,13 +1474,7 @@ def get_next_images_v2(request, dataset_name, dataset=None):
 
     all_images = filtered_images_v2(request, dataset)
     if order == "random":  # TODO(mihirg): pagination (offset) for random
-        if isinstance(all_images, QuerySet):
-            all_image_pks = list(all_images.values_list("pk", flat=True))
-        else:
-            all_image_pks = [di.pk for di in all_images]
-        next_image_pks = random.sample(
-            all_image_pks, min(len(all_image_pks), num_to_return)
-        )
+        next_image_pks = randomly_sample_images_v2(all_images, num_to_return)
         next_images_dict = DatasetItem.objects.in_bulk(next_image_pks)
         next_images = [next_images_dict[pk] for pk in next_image_pks]  # preserve order
     else:
