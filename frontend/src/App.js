@@ -76,6 +76,12 @@ const endpoints = fromPairs(toPairs({
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
 const App = () => {
+  useEffect(() => {
+    window.onbeforeunload = function(){
+      return "Are you sure you want to exit Forager?";
+    };
+  }, []);
+
   //
   // USER AUTHENTICATION
   //
