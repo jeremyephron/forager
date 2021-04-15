@@ -234,11 +234,6 @@ const App = () => {
     });
 
     if (results.type !== "svm") {
-      // Reset all SVM parameters
-      setSvmScoreRange([0, 100]);
-      setSvmAugmentNegs(true);
-      setSvmPosTags([]);
-      setSvmNegTags([]);
       setTrainedSvmData(null);
     }
     if ((results.type === "knn" || results.type === "svm") &&
