@@ -68,7 +68,7 @@ class TopKReducer(Reducer):
 
 class VectorReducer(Reducer):
     class PoolingType(Enum):
-        NONE = lambda x: x
+        NONE = functools.partial(lambda x: x)
         MAX = functools.partial(np.max, axis=0)
         AVG = functools.partial(np.mean, axis=0)
 

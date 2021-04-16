@@ -1462,7 +1462,10 @@ async def generate_embedding(request):
             )
             job = MapReduceJob(
                 mapper,
-                VectorReducer(),
+                VectorReducer(
+                    VectorReducer.PoolingType.AVG,
+                    extract_func=extract_embedding_from_mapper_output,
+                ),
                 {"input_bucket": bucket, "reduction": "average"},
                 n_retries=config.CLOUD_RUN_N_RETRIES,
                 chunk_size=1,
