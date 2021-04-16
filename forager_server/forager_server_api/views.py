@@ -268,8 +268,8 @@ def create_model(request, dataset_name, dataset=None):
     cluster_id = payload['cluster_id']
     bucket_name = payload['bucket']
     index_id = payload['index_id']
-    pos_tags = parse_tag_set_from_query_string_v2(payload['pos_tags'])
-    neg_tags = parse_tag_set_from_query_string_v2(payload['neg_tags'])
+    pos_tags = parse_tag_set_from_query_v2(payload['pos_tags'])
+    neg_tags = parse_tag_set_from_query_v2(payload['neg_tags'])
     augment_negs = bool(distutils.util.strtobool(payload['augment_negs']))
     aux_label_type = payload['aux_label_type']
     resume_model_id = payload.get('resume', None)
@@ -1175,8 +1175,13 @@ def active_batch(request, dataset_name):
 Tag = namedtuple("Tag", "category value")  # type: NamedTuple[str, str]
 
 
-def parse_tag_set_from_query_string_v2(s):
-    parts = (s or "").split(",")
+def parse_tag_set_from_query_v2(s):
+    if isinstance(s, list):
+        parts = s
+    elif isinstance(s, str) and s:
+        parts = s.split(",")
+    else:
+        parts = []
     ts = set()
     for part in parts:
         if not part:
@@ -1231,9 +1236,15 @@ def randomly_sample_images_v2(all_images, n):
 def filtered_images_v2(
     request, dataset, path_filter=None, exclude_pks=None
 ) -> Union[List[DatasetItem], QuerySet]:
-    include_tags = parse_tag_set_from_query_string_v2(request.GET.get("include"))
-    exclude_tags = parse_tag_set_from_query_string_v2(request.GET.get("exclude"))
-    subset_ids = [i for i in request.GET.get("subset", "").split(",") if i]
+    if request.method == "POST":
+        payload = json.loads(request.body)
+        include_tags = parse_tag_set_from_query_v2(payload.get("include"))
+        exclude_tags = parse_tag_set_from_query_v2(payload.get("exclude"))
+        subset_ids = [i for i in payload.get("subset", []) if i]
+    else:
+        include_tags = parse_tag_set_from_query_v2(request.GET.get("include"))
+        exclude_tags = parse_tag_set_from_query_v2(request.GET.get("exclude"))
+        subset_ids = [i for i in request.GET.get("subset", "").split(",") if i]
 
     filter_kwargs = {}
     if path_filter:
@@ -1300,7 +1311,11 @@ def process_image_query_results_v2(request, dataset, query_response, num_results
 
 
 def build_result_set_v2(request, dataset, dataset_items, type, *, num_total=None):
-    index_id = request.GET["index_id"]
+    if request.method == "POST":
+        payload = json.loads(request.body)
+        index_id = payload["index_id"]
+    else:
+        index_id = request.GET["index_id"]
 
     bucket_name = dataset.directory[len("gs://") :].split("/")[0]
     path_template = "https://storage.googleapis.com/{:s}/".format(bucket_name) + "{:s}"
@@ -1346,11 +1361,12 @@ def generate_embedding_v2(request):
     return JsonResponse(r.json())
 
 
-@api_view(["GET"])
+@api_view(["POST"])
 @csrf_exempt
 def query_knn_v2(request, dataset_name):
-    index_id = request.GET["index_id"]
-    num_results = int(request.GET.get("num", 1000))
+    payload = json.loads(request.body)
+    index_id = payload["index_id"]
+    num_results = int(payload.get("num", 1000))
     image_ids = None  # TODO(mihirg): change to use embeddings
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
@@ -1383,8 +1399,8 @@ def query_knn_v2(request, dataset_name):
 @csrf_exempt
 def train_svm_v2(request, dataset_name):
     index_id = request.GET["index_id"]
-    pos_tags = parse_tag_set_from_query_string_v2(request.GET["pos_tags"])
-    neg_tags = parse_tag_set_from_query_string_v2(request.GET.get("neg_tags"))
+    pos_tags = parse_tag_set_from_query_v2(request.GET["pos_tags"])
+    neg_tags = parse_tag_set_from_query_v2(request.GET.get("neg_tags"))
     augment_negs = bool(
         distutils.util.strtobool(request.GET.get("augment_negs", "false"))
     )
@@ -1444,11 +1460,12 @@ def train_svm_v2(request, dataset_name):
 @api_view(["GET"])
 @csrf_exempt
 def query_svm_v2(request, dataset_name):
-    index_id = request.GET["index_id"]
-    svm_vector = request.GET["svm_vector"]
-    score_min = float(request.GET.get("score_min", 0.0))
-    score_max = float(request.GET.get("score_max", 1.0))
-    num_results = int(request.GET.get("num", 1000))
+    payload = json.loads(request.body)
+    index_id = payload["index_id"]
+    svm_vector = payload["svm_vector"]
+    score_min = float(payload.get("score_min", 0.0))
+    score_max = float(payload.get("score_max", 1.0))
+    num_results = int(payload.get("num", 1000))
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
@@ -1476,15 +1493,16 @@ def query_svm_v2(request, dataset_name):
     return JsonResponse(build_result_set_v2(request, dataset, result_images, "svm"))
 
 
-@api_view(["GET"])
+@api_view(["POST"])
 @csrf_exempt
 def get_next_images_v2(request, dataset_name, dataset=None):
     if not dataset:
         dataset = get_object_or_404(Dataset, name=dataset_name)
 
-    offset_to_return = int(request.GET.get("offset", 0))
-    num_to_return = int(request.GET.get("num", 1000))
-    order = request.GET.get("order", "id")
+    payload = json.loads(request.body)
+    offset_to_return = int(payload.get("offset", 0))
+    num_to_return = int(payload.get("num", 1000))
+    order = payload.get("order", "id")
 
     all_images = filtered_images_v2(request, dataset)
     if order == "random":  # TODO(mihirg): pagination (offset) for random
