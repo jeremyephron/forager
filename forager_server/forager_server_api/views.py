@@ -1367,18 +1367,13 @@ def query_knn_v2(request, dataset_name):
     payload = json.loads(request.body)
     index_id = payload["index_id"]
     num_results = int(payload.get("num", 1000))
-    image_ids = None  # TODO(mihirg): change to use embeddings
+    embeddings = payload["embeddings"]
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
-    dataset_item_internal_identifiers = list(
-        DatasetItem.objects.filter(pk__in=image_ids).values_list(
-            "identifier", flat=True
-        )
-    )
 
     params = {
         "index_id": index_id,
-        "identifiers": dataset_item_internal_identifiers,
+        "embeddings": embeddings,
     }
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/query_knn_v2",

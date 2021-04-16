@@ -1480,7 +1480,7 @@ async def generate_embedding(request):
 async def query_knn_v2(request):
     embeddings = request.json["embeddings"]
     index_id = request.json["index_id"]
-    use_full_image = bool(request.json.get("use_full_image", False))
+    use_full_image = bool(request.json.get("use_full_image", True))
 
     index = await get_index(index_id)
 
