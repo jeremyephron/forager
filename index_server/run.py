@@ -761,7 +761,6 @@ class LabeledIndex:
 # Start web server
 app = Sanic(__name__)
 app.update_config({"RESPONSE_TIMEOUT": config.SANIC_RESPONSE_TIMEOUT})
-storage_client = Storage()
 
 
 # CLUSTER
@@ -1447,26 +1446,29 @@ async def generate_embedding(request):
         image_data = re.sub("^data:image/.+;base64,", "", request.json["image_data"])
 
         # Upload to Cloud Storage
-        image = Image.open(BytesIO(base64.b64decode(image_data)))
-        bucket = config.UPLOADED_IMAGE_BUCKET
-        path = os.path.join(config.UPLOADED_IMAGE_DIR, f"{uuid.uuid4()}.png")
-        with BytesIO() as image_buffer:
-            image.save(image_buffer, "jpeg")
-            image_buffer.seek(0)
-            await storage_client.upload(bucket, path, image_buffer)
+        async with aiohttp.ClientSession() as session:
+            storage_client = Storage(session=session)
+            image = Image.open(BytesIO(base64.b64decode(image_data)))
+            bucket = config.UPLOADED_IMAGE_BUCKET
+            path = os.path.join(config.UPLOADED_IMAGE_DIR, f"{uuid.uuid4()}.png")
+            with BytesIO() as image_buffer:
+                image.save(image_buffer, "jpeg")
+                image_buffer.seek(0)
+                await storage_client.upload(bucket, path, image_buffer)
 
-        # Compute embedding using Mapper
-        mapper = MapperSpec(
-            url=config.MAPPER_CLOUD_RUN_URL, n_mappers=config.CLOUD_RUN_N_MAPPERS
-        )
-        job = MapReduceJob(
-            mapper,
-            VectorReducer(),
-            {"input_bucket": bucket, "reduction": "average"},
-            n_retries=config.CLOUD_RUN_N_RETRIES,
-            chunk_size=1,
-        )
-        embedding = await job.run_until_complete([{"image": path}])
+            # Compute embedding using Mapper
+            mapper = MapperSpec(
+                url=config.MAPPER_CLOUD_RUN_URL, n_mappers=config.CLOUD_RUN_N_MAPPERS
+            )
+            job = MapReduceJob(
+                mapper,
+                VectorReducer(),
+                {"input_bucket": bucket, "reduction": "average"},
+                n_retries=config.CLOUD_RUN_N_RETRIES,
+                chunk_size=1,
+                session=session,
+            )
+            embedding = await job.run_until_complete([{"image": path}])
 
     return resp.json({"embedding": utils.numpy_to_base64(embedding)})
 

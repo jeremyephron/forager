@@ -1337,13 +1337,13 @@ def generate_embedding_v2(request):
     payload = json.loads(request.body)
     image_id = payload.get("image_id")
     if image_id:
-        index_id = payload["index_id"]
         payload["identifier"] = DatasetItem.objects.get(pk=image_id).identifier
 
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/generate_embedding",
         json=payload,
     )
+    return JsonResponse(r.json())
 
 
 @api_view(["GET"])
