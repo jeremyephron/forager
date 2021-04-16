@@ -1368,12 +1368,14 @@ def query_knn_v2(request, dataset_name):
     index_id = payload["index_id"]
     num_results = int(payload.get("num", 1000))
     embeddings = payload["embeddings"]
+    use_full_image = bool(payload.get("use_full_image", True))
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
     params = {
         "index_id": index_id,
         "embeddings": embeddings,
+        "use_full_image": use_full_image,
     }
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/query_knn_v2",

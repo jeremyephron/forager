@@ -272,6 +272,7 @@ const App = () => {
     } else if (orderingMode === "knn") {
       url = new URL(`${endpoints.queryKnn}/${datasetName}`);
       body.embeddings = Object.values(knnImages).map(i => i.embedding);
+      body.use_full_image = !knnUseSpatial;
     } else if (orderingMode === "svm") {
       url = new URL(`${endpoints.querySvm}/${datasetName}`);
       body.svm_vector = trainedSvmData.svm_vector;

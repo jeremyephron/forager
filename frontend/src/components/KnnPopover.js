@@ -82,7 +82,6 @@ const KnnPopover = ({ images, dispatch, generateEmbedding, useSpatial, setUseSpa
             id="knn-use-spatial-checkbox"
             checked={useSpatial}
             onChange={(e) => setUseSpatial(e.target.checked)}
-            disabled
           />
           <label className="custom-control-label" htmlFor="knn-use-spatial-checkbox">
             Use spatial embeddings (slower but more accurate)

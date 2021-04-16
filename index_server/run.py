@@ -164,13 +164,15 @@ class LabeledIndex:
                     sorted_results.append(LabeledIndex.QueryResult(int(i), float(d)))
         else:
             assert (
-                num_results is not None
-            ), "Returning exhausive results not supported for spatial queries"
-            assert (
                 min_d == 0.0 and max_d == 1.0
             ), "Distance bounds not supported for spatial queries"
 
             index = self.indexes[IndexType.SPATIAL_DOT if svm else IndexType.SPATIAL]
+            if num_results is None:
+                # TODO(mihirg): Set num_results properly
+                num_results = config.QUERY_NUM_RESULTS_MULTIPLE * len(self.labels)
+                num_probes = index.n_centroids
+
             dists, (ids, locs) = index.query(
                 query_vector,
                 config.QUERY_NUM_RESULTS_MULTIPLE * num_results,
@@ -1480,7 +1482,7 @@ async def generate_embedding(request):
 async def query_knn_v2(request):
     embeddings = request.json["embeddings"]
     index_id = request.json["index_id"]
-    use_full_image = bool(request.json.get("use_full_image", True))
+    use_full_image = request.json["use_full_image"]
 
     index = await get_index(index_id)
 
