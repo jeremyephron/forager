@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useReducer } from "react";
 import useInterval from 'react-useinterval';
 import {
   Container,
@@ -23,8 +23,11 @@ import { ReactSVG } from "react-svg";
 import Slider, { Range } from "rc-slider";
 import Emoji from "react-emoji-render";
 import ReactTimeAgo from "react-time-ago";
+import { v4 as uuidv4 } from "uuid";
 
 import fromPairs from "lodash/fromPairs";
+import size from "lodash/size";
+import some from "lodash/some";
 import sortBy from "lodash/sortBy";
 import toPairs from "lodash/toPairs";
 
@@ -40,6 +43,7 @@ import {
   CategoryInput,
   FeatureInput,
   NewModeInput,
+  KnnPopover,
 } from "./components";
 
 var disjointSet = require("disjoint-set");
@@ -56,7 +60,7 @@ const orderingModes = [
   {id: "random", label: "Random order"},
   {id: "id", label: "Dataset order"},
   {id: "svm", label: "SVM"},
-  {id: "knn", label: "KNN", disabled: true},
+  {id: "knn", label: "KNN"},
 ];
 
 const dnns = [
@@ -73,9 +77,12 @@ const endpoints = fromPairs(toPairs({
   modelStatus: "model_v2",
   startCluster: "start_cluster",
   clusterStatus: "cluster",
+  generateEmbedding: 'generate_embedding_v2',
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
 const App = () => {
+  const [hasDrag, setHasDrag] = useState(false);
+
   useEffect(() => {
     window.onbeforeunload = function(){
       return "Are you sure you want to exit Forager?";
@@ -152,7 +159,62 @@ const App = () => {
   const [orderingMode, setOrderingMode] = useState(orderingModes[0].id);
   const [orderByClusterSize, setOrderByClusterSize] = useState(true);
   const [clusteringStrength, setClusteringStrength] = useState(20);
-  const [orderingModePopoverOpen, setOrderingModePopoverOpen] = useState(false);
+
+  const generateEmbedding = async (req, uuid) => {
+    const url = new URL(endpoints.generateEmbedding);
+    const body = {
+      index_id: datasetInfo.index_id,
+      ...req,
+    };
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body),
+    }).then(res => res.json());
+
+    knnImagesDispatch({
+      type: "SET_EMBEDDING",
+      embedding: res.embedding,
+      uuid,
+    });
+  };
+
+  const knnReducer = (state, action) => {
+    switch (action.type) {
+      case "ADD_IMAGE_FROM_DATASET": {
+        let newState = {...state};
+        let newImageState = {type: "dataset", id: action.image.id, src: action.image.thumb};
+        newState[action.uuid] = newImageState;
+        return newState;
+      }
+      case "ADD_IMAGE_FILE": {
+        let newState = {...state};
+        let newImageState = {type: "file", file: action.file, src: URL.createObjectURL(action.file)};
+        newState[action.uuid] = newImageState;
+        return newState;
+      }
+      case "SET_EMBEDDING": {
+        if (!state.hasOwnProperty(action.uuid)) return state;
+        let newState = {...state};
+        let newImageState = {...state[action.uuid], embedding: action.embedding};
+        newState[action.uuid] = newImageState;
+        return newState;
+      }
+      case "DELETE_IMAGE": {
+        let newState = {...state};
+        delete newState[action.uuid];
+        return newState;
+      }
+      default:
+        throw new Error();
+    }
+  };
+
+  const [knnImages, knnImagesDispatch] = useReducer(knnReducer, {});
+  const [knnUseSpatial, setKnnUseSpatial] = useState(false);
+
+  const [svmPopoverOpen, setSvmPopoverOpen] = useState(false);
   const [svmScoreRange, setSvmScoreRange] = useState([0, 100]);
   const [svmAugmentNegs, setSvmAugmentNegs] = useState(true);
   const [svmPosTags, setSvmPosTags] = useState([]);
@@ -161,7 +223,6 @@ const App = () => {
   const [svmAugmentExcludeTags, setSvmAugmentExcludeTags] = useState([]);
   const [svmFeature, setSvmFeature] = useState([]);
 
-  const [knnImage, setKnnImage] = useState({});
   const [subset, setSubset_] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [queryResultData, setQueryResultData] = useState({
@@ -197,7 +258,7 @@ const App = () => {
     setSelection({});
 
     let url;
-    let params = {
+    let body = {
       num: 1000,
       index_id: datasetInfo.index_id,
       include: datasetIncludeTags.map(t => `${t.category}:${t.value}`),
@@ -207,25 +268,23 @@ const App = () => {
 
     if (orderingMode === "id" || orderingMode === "random") {
       url = new URL(`${endpoints.getNextImages}/${datasetName}`);
-      url.search = new URLSearchParams({...params, order: orderingMode}).toString();
+      body.order = orderingMode;
     } else if (orderingMode === "knn") {
       url = new URL(`${endpoints.queryKnn}/${datasetName}`);
-      url.search = new URLSearchParams({...params,
-        image_ids: [knnImage.id]
-      }).toString();
+      body.embeddings = Object.values(knnImages).map(i => i.embedding);
     } else if (orderingMode === "svm") {
       url = new URL(`${endpoints.querySvm}/${datasetName}`);
-      url.search = new URLSearchParams({...params,
-        svm_vector: trainedSvmData.svm_vector,
-        score_min: svmScoreRange[0] / 100,
-        score_max: svmScoreRange[1] / 100,
-      }).toString();
+      body.svm_vector = trainedSvmData.svm_vector;
+      body.score_min = svmScoreRange[0] / 100;
+      body.score_max = svmScoreRange[1] / 100;
     } else {
       console.error(`Query type (${orderingMode}) not implemented`);
       return;
     }
     const results = await fetch(url, {
-      method: "GET",
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body),
     }).then(r => r.json());
 
     const images = results.paths.map((path, i) => {
@@ -262,11 +321,18 @@ const App = () => {
     setIsLoading(true);
   }
 
-  // Run KNN queries whenever user clicks "find similar" button
+  // Add KNN image whenever user clicks "find similar" button
   const findSimilar = (image) => {
-    setKnnImage(image);
+    const uuid = uuidv4();
+    knnImagesDispatch({
+      type: "ADD_IMAGE_FROM_DATASET",
+      image,
+      uuid,
+    });
     setOrderingMode("knn");
-    setIsLoading(true);
+    setClusterIsOpen(false);
+    setSelection({});
+    generateEmbedding({image_id: image.id}, uuid);
   }
 
   // Automatically (re-)cluster whenever new results load; also run this manually when
@@ -650,7 +716,10 @@ const App = () => {
               <Button
                 color="light"
                 onClick={() => setIsLoading(true)}
-                disabled={orderingMode === "svm" && !!!(trainedSvmData)}
+                disabled={
+                  (orderingMode === "svm" && !!!(trainedSvmData)) ||
+                  (orderingMode === "knn" && (size(knnImages) === 0 || some(Object.values(knnImages).map(i => !(i.embedding)))))
+                }
               >Run query</Button>
             </div>
             <div className="mt-2 mb-1 d-flex flex-row-reverse justify-content-between">
@@ -697,10 +766,10 @@ const App = () => {
         </div>
         {orderingMode === "svm" && <Popover
           placement="bottom"
-          isOpen={orderingModePopoverOpen || isTraining || !!!(trainedSvmData)}
+          isOpen={svmPopoverOpen || isTraining || !!!(trainedSvmData)}
           target="ordering-mode"
           trigger="hover"
-          toggle={() => setOrderingModePopoverOpen(!orderingModePopoverOpen)}
+          toggle={() => setSvmPopoverOpen(!svmPopoverOpen)}
           fade={false}
           popperClassName={`svm-popover ${isTraining ? "loading" : ""}`}
         >
@@ -805,6 +874,14 @@ const App = () => {
             </div>
           </PopoverBody>
         </Popover>}
+        {orderingMode === "knn" && <KnnPopover
+          images={knnImages}
+          dispatch={knnImagesDispatch}
+          generateEmbedding={generateEmbedding}
+          useSpatial={knnUseSpatial}
+          setUseSpatial={setKnnUseSpatial}
+          hasDrag={hasDrag}
+        />}
         <Container fluid>
           {(!!!(datasetInfo.isNotLoaded) && !isLoading && queryResultData.images.length == 0) &&
             <p className="text-center text-muted">No results match your query.</p>}

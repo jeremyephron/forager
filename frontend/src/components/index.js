@@ -7,3 +7,4 @@ export { default as TagManagementModal } from "./TagManagementModal.js";
 export { default as CategoryInput } from "./CategoryInput.js";
 export { default as FeatureInput } from "./FeatureInput.js";
 export { default as NewModeInput } from "./NewModeInput.js";
+export { default as KnnPopover } from "./KnnPopover.js";
