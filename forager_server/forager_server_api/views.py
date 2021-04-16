@@ -1454,7 +1454,7 @@ def train_svm_v2(request, dataset_name):
     return JsonResponse(r.json())  # {"svm_vector": base64-encoded string}
 
 
-@api_view(["GET"])
+@api_view(["POST"])
 @csrf_exempt
 def query_svm_v2(request, dataset_name):
     payload = json.loads(request.body)
