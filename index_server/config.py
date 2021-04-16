@@ -9,7 +9,7 @@ ip_request = Request(
 )
 ip_request.add_header("Metadata-Flavor", "Google")
 INSTANCE_IP = urlopen(ip_request).read().decode()
-#INSTANCE_IP = ""
+# INSTANCE_IP = ""
 
 SANIC_RESPONSE_TIMEOUT = 10 * 60  # seconds
 
@@ -61,9 +61,11 @@ TRAINER_STATUS_CALLBACK = f"http://{INSTANCE_IP}:5000{TRAINER_STATUS_ENDPOINT}"
 
 BGSPLIT_TRAINING_MAX_RAM = 35 * GIGABYTE
 BGSPLIT_TRAINER_STATUS_ENDPOINT = "/bgsplit_trainer_status"
-BGSPLIT_TRAINER_STATUS_CALLBACK = f"http://{INSTANCE_IP}:5000{BGSPLIT_TRAINER_STATUS_ENDPOINT}"
+BGSPLIT_TRAINER_STATUS_CALLBACK = (
+    f"http://{INSTANCE_IP}:5000{BGSPLIT_TRAINER_STATUS_ENDPOINT}"
+)
 
-GCS_PUBLIC_ROOT_URL = 'https://storage.googleapis.com/'
+GCS_PUBLIC_ROOT_URL = "https://storage.googleapis.com/"
 
 INDEX_PARENT_DIR = Path("~/forager/indexes").expanduser().resolve()
 INDEX_UPLOAD_GCS_PATH = "gs://foragerml/indexes/"  # trailing slash = directory
@@ -73,16 +75,18 @@ MODEL_DIR_TMPL = Path("~/forager/models").expanduser().resolve()
 MODEL_UPLOAD_GCS_PATH = "gs://foragerml/models/"  # trailing slash = directory
 
 AUX_PARENT_DIR = Path("~/forager/aux_labels").expanduser().resolve()
-AUX_DIR_TMPL = os.path.join(
-    AUX_PARENT_DIR, '{}/{}.pickle')
+AUX_DIR_TMPL = os.path.join(AUX_PARENT_DIR, "{}/{}.pickle")
 AUX_UPLOAD_GCS_PATH = "gs://foragerml/aux_labels/"  # trailing slash = directory
-AUX_GCS_TMPL = os.path.join(
-    AUX_UPLOAD_GCS_PATH, '{}/{}.pickle')
+AUX_GCS_TMPL = os.path.join(AUX_UPLOAD_GCS_PATH, "{}/{}.pickle")
 AUX_GCS_PUBLIC_TMPL = os.path.join(
-    GCS_PUBLIC_ROOT_URL, 'foragerml/aux_labels/{}/{}.pickle')
+    GCS_PUBLIC_ROOT_URL, "foragerml/aux_labels/{}/{}.pickle"
+)
 
 QUERY_PATCHES_PER_IMAGE = 8
 QUERY_NUM_RESULTS_MULTIPLE = 80
 
 SVM_NUM_NEGS_MULTIPLIER = 7
 BGSPLIT_NUM_NEGS_MULTIPLIER = 10
+
+UPLOADED_IMAGE_BUCKET = "foragerml"
+UPLOADED_IMAGE_DIR = "uploads/"

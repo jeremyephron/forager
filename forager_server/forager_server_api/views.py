@@ -1331,12 +1331,27 @@ def build_result_set_v2(request, dataset, dataset_items, type, *, num_total=None
     }
 
 
+@api_view(["POST"])
+@csrf_exempt
+def generate_embedding_v2(request):
+    payload = json.loads(request.body)
+    image_id = payload.get("image_id")
+    if image_id:
+        index_id = payload["index_id"]
+        payload["identifier"] = DatasetItem.objects.get(pk=image_id).identifier
+
+    r = requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/generate_embedding",
+        json=payload,
+    )
+
+
 @api_view(["GET"])
 @csrf_exempt
 def query_knn_v2(request, dataset_name):
     index_id = request.GET["index_id"]
-    image_ids = request.GET["image_ids"].split(",")
     num_results = int(request.GET.get("num", 1000))
+    image_ids = None  # TODO(mihirg): change to use embeddings
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
     dataset_item_internal_identifiers = list(

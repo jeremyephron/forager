@@ -1,10 +1,12 @@
 import asyncio
+import base64
 import concurrent
 from collections import defaultdict
 from dataclasses import dataclass
 import functools
 import heapq
 import itertools
+from io import BytesIO
 import json
 import logging
 import operator
@@ -12,6 +14,7 @@ import os
 import pickle
 from pathlib import Path
 import random
+import re
 import shutil
 import time
 import uuid
@@ -20,7 +23,9 @@ import aiohttp
 from bidict import bidict
 from dataclasses_json import dataclass_json
 import fastcluster
+from gcloud.aio.storage import Storage
 import numpy as np
+from PIL import Image
 from sanic import Sanic
 import sanic.response as resp
 from scipy.spatial.distance import squareform
@@ -756,6 +761,7 @@ class LabeledIndex:
 # Start web server
 app = Sanic(__name__)
 app.update_config({"RESPONSE_TIMEOUT": config.SANIC_RESPONSE_TIMEOUT})
+storage_client = Storage()
 
 
 # CLUSTER
@@ -1430,18 +1436,54 @@ async def perform_clustering(request):
     return resp.json({"clustering": clustering})
 
 
+@app.route("generate_embedding", methods=["POST"])
+async def generate_embedding(request):
+    identifier = request.json.get("identifier")
+    if identifier:
+        index_id = request.json["index_id"]
+        index = await get_index(index_id)
+        embedding = index.get_embeddings([identifier])[0]
+    else:
+        image_data = re.sub("^data:image/.+;base64,", "", request.json["image_data"])
+
+        # Upload to Cloud Storage
+        image = Image.open(BytesIO(base64.b64decode(image_data)))
+        bucket = config.UPLOADED_IMAGE_BUCKET
+        path = os.path.join(config.UPLOADED_IMAGE_DIR, f"{uuid.uuid4()}.png")
+        with BytesIO() as image_buffer:
+            image.save(image_buffer, "jpeg")
+            image_buffer.seek(0)
+            await storage_client.upload(bucket, path, image_buffer)
+
+        # Compute embedding using Mapper
+        mapper = MapperSpec(
+            url=config.MAPPER_CLOUD_RUN_URL, n_mappers=config.CLOUD_RUN_N_MAPPERS
+        )
+        job = MapReduceJob(
+            mapper,
+            VectorReducer(),
+            {"input_bucket": bucket, "reduction": "average"},
+            n_retries=config.CLOUD_RUN_N_RETRIES,
+            chunk_size=1,
+        )
+        embedding = await job.run_until_complete([{"image": path}])
+
+    return resp.json({"embedding": utils.numpy_to_base64(embedding)})
+
+
 @app.route("/query_knn_v2", methods=["POST"])
 async def query_knn_v2(request):
-    identifiers = request.json["identifiers"]
+    embeddings = request.json["embeddings"]
     index_id = request.json["index_id"]
+    use_full_image = bool(request.json.get("use_full_image", False))
 
     index = await get_index(index_id)
 
     # Get query vector from local flat index
-    query_vector = np.mean(index.get_embeddings(identifiers), axis=0)
+    query_vector = np.mean([utils.base64_to_numpy(e) for e in embeddings], axis=0)
 
     # Run query and return results
-    query_results = index.query(query_vector, use_full_image=True, svm=False)
+    query_results = index.query(query_vector, use_full_image=use_full_image, svm=False)
     return resp.json({"results": [r.to_dict() for r in query_results]})
 
 
