@@ -163,9 +163,11 @@ html, body, #root, .main {
   }
 }
 
+$semi-transparent-white: rgba(255, 255, 255, 0.92);
+
 .popover {
   font-weight: normal;
-  background-color: rgba(255, 255, 255, 0.92);
+  background-color: $semi-transparent-white;
 
   .popover-body {
     padding-bottom: 0.6rem;
@@ -179,6 +181,7 @@ html, body, #root, .main {
 .knn-popover {
   padding-top: 0.4rem;
   padding-bottom: 0.4rem;
+  width: 15rem;
 
   .dropzone {
     width: 100%;
@@ -190,6 +193,24 @@ html, body, #root, .main {
     border-radius: 5px;
     text-align: center;
     padding: 0.5rem;
+  }
+
+
+  .removable-image {
+    position: relative;
+
+    img {
+      width: 100%;
+    }
+
+    .remove-icon {
+      cursor: pointer;
+      position: absolute;
+      top: 7px;
+      right: 7px;
+      border-radius: 9px;
+      color: $semi-transparent-white;
+    }
   }
 }
 

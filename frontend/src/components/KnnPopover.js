@@ -15,7 +15,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import some from "lodash/some";
 import size from "lodash/size";
 
-const KnnPopover = ({ images, dispatch, generateEmbedding, useSpatial, setUseSpatial, hasDrag, onDrop }) => {
+const KnnPopover = ({ images, dispatch, generateEmbedding, useSpatial, setUseSpatial, hasDrag }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const toBase64 = file => new Promise((resolve, reject) => {
@@ -25,8 +25,7 @@ const KnnPopover = ({ images, dispatch, generateEmbedding, useSpatial, setUseSpa
     reader.onerror = error => reject(error);
   });
 
-  const innerOnDrop = async (acceptedFiles) => {
-    onDrop();
+  const onDrop = async (acceptedFiles) => {
     let promises = [];
     for (const file of acceptedFiles) {
       const uuid = uuidv4();
@@ -54,15 +53,14 @@ const KnnPopover = ({ images, dispatch, generateEmbedding, useSpatial, setUseSpa
     >
       <PopoverBody>
         {Object.entries(images).map(([uuid, image]) =>
-          <div className="mb-1">
+          <div className="removable-image mb-2">
             <img
-              className="w-100"
               key={uuid}
               src={image.src}
             />
             <FontAwesomeIcon
               icon={faTimesCircle}
-              style={{cursor: "pointer"}}
+              className="remove-icon"
               onClick={() => dispatch({
                 type: "DELETE_IMAGE",
                 uuid,
@@ -70,15 +68,15 @@ const KnnPopover = ({ images, dispatch, generateEmbedding, useSpatial, setUseSpa
             />
           </div>
         )}
-        <Dropzone accept="image/*" multiple preventDropOnDocument onDrop={innerOnDrop} >
+        <Dropzone accept="image/*" multiple preventDropOnDocument onDrop={onDrop} >
           {({getRootProps, getInputProps}) => (
-            <div {...getRootProps()} className="dropzone">
+            <div {...getRootProps()} className="dropzone mb-2">
               <input {...getInputProps()} />
               Drop image here, or click to choose a file
             </div>
           )}
         </Dropzone>
-        <div className="mt-2 custom-control custom-checkbox">
+        <div className="custom-control custom-checkbox">
           <input
             type="checkbox"
             className="custom-control-input"

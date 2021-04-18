@@ -905,7 +905,6 @@ const App = () => {
           useSpatial={knnUseSpatial}
           setUseSpatial={setKnnUseSpatial}
           hasDrag={hasDrag}
-          onDrop={() => {}}
         />}
         <Container fluid>
           {(!!!(datasetInfo.isNotLoaded) && !isLoading && queryResultData.images.length == 0) &&
