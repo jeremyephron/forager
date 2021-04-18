@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useReducer } from "react";
+import React, { useState, useEffect, useCallback, useReducer, useRef } from "react";
 import useInterval from 'react-useinterval';
 import {
   Container,
@@ -83,11 +83,34 @@ const endpoints = fromPairs(toPairs({
 const App = () => {
   const [hasDrag, setHasDrag] = useState(false);
 
+  const dragRefCount = useRef(0);
+
+  const onDragEnter = () => {
+    dragRefCount.current = dragRefCount.current + 1;
+    setHasDrag(true);
+  };
+
+  const onDragExit = () => {
+    dragRefCount.current = dragRefCount.current - 1;
+    if (dragRefCount.current === 0) setHasDrag(false);
+  };
+
+  const onDrop = () => {
+    dragRefCount.current = 0;
+    setHasDrag(false);
+  };
+
   useEffect(() => {
-    window.onbeforeunload = function(){
-      return "Are you sure you want to exit Forager?";
-    };
-  }, []);
+    window.onbeforeunload = () => "Are you sure you want to exit Forager?";
+    document.addEventListener("dragenter", onDragEnter);
+    document.addEventListener("dragleave", onDragExit);
+    document.addEventListener("drop", onDrop);
+    return () => {
+      document.removeEventListener("dragenter", onDragEnter);
+      document.removeEventListener("dragleave", onDragExit);
+      document.removeEventListener("drop", onDrop);
+    }
+  }, [onDragEnter, onDragExit, onDrop]);
 
   //
   // USER AUTHENTICATION
@@ -882,6 +905,7 @@ const App = () => {
           useSpatial={knnUseSpatial}
           setUseSpatial={setKnnUseSpatial}
           hasDrag={hasDrag}
+          onDrop={() => {}}
         />}
         <Container fluid>
           {(!!!(datasetInfo.isNotLoaded) && !isLoading && queryResultData.images.length == 0) &&

@@ -15,7 +15,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import some from "lodash/some";
 import size from "lodash/size";
 
-const KnnPopover = ({ images, dispatch, generateEmbedding, useSpatial, setUseSpatial, hasDrag }) => {
+const KnnPopover = ({ images, dispatch, generateEmbedding, useSpatial, setUseSpatial, hasDrag, onDrop }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const toBase64 = file => new Promise((resolve, reject) => {
@@ -25,16 +25,19 @@ const KnnPopover = ({ images, dispatch, generateEmbedding, useSpatial, setUseSpa
     reader.onerror = error => reject(error);
   });
 
-  const onDrop = async (acceptedFiles) => {
-    if (acceptedFiles.length !== 1) return;
-    const uuid = uuidv4();
-    const file = acceptedFiles[0];
-    dispatch({
-      type: "ADD_IMAGE_FILE",
-      file,
-      uuid,
-    });
-    generateEmbedding({image_data: await toBase64(file)}, uuid);
+  const innerOnDrop = async (acceptedFiles) => {
+    onDrop();
+    let promises = [];
+    for (const file of acceptedFiles) {
+      const uuid = uuidv4();
+      dispatch({
+        type: "ADD_IMAGE_FILE",
+        file,
+        uuid,
+      });
+      promises.push(generateEmbedding({image_data: await toBase64(file)}, uuid));
+    }
+    await Promise.all(promises);
   };
 
   const isLoading = some(Object.values(images).map(i => !(i.embedding)));
@@ -42,12 +45,12 @@ const KnnPopover = ({ images, dispatch, generateEmbedding, useSpatial, setUseSpa
   return (
     <Popover
       placement="bottom"
-      isOpen={isOpen || hasDrag}
+      isOpen={true}
       target="ordering-mode"
       trigger="hover"
       toggle={() => setIsOpen(!isOpen)}
       fade={false}
-      popperClassName="knn-popover"
+      popperClassName={`knn-popover ${(isOpen || isLoading || hasDrag) ? "visible" : "invisible"}`}
     >
       <PopoverBody>
         {Object.entries(images).map(([uuid, image]) =>
@@ -67,7 +70,7 @@ const KnnPopover = ({ images, dispatch, generateEmbedding, useSpatial, setUseSpa
             />
           </div>
         )}
-        <Dropzone accept="image/*" multiple={false} preventDropOnDocument onDrop={onDrop} >
+        <Dropzone accept="image/*" multiple preventDropOnDocument onDrop={innerOnDrop} >
           {({getRootProps, getInputProps}) => (
             <div {...getRootProps()} className="dropzone">
               <input {...getInputProps()} />
