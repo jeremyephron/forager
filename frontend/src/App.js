@@ -81,8 +81,11 @@ const endpoints = fromPairs(toPairs({
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
 const App = () => {
-  const [hasDrag, setHasDrag] = useState(false);
+  //
+  // DOCUMENT EVENT HANDLERS
+  //
 
+  const [hasDrag, setHasDrag] = useState(false);
   const dragRefCount = useRef(0);
 
   const onDragEnter = () => {
@@ -237,6 +240,7 @@ const App = () => {
   const [knnImages, knnImagesDispatch] = useReducer(knnReducer, {});
   const [knnUseSpatial, setKnnUseSpatial] = useState(false);
 
+  const svmPopoverRepositionFunc = useRef();
   const [svmPopoverOpen, setSvmPopoverOpen] = useState(false);
   const [svmScoreRange, setSvmScoreRange] = useState([0, 100]);
   const [svmAugmentNegs, setSvmAugmentNegs] = useState(true);
@@ -387,7 +391,7 @@ const App = () => {
   //
   // MODE
   //
-  const [mode, setMode] = useState("explore");
+  const [mode, setMode_] = useState("explore");
   const [labelModeCategories, setLabelModeCategories_] = useState([]);
   const [modelStatus, setModelStatus] = useState({});
   const [dnnType, setDnnType] = useState(dnns[0].id);
@@ -403,6 +407,11 @@ const App = () => {
   const [modelEpoch, setModelEpoch] = useState(1);
   const [statusIntervalId, setStatusIntervalId] = useState();
   const [modelName, setModelName] = useState("kayvonf_04-06-2021");
+
+  const setMode = (mode) => {
+    setMode_(mode);
+    if (svmPopoverRepositionFunc.current) svmPopoverRepositionFunc.current();
+  }
 
   useEffect(async () => {
     let _clusterId = clusterId;
@@ -790,113 +799,118 @@ const App = () => {
         </div>
         {orderingMode === "svm" && <Popover
           placement="bottom"
-          isOpen={svmPopoverOpen || isTraining || !!!(trainedSvmData)}
+          isOpen={!clusterIsOpen && (svmPopoverOpen || isTraining || !!!(trainedSvmData))}
           target="ordering-mode"
           trigger="hover"
           toggle={() => setSvmPopoverOpen(!svmPopoverOpen)}
           fade={false}
           popperClassName={`svm-popover ${isTraining ? "loading" : ""}`}
         >
-          <PopoverBody>
-            <div>
-              <CategoryInput
-                id="svm-pos-bar"
-                className="mt-1"
-                placeholder="Positive example tags"
-                categories={datasetInfo.categories}
-                setCategories={setCategories}
-                selected={svmPosTags}
-                disabled={isTraining}
-                setSelected={selected => {
-                  setSvmPosTags(selected);
-                  setTrainedSvmData(null);
-                }}
-              />
-              <CategoryInput
-                id="svm-neg-bar"
-                className="mt-2 mb-1"
-                placeholder="Negative example tags"
-                categories={datasetInfo.categories}
-                setCategories={setCategories}
-                selected={svmNegTags}
-                disabled={isTraining}
-                setSelected={selected => {
-                  setSvmNegTags(selected);
-                  setTrainedSvmData(null);
-                }}
-              />
-              {/* <FeatureInput */}
-              {/*   id="svm-feature-bar" */}
-              {/*   className="mt-3 mb-2" */}
-              {/*   placeholder="Features to train on" */}
-              {/*   disabled={isTraining} */}
-              {/*   features={datasetInfo.models} */}
-              {/*   selected={svmFeature} */}
-              {/*   onChange={selected => { */}
-              {/*     setSvmFeature(selected); */}
-              {/*     setTrainedSvmData(null); */}
-              {/*   }} */}
-              {/* /> */}
-              <div className="mt-2 custom-control custom-checkbox">
-                <input
-                  type="checkbox"
-                  className="custom-control-input"
-                  id="svm-augment-negs-checkbox"
-                  disabled={isTraining}
-                  checked={svmAugmentNegs}
-                  onChange={(e) => {
-                    setSvmAugmentNegs(e.target.checked);
-                    setTrainedSvmData(null);
-                  }}
-                />
-                <label className="custom-control-label" htmlFor="svm-augment-negs-checkbox">
-                  Automatically augment negative set
-                </label>
-              </div>
-              {svmAugmentNegs && <>
-                <CategoryInput
-                  id="svm-augment-negs-include-bar"
-                  className="mt-2"
-                  placeholder="Tags to include in auto-negative pool"
-                  categories={datasetInfo.categories}
-                  setCategories={setCategories}
-                  selected={svmAugmentIncludeTags}
-                  disabled={isTraining}
-                  setSelected={selected => {
-                    setSvmAugmentIncludeTags(selected);
-                    setTrainedSvmData(null);
-                  }}
-                />
-                <CategoryInput
-                  id="svm-augment-negs-exclude-bar"
-                  className="mt-2 mb-1"
-                  placeholder="Tags to exclude from auto-negative pool"
-                  categories={datasetInfo.categories}
-                  setCategories={setCategories}
-                  selected={svmAugmentExcludeTags}
-                  disabled={isTraining}
-                  setSelected={selected => {
-                    setSvmAugmentExcludeTags(selected);
-                    setTrainedSvmData(null);
-                  }}
-                />
-              </>}
-              <Button
-                color="light"
-                onClick={() => setIsTraining(true)}
-                disabled={svmPosTags.length === 0 || (svmNegTags.length === 0 && !svmAugmentNegs) || isTraining}
-                className="mt-2 mb-1 w-100"
-              >Train</Button>
-              {!!(trainedSvmData) && <div className="mt-1">
-                Trained model ({trainedSvmData.num_positives} positives,{" "}
-                {trainedSvmData.num_negatives} negatives) &mdash;{" "}
-                precision {Number(trainedSvmData.precision).toFixed(2)},
-                recall {Number(trainedSvmData.recall).toFixed(2)},
-                F1 {Number(trainedSvmData.f1).toFixed(2)}){" "}
-                <ReactTimeAgo date={trainedSvmData.date} timeStyle="mini"/> ago
-              </div>}
-            </div>
-          </PopoverBody>
+          {({ scheduleUpdate }) => {
+            svmPopoverRepositionFunc.current = scheduleUpdate;
+            return (
+              <PopoverBody>
+                <div>
+                  <CategoryInput
+                    id="svm-pos-bar"
+                    className="mt-1"
+                    placeholder="Positive example tags"
+                    categories={datasetInfo.categories}
+                    setCategories={setCategories}
+                    selected={svmPosTags}
+                    disabled={isTraining}
+                    setSelected={selected => {
+                      setSvmPosTags(selected);
+                      setTrainedSvmData(null);
+                    }}
+                  />
+                  <CategoryInput
+                    id="svm-neg-bar"
+                    className="mt-2 mb-1"
+                    placeholder="Negative example tags"
+                    categories={datasetInfo.categories}
+                    setCategories={setCategories}
+                    selected={svmNegTags}
+                    disabled={isTraining}
+                    setSelected={selected => {
+                      setSvmNegTags(selected);
+                      setTrainedSvmData(null);
+                    }}
+                  />
+                  {/* <FeatureInput */}
+                  {/*   id="svm-feature-bar" */}
+                  {/*   className="mt-3 mb-2" */}
+                  {/*   placeholder="Features to train on" */}
+                  {/*   disabled={isTraining} */}
+                  {/*   features={datasetInfo.models} */}
+                  {/*   selected={svmFeature} */}
+                  {/*   onChange={selected => { */}
+                  {/*     setSvmFeature(selected); */}
+                  {/*     setTrainedSvmData(null); */}
+                  {/*   }} */}
+                  {/* /> */}
+                  <div className="mt-2 custom-control custom-checkbox">
+                    <input
+                      type="checkbox"
+                      className="custom-control-input"
+                      id="svm-augment-negs-checkbox"
+                      disabled={isTraining}
+                      checked={svmAugmentNegs}
+                      onChange={(e) => {
+                        setSvmAugmentNegs(e.target.checked);
+                        setTrainedSvmData(null);
+                      }}
+                    />
+                    <label className="custom-control-label" htmlFor="svm-augment-negs-checkbox">
+                      Automatically augment negative set
+                    </label>
+                  </div>
+                  {svmAugmentNegs && <>
+                    <CategoryInput
+                      id="svm-augment-negs-include-bar"
+                      className="mt-2"
+                      placeholder="Tags to include in auto-negative pool"
+                      categories={datasetInfo.categories}
+                      setCategories={setCategories}
+                      selected={svmAugmentIncludeTags}
+                      disabled={isTraining}
+                      setSelected={selected => {
+                        setSvmAugmentIncludeTags(selected);
+                        setTrainedSvmData(null);
+                      }}
+                    />
+                    <CategoryInput
+                      id="svm-augment-negs-exclude-bar"
+                      className="mt-2 mb-1"
+                      placeholder="Tags to exclude from auto-negative pool"
+                      categories={datasetInfo.categories}
+                      setCategories={setCategories}
+                      selected={svmAugmentExcludeTags}
+                      disabled={isTraining}
+                      setSelected={selected => {
+                        setSvmAugmentExcludeTags(selected);
+                        setTrainedSvmData(null);
+                      }}
+                    />
+                  </>}
+                  <Button
+                    color="light"
+                    onClick={() => setIsTraining(true)}
+                    disabled={svmPosTags.length === 0 || (svmNegTags.length === 0 && !svmAugmentNegs) || isTraining}
+                    className="mt-2 mb-1 w-100"
+                  >Train</Button>
+                  {!!(trainedSvmData) && <div className="mt-1">
+                    Trained model ({trainedSvmData.num_positives} positives,{" "}
+                    {trainedSvmData.num_negatives} negatives) &mdash;{" "}
+                    precision {Number(trainedSvmData.precision).toFixed(2)},
+                    recall {Number(trainedSvmData.recall).toFixed(2)},
+                    F1 {Number(trainedSvmData.f1).toFixed(2)}){" "}
+                    <ReactTimeAgo date={trainedSvmData.date} timeStyle="mini"/> ago
+                  </div>}
+                </div>
+              </PopoverBody>
+            );
+          }}
         </Popover>}
         {orderingMode === "knn" && <KnnPopover
           images={knnImages}
