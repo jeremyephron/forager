@@ -1450,7 +1450,7 @@ async def generate_embedding(request):
         # Upload to Cloud Storage
         async with aiohttp.ClientSession() as session:
             storage_client = Storage(session=session)
-            image = Image.open(BytesIO(base64.b64decode(image_data)))
+            image = Image.open(BytesIO(base64.b64decode(image_data))).convert("RGB")
             bucket = config.UPLOADED_IMAGE_BUCKET
             path = os.path.join(config.UPLOADED_IMAGE_DIR, f"{uuid.uuid4()}.png")
             with BytesIO() as image_buffer:
