@@ -111,7 +111,7 @@ class LabeledIndex:
         self.labels: List[str] = []
         self.identifiers: Optional[bidict[str, int]] = None
         self.indexes: Dict[IndexType, InteractiveIndex] = {}
-        self.local_flat_index: Optional[LocalFlatIndex] = None
+        self.local_flat_indexes: Dict[str, LocalFlatIndex] = {}
 
         # Will only be used by the start_building() pathway
         self.bucket: Optional[str] = None
@@ -135,19 +135,19 @@ class LabeledIndex:
         min_d: float = 0.0,
         max_d: float = 1.0,
         chunk_size: int = config.BRUTE_FORCE_QUERY_CHUNK_SIZE,
+        model: str = config.DEFAULT_QUERY_MODEL,
     ) -> List[QueryResult]:
-        assert self.local_flat_index and self.local_flat_index.index is not None
+        local_flat_index = self.local_flat_indexes.get(model)
+        assert local_flat_index and local_flat_index.index is not None
 
         self.logger.info(f"Brute force query: dot_product={dot_product}")
         start = time.perf_counter()
 
         # TODO(mihirg): Process CHUNK_SIZE rows at a time for large datasets
         if dot_product:
-            dists = self.local_flat_index.index @ query_vector
+            dists = local_flat_index.index @ query_vector
         else:
-            dists = cdist(
-                np.expand_dims(query_vector, axis=0), self.local_flat_index.index
-            )
+            dists = cdist(np.expand_dims(query_vector, axis=0), local_flat_index.index)
             dists = np.squeeze(dists, axis=0)
 
         sorted_results = []
@@ -302,36 +302,39 @@ class LabeledIndex:
         assert self.identifiers
         return set(self.identifiers.keys())
 
-    def get_embeddings(self, identifiers: List[str]) -> np.ndarray:
+    def get_embeddings(
+        self, identifiers: List[str], model: str = config.DEFAULT_QUERY_MODEL
+    ) -> np.ndarray:
+        local_flat_index = self.local_flat_indexes.get(model)
         assert (
-            self.identifiers
-            and self.local_flat_index
-            and self.local_flat_index.index is not None
+            self.identifiers and local_flat_index and local_flat_index.index is not None
         )
         inds = [self.identifiers[id] for id in identifiers]
-        return self.local_flat_index.index[inds]
+        return local_flat_index.index[inds]
 
-    def cluster_identifiers(self, identifiers: List[str]) -> List[List[float]]:
+    def cluster_identifiers(
+        self, identifiers: List[str], model: str = config.DEFAULT_QUERY_MODEL
+    ) -> List[List[float]]:
         assert self.identifiers
         inds = [self.identifiers[id] for id in identifiers]
-        return self._cluster(inds)
+        return self._cluster(inds, model)
 
-    def cluster_results(self, results: List[QueryResult]) -> List[List[float]]:
+    def cluster_results(
+        self, results: List[QueryResult], model: str = config.DEFAULT_QUERY_MODEL
+    ) -> List[List[float]]:
         inds = [result.id for result in results]
-        return self._cluster(inds)
+        return self._cluster(inds, model)
 
-    def _cluster(self, inds: List[int]) -> List[List[float]]:
+    def _cluster(self, inds: List[int], model: str) -> List[List[float]]:
         # TODO(mihirg): Consider performing hierarchical clustering once over the entire
         # dataset during index build time
-        assert (
-            self.local_flat_index is not None
-            and self.local_flat_index.distance_matrix is not None
-        )
+        local_flat_index = self.local_flat_indexes.get(model)
+        assert local_flat_index and local_flat_index.distance_matrix is not None
         if len(inds) <= 1:
             return []
 
         # Construct condensed distance submatrix
-        dists = self.local_flat_index.distance_matrix[np.ix_(inds, inds)]
+        dists = local_flat_index.distance_matrix[np.ix_(inds, inds)]
         condensed = squareform(dists)
 
         # Perform hierarchical clustering
@@ -475,7 +478,10 @@ class LabeledIndex:
         # Start a background task that consumes Map outputs as they're generated and
         # builds a local flat index of full-image embeddings
         self.local_flat_index = LocalFlatIndex.create(
-            self.index_dir, len(self.labels), self.cluster.mount_parent_dir
+            self.index_dir,
+            len(self.labels),
+            config.EMBEDDING_DIM,
+            self.cluster.mount_parent_dir,
         )
         self.build_local_flat_index_task = self.build_local_flat_index_in_background()
 
@@ -787,9 +793,10 @@ class LabeledIndex:
             self.identifiers = bidict(
                 json.load((self.index_dir / self.IDENTIFIERS_FILENAME).open())
             )
-            self.local_flat_index = LocalFlatIndex.load(
-                self.index_dir, len(self.labels)
-            )
+            for model, dim in config.EMBEDDING_DIMS_BY_MODEL.items():
+                self.local_flat_indexes[model] = LocalFlatIndex.load(
+                    self.index_dir / "local" / model, len(self.labels), dim
+                )
         except Exception:
             pass
         self._load_local_indexes()
@@ -1556,7 +1563,9 @@ async def query_knn_v2(request):
     query_vector = np.mean([utils.base64_to_numpy(e) for e in embeddings], axis=0)
 
     # Run query and return results
-    query_results = index.query_brute_force(query_vector, dot_product=use_dot_product)
+    query_results = index.query_brute_force(
+        query_vector, dot_product=use_dot_product, model=model
+    )
     return resp.json({"results": [r.to_dict() for r in query_results]})
 
 

@@ -24,6 +24,7 @@ import config
 
 logger = logging.getLogger("index_server")
 
+
 class MapperReducer(Reducer):
     @dataclass
     class Result:
@@ -248,9 +249,6 @@ class TrainingJob:
             "profiling": self.profiling,
         }
 
-
-
-
     def start(self, mapper_result: MapperReducer.Result):
         self.started = True
         self._task = self.run_in_background(mapper_result)
@@ -314,36 +312,39 @@ class TrainingJob:
 
 
 class LocalFlatIndex:
-    # TODO(mihirg): Don't store entire dataset in memory long-term
-
     INDEX_FILENAME = "embeddings.npy"
     DISTANCE_MATRIX_FILENAME = "distances.npy"
 
     @classmethod
-    def load(cls, dir: Path, num_images: int):
+    def load(cls, dir: Path, num_images: int, dim: int):
         self = cls()
         self.index = np.memmap(
             dir / self.INDEX_FILENAME,
             dtype=np.float32,
             mode="r",
-            shape=(num_images, config.EMBEDDING_DIM),
+            shape=(num_images, dim),
         )
-        self.distance_matrix = np.memmap(
-            dir / self.DISTANCE_MATRIX_FILENAME,
-            dtype=np.float32,
-            mode="r",
-            shape=(num_images, num_images),
-        )
+        try:
+            self.distance_matrix = np.memmap(
+                dir / self.DISTANCE_MATRIX_FILENAME,
+                dtype=np.float32,
+                mode="r",
+                shape=(num_images, num_images),
+            )
+        except Exception:
+            pass
         return self
 
     @classmethod
-    def create(cls, dir: Path, num_images: int, cluster_mount_parent_dir: Path):
+    def create(
+        cls, dir: Path, num_images: int, dim: int, cluster_mount_parent_dir: Path
+    ):
         self = cls()
         self.index = np.memmap(
             dir / self.INDEX_FILENAME,
             dtype=np.float32,
             mode="w+",
-            shape=(num_images, config.EMBEDDING_DIM),
+            shape=(num_images, dim),
         )
         self.distance_matrix = np.memmap(
             dir / self.DISTANCE_MATRIX_FILENAME,
@@ -411,7 +412,7 @@ class BGSplitTrainingJob:
         cluster_mount_parent_dir: Path,
         session: aiohttp.ClientSession,
     ):
-        self.model_name = 'BGSPLIT'
+        self.model_name = "BGSPLIT"
         self.pos_paths = pos_paths
         self.neg_paths = neg_paths
         self.unlabeled_paths = unlabeled_paths
@@ -481,8 +482,8 @@ class BGSplitTrainingJob:
                             trainer_url, json=request
                         ) as response:
                             if response.status != 200:
-                               await asyncio.sleep(5)
-                               continue
+                                await asyncio.sleep(5)
+                                continue
                         await self._failed_or_finished.wait()
             except asyncio.CancelledError:
                 pass
@@ -526,7 +527,6 @@ class BGSplitTrainingJob:
             "val_negative_paths": [],
             "val_unlabeled_paths": [],
             "model_kwargs": self.model_kwargs,
-
             "model_id": self.model_id,
             "model_name": self.model_name,
             "notify_url": config.BGSPLIT_TRAINER_STATUS_CALLBACK,
