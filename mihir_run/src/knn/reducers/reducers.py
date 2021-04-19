@@ -16,6 +16,18 @@ from knn.utils import JSONType
 from .base import Reducer
 
 
+class ListReducer(Reducer):
+    def __init__(self):
+        self.results = []
+
+    def handle_result(self, input, output: JSONType):
+        self.results.append(output)
+
+    @property
+    def result(self) -> List[JSONType]:
+        return self.results
+
+
 class IsFinishedReducer(Reducer):
     def __init__(self):
         self.finished = asyncio.Event()
