@@ -280,6 +280,10 @@ $semi-transparent-white: rgba(255, 255, 255, 0.92);
     }
   }
 
+  &.ALL {
+    @extend .alert-dark;
+  }
+
   &.CUSTOM {
     color: #007bff;
   }

@@ -78,6 +78,8 @@ const MyToken = forwardRef((props, ref) => {
     categories,
     setCategories,
     allowNewModes,
+    deduplicateByCategory,
+    populateAll,
   } = allProps;
 
   return (
@@ -120,6 +122,15 @@ const MyToken = forwardRef((props, ref) => {
               categories={categories}
               setCategories={setCategories}
             />
+          </div>}
+          {!deduplicateByCategory && <div>
+            <a
+              href="#"
+              onClick={(e) => populateAll(index, e)}
+              className="rbt-token ALL"
+            >
+              (All of the above)
+            </a>
           </div>}
         </PopoverBody>
       </Popover>
@@ -169,6 +180,16 @@ const CategoryInput = ({ id, categories, className, selected, setSelected, setCa
     e.preventDefault();
   };
 
+  const populateAll = (index, e) => {
+    const category = selected[index].category;
+    const before = selected.slice(0, index);
+    const standard = LABEL_VALUES.map(([value]) => {return {category, value};});
+    const custom = (categories[category]).map(value => {return {category, value};});
+    const after = selected.slice(index + 1);
+    onChange([...before, ...standard, ...custom, ...after]);
+    e.preventDefault();
+  };
+
   const renderToken = (option, { onRemove, disabled, key }, index) => {
     const isCustom = !LABEL_VALUES.some(([value]) => value === option.value);
     return (
@@ -181,11 +202,13 @@ const CategoryInput = ({ id, categories, className, selected, setSelected, setCa
         option={option}
         index={index}
         onValueClick={onValueClick}
+        populateAll={populateAll}
         customValues={categories[option.category] || []}
         category={option.category}
         categories={categories}
         setCategories={setCategories}
-        allowNewModes={allowNewModes}>
+        allowNewModes={allowNewModes}
+        deduplicateByCategory={deduplicateByCategory}>
         {option.category}{isCustom ? ` (${option.value})` : ""}
       </MyToken>
     );
