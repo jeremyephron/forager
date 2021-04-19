@@ -262,7 +262,7 @@ const App = () => {
   const [svmAugmentExcludeTags, setSvmAugmentExcludeTags] = useState([]);
   const [svmFeature, setSvmFeature] = useState([]);
 
-  const [rankingModel, setRankingModel] = useState(null);
+  const [rankingModel, setRankingModel] = useState([]);
 
   const [captionQuery, setCaptionQuery] = useState("");
   const [captionQueryEmbedding, setCaptionQueryEmbedding] = useState("");
@@ -324,7 +324,7 @@ const App = () => {
       body.svm_vector = trainedSvmData.svm_vector;
     } else if (orderingMode === "dnn") {
       url = new URL(`${endpoints.queryRanking}/${datasetName}`);
-      body.model = rankingModel.model_id;
+      body.model = rankingModel[0].model_id;
     } else if (orderingMode === "clip") {
       url = new URL(`${endpoints.queryKnn}/${datasetName}`);
       body.embeddings = [captionQueryEmbedding];

@@ -336,8 +336,8 @@ class LocalFlatIndex:
             pass
         try:
             self.scores = np.load(dir / self.SCORES_FILENAME)
-        except Exception as e:
-            print(dir, e)
+        except Exception:
+            pass
         return self
 
     @classmethod

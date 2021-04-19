@@ -139,8 +139,6 @@ class LabeledIndex:
                 len(self.labels),
                 config.BGSPLIT_EMBEDDING_DIM,
             )
-            print(model)
-            print(self.local_flat_indexes[model].scores)
         index = self.local_flat_indexes[model]
         return index
 
@@ -156,6 +154,7 @@ class LabeledIndex:
 
         sorted_results = []
         for i in ranking:
+            i = int(i)
             s = float(local_flat_index.scores[i])
             s = (s - lowest_score) / (highest_score - lowest_score)  # normalize
             if min_s <= s <= max_s:
