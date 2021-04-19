@@ -1057,7 +1057,7 @@ async def start_bgsplit_job(request):
 
     unlabeled_paths = [
         os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
-        for i in list(unused_identifiers)[:1000]
+        for i in list(unused_identifiers)
     ]
 
     http_session = utils.create_unlimited_aiohttp_session()
