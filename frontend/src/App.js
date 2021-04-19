@@ -243,6 +243,7 @@ const App = () => {
 
   const [knnImages, knnImagesDispatch] = useReducer(knnReducer, {});
   const [knnUseSpatial, setKnnUseSpatial] = useState(false);
+  const [knnModel, setKnnModel] = useState([]);
 
   // Run queries after dataset info has loaded and whenever user clicks "query" button
   const [datasetIncludeTags, setDatasetIncludeTags] = useState([]);
@@ -261,7 +262,7 @@ const App = () => {
   const [svmNegTags, setSvmNegTags] = useState([]);
   const [svmAugmentIncludeTags, setSvmAugmentIncludeTags] = useState([]);
   const [svmAugmentExcludeTags, setSvmAugmentExcludeTags] = useState([]);
-  const [svmFeature, setSvmFeature] = useState([]);
+  const [svmModel, setSvmModel] = useState([]);
 
   const [rankingModel, setRankingModel] = useState([]);
 
@@ -320,9 +321,11 @@ const App = () => {
       url = new URL(`${endpoints.queryKnn}/${datasetName}`);
       body.embeddings = Object.values(knnImages).map(i => i.embedding);
       body.use_full_image = !knnUseSpatial;
+      if (knnModel[0]) body.model = knnModel[0].model_id;
     } else if (orderingMode === "svm") {
       url = new URL(`${endpoints.querySvm}/${datasetName}`);
       body.svm_vector = trainedSvmData.svm_vector;
+      if (svmModel[0]) body.model = svmModel[0].model_id;
     } else if (orderingMode === "dnn") {
       url = new URL(`${endpoints.queryRanking}/${datasetName}`);
       body.model = rankingModel[0].model_id;
@@ -979,7 +982,7 @@ const App = () => {
                   />
                   <CategoryInput
                     id="svm-neg-bar"
-                    className="mt-2 mb-1"
+                    className="mt-2 mb-3"
                     placeholder="Negative example tags"
                     categories={datasetInfo.categories}
                     setCategories={setCategories}
@@ -990,19 +993,19 @@ const App = () => {
                       setTrainedSvmData(null);
                     }}
                   />
-                  {/* <FeatureInput */}
-                  {/*   id="svm-feature-bar" */}
-                  {/*   className="mt-3 mb-2" */}
-                  {/*   placeholder="Features to train on" */}
-                  {/*   disabled={isTraining} */}
-                  {/*   features={datasetInfo.models} */}
-                  {/*   selected={svmFeature} */}
-                  {/*   onChange={selected => { */}
-                  {/*     setSvmFeature(selected); */}
-                  {/*     setTrainedSvmData(null); */}
-                  {/*   }} */}
-                  {/* /> */}
-                  <div className="mt-2 custom-control custom-checkbox">
+                  <FeatureInput
+                    id="svm-model-bar"
+                    className="mb-2"
+                    placeholder="Model features to use (optional)"
+                    features={modelInfo.filter(m => m.has_output)}
+                    disabled={isTraining}
+                    selected={svmModel}
+                    setSelected={selected => {
+                      setSvmModel(selected);
+                      setTrainedSvmData(null);
+                    }}
+                  />
+                  <div className="mt-1 custom-control custom-checkbox">
                     <input
                       type="checkbox"
                       className="custom-control-input"
