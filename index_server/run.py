@@ -1536,7 +1536,9 @@ async def generate_text_embedding(request):
         n_retries=config.CLOUD_RUN_N_RETRIES,
         chunk_size=1,
     )
-    embedding_base64 = (await job.run_until_complete([text]))[0]
+    result = await job.run_until_complete([text])
+    print(result)
+    embedding_base64 = result[0]
 
     return resp.json({"embedding": embedding_base64})
 

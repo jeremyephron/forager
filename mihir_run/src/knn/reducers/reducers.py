@@ -21,6 +21,7 @@ class ListReducer(Reducer):
         self.results = []
 
     def handle_result(self, input, output: JSONType):
+        print(input, output)
         self.results.append(output)
 
     @property
