@@ -1545,6 +1545,8 @@ async def generate_text_embedding(request):
 async def query_knn_v2(request):
     embeddings = request.json["embeddings"]
     index_id = request.json["index_id"]
+    model = request.json["model"]
+    use_dot_product = request.json["use_dot_product"]
     use_full_image = request.json["use_full_image"]
     assert use_full_image
 
@@ -1554,7 +1556,7 @@ async def query_knn_v2(request):
     query_vector = np.mean([utils.base64_to_numpy(e) for e in embeddings], axis=0)
 
     # Run query and return results
-    query_results = index.query_brute_force(query_vector, dot_product=False)
+    query_results = index.query_brute_force(query_vector, dot_product=use_dot_product)
     return resp.json({"results": [r.to_dict() for r in query_results]})
 
 

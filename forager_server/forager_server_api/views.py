@@ -1380,6 +1380,8 @@ def query_knn_v2(request, dataset_name):
     num_results = int(payload.get("num", 1000))
     embeddings = payload["embeddings"]
     use_full_image = bool(payload.get("use_full_image", True))
+    use_dot_product = bool(payload.get("use_dot_product", False))
+    model = payload.get("model", "imagenet")
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
@@ -1387,6 +1389,8 @@ def query_knn_v2(request, dataset_name):
         "index_id": index_id,
         "embeddings": embeddings,
         "use_full_image": use_full_image,
+        "use_dot_product": use_dot_product,
+        "model": model,
     }
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/query_knn_v2",
