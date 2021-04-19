@@ -13,7 +13,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import some from "lodash/some";
 import size from "lodash/size";
 
-const KnnPopover = ({ images, dispatch, generateEmbedding, useSpatial, setUseSpatial, hasDrag }) => {
+const KnnPopover = ({ images, dispatch, generateEmbedding, useSpatial, setUseSpatial, hasDrag, canBeOpen }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const toBase64 = file => new Promise((resolve, reject) => {
@@ -47,7 +47,7 @@ const KnnPopover = ({ images, dispatch, generateEmbedding, useSpatial, setUseSpa
       trigger="hover"
       toggle={() => setIsOpen(!isOpen)}
       fade={false}
-      popperClassName={`knn-popover ${(isOpen || isLoading || hasDrag) ? "visible" : "invisible"}`}
+      popperClassName={`knn-popover ${(canBeOpen && (isOpen || isLoading || hasDrag)) ? "visible" : "invisible"}`}
     >
       <PopoverBody>
         {Object.entries(images).map(([uuid, image]) =>

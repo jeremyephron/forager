@@ -44,6 +44,7 @@ import {
   FeatureInput,
   NewModeInput,
   KnnPopover,
+  ModelRankingPopover,
   CaptionSearchPopover,
 } from "./components";
 
@@ -77,6 +78,7 @@ const endpoints = fromPairs(toPairs({
   trainSvm: "train_svm_v2",
   querySvm: "query_svm_v2",
   queryKnn: "query_knn_v2",
+  queryRanking: "query_ranking_v2",
   trainModel: "train_model_v2",
   modelStatus: "model_v2",
   modelInference: "model_inference_v2",
@@ -179,8 +181,6 @@ const App = () => {
         method: "GET",
       }).then(r => r.json());
       setDatasetInfo(_datasetInfo);
-      console.log('set dataset info!');
-      console.log(_datasetInfo);
       setIsLoading(true);
     }
     getDatasetInfo();
@@ -251,15 +251,18 @@ const App = () => {
   const [orderByClusterSize, setOrderByClusterSize] = useState(true);
   const [clusteringStrength, setClusteringStrength] = useState(20);
 
+  const [scoreRange, setScoreRange] = useState([0, 100]);
+
   const svmPopoverRepositionFunc = useRef();
   const [svmPopoverOpen, setSvmPopoverOpen] = useState(false);
-  const [svmScoreRange, setSvmScoreRange] = useState([0, 100]);
   const [svmAugmentNegs, setSvmAugmentNegs] = useState(true);
   const [svmPosTags, setSvmPosTags] = useState([]);
   const [svmNegTags, setSvmNegTags] = useState([]);
   const [svmAugmentIncludeTags, setSvmAugmentIncludeTags] = useState([]);
   const [svmAugmentExcludeTags, setSvmAugmentExcludeTags] = useState([]);
   const [svmFeature, setSvmFeature] = useState([]);
+
+  const [rankingModel, setRankingModel] = useState(null);
 
   const [captionQuery, setCaptionQuery] = useState("");
   const [captionQueryEmbedding, setCaptionQueryEmbedding] = useState("");
@@ -305,6 +308,8 @@ const App = () => {
       include: datasetIncludeTags.map(t => `${t.category}:${t.value}`),
       exclude: datasetExcludeTags.map(t => `${t.category}:${t.value}`),
       subset: subset.map(im => im.id),
+      score_min: scoreRange[0] / 100,
+      score_max: scoreRange[1] / 100,
     };
 
     if (orderingMode === "id" || orderingMode === "random") {
@@ -317,8 +322,9 @@ const App = () => {
     } else if (orderingMode === "svm") {
       url = new URL(`${endpoints.querySvm}/${datasetName}`);
       body.svm_vector = trainedSvmData.svm_vector;
-      body.score_min = svmScoreRange[0] / 100;
-      body.score_max = svmScoreRange[1] / 100;
+    } else if (orderingMode === "dnn") {
+      url = new URL(`${endpoints.queryRanking}/${datasetName}`);
+      body.model = rankingModel.model_id;
     } else if (orderingMode === "clip") {
       url = new URL(`${endpoints.queryKnn}/${datasetName}`);
       body.embeddings = [captionQueryEmbedding];
@@ -816,8 +822,8 @@ const App = () => {
               {requestDnnInference ? <>
                 <div className="d-flex flex-row align-items-center">
                   <Spinner color="dark" className="my-1 mr-2" />
-                  {clusterStatus.ready ? 
-                    <span><b>Inferring</b> model <b>{modelName}</b>, Time left: {dnnInferenceStatus.time_left && dnnInferenceStatus.time_left >= 0 ? new Date(Math.max(dnnInferenceStatus.time_left, 0) * 1000).toISOString().substr(11, 8) : 'estimating...'} </span> : 
+                  {clusterStatus.ready ?
+                    <span><b>Inferring</b> model <b>{modelName}</b>, Time left: {dnnInferenceStatus.time_left && dnnInferenceStatus.time_left >= 0 ? new Date(Math.max(dnnInferenceStatus.time_left, 0) * 1000).toISOString().substr(11, 8) : 'estimating...'} </span> :
                     <span><b>Starting cluster</b></span>
                   }
                 </div>
@@ -838,7 +844,7 @@ const App = () => {
                   placeholder="Model to performance inference for"
                   features={modelInfo.filter(m => m.has_checkpoint && !m.has_output)}
                   selected={dnnInferenceModel}
-                  onChange={setDnnInferenceModel}
+                  setSelected={setDnnInferenceModel}
                 />
                 <Button
                   color="light"
@@ -887,6 +893,7 @@ const App = () => {
                 disabled={
                   (orderingMode === "svm" && !!!(trainedSvmData)) ||
                   (orderingMode === "knn" && (size(knnImages) === 0 || some(Object.values(knnImages).map(i => !(i.embedding))))) ||
+                  (orderingMode === "dnn" && !!!(rankingModel)) ||
                   (orderingMode === "clip" && !captionQueryEmbedding)
                 }
               >Run query</Button>
@@ -912,16 +919,16 @@ const App = () => {
                   onAfterChange={recluster}
                 />
               </div>
-              {queryResultData.type === "svm" && <div className="d-flex flex-row align-items-center">
-                <label className="mb-0 mr-2 text-nowrap">SVM score range:</label>
+              {(queryResultData.type === "svm" || queryResultData.type === "ranking") && <div className="d-flex flex-row align-items-center">
+                <label className="mb-0 mr-2 text-nowrap">Score range:</label>
                 <Range
                   allowCross={false}
-                  value={svmScoreRange}
-                  onChange={setSvmScoreRange}
+                  value={scoreRange}
+                  onChange={setScoreRange}
                   onAfterChange={() => setIsLoading(true)}
                 />
                 <span className="mb-0 ml-2 text-nowrap text-muted">
-                  ({Number(svmScoreRange[0] / 100).toFixed(2)} to {Number(svmScoreRange[1] / 100).toFixed(2)})
+                  ({Number(scoreRange[0] / 100).toFixed(2)} to {Number(scoreRange[1] / 100).toFixed(2)})
                 </span>
               </div>}
               {subset.length > 0 && <div className="rbt-token rbt-token-removeable alert-secondary">
@@ -1055,6 +1062,13 @@ const App = () => {
           useSpatial={knnUseSpatial}
           setUseSpatial={setKnnUseSpatial}
           hasDrag={hasDrag}
+          canBeOpen={!clusterIsOpen}
+        />}
+        {orderingMode === "dnn" && <ModelRankingPopover
+          modelInfo={modelInfo}
+          rankingModel={rankingModel}
+          setRankingModel={setRankingModel}
+          canBeOpen={!clusterIsOpen}
         />}
         {orderingMode === "clip" && <CaptionSearchPopover
           text={captionQuery}
