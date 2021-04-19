@@ -145,7 +145,7 @@ class LabeledIndex:
         if dot_product:
             dists = self.local_flat_index.index @ query_vector
         else:
-            dists = -1 * cdist(
+            dists = cdist(
                 np.expand_dims(query_vector, axis=0), self.local_flat_index.index
             )
             dists = np.squeeze(dists, axis=0)
@@ -160,7 +160,7 @@ class LabeledIndex:
             if min_d <= d <= max_d:
                 sorted_results.append(LabeledIndex.QueryResult(i, d))
 
-        sorted_results.sort(key=operator.attrgetter("dist"))
+        sorted_results.sort(key=operator.attrgetter("dist"), reversed=dot_product)
 
         end = time.perf_counter()
         self.logger.debug(
