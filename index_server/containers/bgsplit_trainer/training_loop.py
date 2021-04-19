@@ -33,7 +33,7 @@ class TrainingLoop():
             notify_callback: Callable[[Dict[str, Any]], None]=lambda x: None):
         '''The training loop for background splitting models.'''
         self.model_kwargs = model_kwargs
-        batch_size = model_kwargs.get('batch_size', 1024)
+        batch_size = model_kwargs.get('batch_size', 512)
         num_workers = NUM_WORKERS
         self.val_frequency = model_kwargs.get('val_frequency', 1)
         self.checkpoint_frequency = model_kwargs.get('checkpoint_frequency', 1)
