@@ -68,25 +68,25 @@ const KnnPopover = ({ images, dispatch, generateEmbedding, useSpatial, setUseSpa
         )}
         <Dropzone accept="image/*" multiple preventDropOnDocument onDrop={onDrop} >
           {({getRootProps, getInputProps}) => (
-            <div {...getRootProps()} className="dropzone mb-2">
+            <div {...getRootProps()} className="dropzone">
               <input {...getInputProps()} />
               Drop image here, or click to choose a file
             </div>
           )}
         </Dropzone>
-        <div className="custom-control custom-checkbox">
-          <input
-            type="checkbox"
-            className="custom-control-input"
-            id="knn-use-spatial-checkbox"
-            checked={useSpatial}
-            onChange={(e) => setUseSpatial(e.target.checked)}
-          />
-          <label className="custom-control-label" htmlFor="knn-use-spatial-checkbox">
-            Use spatial embeddings (slower but more accurate)
-          </label>
-        </div>
-        {size(images) > 0 && <div className="mt-1">
+        {/* <div className="custom-control custom-checkbox"> */}
+        {/*   <input */}
+        {/*     type="checkbox" */}
+        {/*     className="custom-control-input" */}
+        {/*     id="knn-use-spatial-checkbox" */}
+        {/*     checked={useSpatial} */}
+        {/*     onChange={(e) => setUseSpatial(e.target.checked)} */}
+        {/*   /> */}
+        {/*   <label className="custom-control-label" htmlFor="knn-use-spatial-checkbox"> */}
+        {/*     Use spatial embeddings (slower but more accurate) */}
+        {/*   </label> */}
+        {/* </div> */}
+        {size(images) > 0 && <div className="mt-2">
           {isLoading ?
             <Spinner size="sm" color="secondary" /> :
             <Emoji text=":white_check_mark:"/>}&nbsp;&nbsp;&nbsp;

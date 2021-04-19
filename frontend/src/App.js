@@ -243,7 +243,6 @@ const App = () => {
 
   const [knnImages, knnImagesDispatch] = useReducer(knnReducer, {});
   const [knnUseSpatial, setKnnUseSpatial] = useState(false);
-  const [knnModel, setKnnModel] = useState([]);
 
   // Run queries after dataset info has loaded and whenever user clicks "query" button
   const [datasetIncludeTags, setDatasetIncludeTags] = useState([]);
@@ -321,7 +320,6 @@ const App = () => {
       url = new URL(`${endpoints.queryKnn}/${datasetName}`);
       body.embeddings = Object.values(knnImages).map(i => i.embedding);
       body.use_full_image = !knnUseSpatial;
-      if (knnModel[0]) body.model = knnModel[0].model_id;
     } else if (orderingMode === "svm") {
       url = new URL(`${endpoints.querySvm}/${datasetName}`);
       body.svm_vector = trainedSvmData.svm_vector;
