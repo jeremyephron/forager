@@ -797,8 +797,8 @@ class LabeledIndex:
                 self.local_flat_indexes[model] = LocalFlatIndex.load(
                     self.index_dir / "local" / model, len(self.labels), dim
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.warning(f"Error loading index from {self.index_dir}: {e}")
         self._load_local_indexes()
         self.logger.info(f"Finished loading index from {self.index_dir}")
 
