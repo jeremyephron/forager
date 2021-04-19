@@ -906,7 +906,7 @@ const App = () => {
                 disabled={
                   (orderingMode === "svm" && !!!(trainedSvmData)) ||
                   (orderingMode === "knn" && (size(knnImages) === 0 || some(Object.values(knnImages).map(i => !(i.embedding))))) ||
-                  (orderingMode === "dnn" && !!!(rankingModel)) ||
+                  (orderingMode === "dnn" && !!!(rankingModel[0]) ||
                   (orderingMode === "clip" && !captionQueryEmbedding)
                 }
               >Run query</Button>
