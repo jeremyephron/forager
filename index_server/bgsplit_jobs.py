@@ -318,7 +318,9 @@ class BGSplitInferenceJob:
                 n_mappers=n_mappers,
             ),
             reducer=BGSplitInferenceReducer(
-                model_id=self.model_id, shared_dir=self.cluster_shared_dir
+                model_id=self.model_id,
+                shared_dir=self.cluster_shared_dir,
+                num_images=len(self.paths),
             ),
             mapper_args={
                 "input_bucket": self.bucket,
