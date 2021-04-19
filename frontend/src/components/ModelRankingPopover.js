@@ -6,7 +6,7 @@ import {
 
 import FeatureInput from "./FeatureInput";
 
-const ModelRankingPopover = ({ canBeOpen, modelInfo, rankingModel, setRankingModel }) => {
+const ModelRankingPopover = ({ canBeOpen, features, rankingModel, setRankingModel }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -24,7 +24,7 @@ const ModelRankingPopover = ({ canBeOpen, modelInfo, rankingModel, setRankingMod
           id="ranking-feature-bar"
           className="my-1"
           placeholder="Model to rank by"
-          features={modelInfo.filter(m => m.has_output)}
+          features={features}
           selected={rankingModel}
           setSelected={setRankingModel}
         />

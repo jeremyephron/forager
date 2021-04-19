@@ -323,10 +323,10 @@ const App = () => {
     } else if (orderingMode === "svm") {
       url = new URL(`${endpoints.querySvm}/${datasetName}`);
       body.svm_vector = trainedSvmData.svm_vector;
-      if (svmModel[0]) body.model = svmModel[0].model_id;
+      if (svmModel[0]) body.model = svmModel[0].with_output.model_id;
     } else if (orderingMode === "dnn") {
       url = new URL(`${endpoints.queryRanking}/${datasetName}`);
-      body.model = rankingModel[0].model_id;
+      body.model = rankingModel[0].with_output_model_id;
     } else if (orderingMode === "clip") {
       url = new URL(`${endpoints.queryKnn}/${datasetName}`);
       body.embeddings = [captionQueryEmbedding];
@@ -423,7 +423,7 @@ const App = () => {
   const [modelName, setModelName] = useState("");
   const [prevModelId, setPrevModelId] = useState(null);
 
-  const [dnnInferenceModel, setDnnInferenceModel] = useState(null);
+  const [dnnInferenceModel, setDnnInferenceModel] = useState([]);
   const [requestDnnInference, setRequestDnnInference] = useState(false);
   const [dnnIsInferring, setDnnIsInferring] = useState(false);
   const [dnnInferenceJobId, setDnnInferenceJobId] = useState(null);
@@ -571,7 +571,7 @@ const App = () => {
     // Start training DNN
     const url = new URL(`${endpoints.modelInference}/${datasetName}`);
     let body = {
-      model_id: dnnInferenceModel[0].model_id,
+      model_id: dnnInferenceModel[0].latest.model_id,
       cluster_id: _clusterId,
       bucket: "foragerml",
       index_id: datasetInfo.index_id,
@@ -853,14 +853,14 @@ const App = () => {
                   id="dnn-inference-model-bar"
                   className="mr-2"
                   placeholder="Model to performance inference for"
-                  features={modelInfo.filter(m => m.has_checkpoint && !m.has_output)}
+                  features={modelInfo.filter(m => m.latest.has_checkpoint && !m.latest.has_output)}
                   selected={dnnInferenceModel}
                   setSelected={setDnnInferenceModel}
                 />
                 <Button
                   color="light"
                   onClick={startDnnInference}
-                  disabled={!!!(username) || !dnnInferenceModel || requestDnnInference}
+                  disabled={!!!(username) || !!!(dnnInferenceModel[0]) || requestDnnInference}
               >Start inference</Button>
                 </>}
               </div>
@@ -995,7 +995,7 @@ const App = () => {
                     id="svm-model-bar"
                     className="mb-2"
                     placeholder="Model features to use (optional)"
-                    features={modelInfo.filter(m => m.has_output)}
+                    features={modelInfo.filter(m => m.with_output)}
                     disabled={isTraining}
                     selected={svmModel}
                     setSelected={selected => {
@@ -1076,7 +1076,7 @@ const App = () => {
           canBeOpen={!clusterIsOpen}
         />}
         {orderingMode === "dnn" && <ModelRankingPopover
-          modelInfo={modelInfo}
+          features={modelInfo.filter(m => m.with_output)}
           rankingModel={rankingModel}
           setRankingModel={setRankingModel}
           canBeOpen={!clusterIsOpen}

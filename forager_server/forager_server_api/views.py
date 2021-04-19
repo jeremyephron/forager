@@ -1664,23 +1664,10 @@ def get_dataset_info_v2(request, dataset_name):
         k: sorted(v) for k, v in categories_and_custom_values.items()
     }
 
-    model_objs = DNNModel.objects.filter(
-        dataset=dataset, checkpoint_path__isnull=False,
-    ).order_by(
-        "name", "-last_updated"
-    ).distinct("name")
-    models = [
-        {'name': m.name,
-         'model_id': m.model_id,
-         'has_checkpoint': m.checkpoint_path is not None,
-         'has_output': m.output_directory is not None,
-         'timestamp': m.last_updated}
-        for m in model_objs]
-
     return JsonResponse(
         {
             "categories": categories_and_custom_values,
-            "models": models,
+            "models": get_models(dataset),
             "index_id": dataset.index_id,
             "num_images": dataset.datasetitem_set.filter(google=False).count(),
             "num_google": dataset.datasetitem_set.filter(google=True).count(),
@@ -1692,21 +1679,44 @@ def get_dataset_info_v2(request, dataset_name):
 @csrf_exempt
 def get_models_v2(request, dataset_name):
     dataset = get_object_or_404(Dataset, name=dataset_name)
+    return JsonResponse({'models': get_models(dataset)})
 
+
+def get_models(dataset):
     model_objs = DNNModel.objects.filter(
         dataset=dataset, checkpoint_path__isnull=False,
     ).order_by(
-        "name", "-last_updated"
-    ).distinct("name")
-    models = [
-        {'name': m.name,
-         'model_id': m.model_id,
-         'has_checkpoint': m.checkpoint_path is not None,
-         'has_output': m.output_directory is not None,
-         'timestamp': m.last_updated}
-        for m in model_objs]
+        "-last_updated"
+    )
 
-    return JsonResponse({'models': models})
+    model_names = set()
+    latest = {}
+    with_output = {}
+    for model in model_objs:
+        model_names.add(model.name)
+        if model.name not in latest:
+            latest[model.name] = model
+        if model.output_directory and model.name not in with_output:
+            with_output[model.name] = model
+
+    models = [
+        {
+            "name": model_name,
+            "latest": model_info(latest[model_name]),
+            "with_output": model_info(with_output.get(model_name))
+        }
+        for model_name in model_names
+    ]
+    return models
+
+
+def model_info(model):
+    return {
+        "model_id": model.model_id,
+        "timestamp": model.last_updated,
+        "has_checkpoint": model.checkpoint_path is not None,
+        "has_output": model.output_directory is not None,
+    } if model is not None else None
 
 
 @api_view(["GET"])
