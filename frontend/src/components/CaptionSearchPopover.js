@@ -14,7 +14,7 @@ const endpoints = fromPairs(toPairs({
   generateTextEmbedding: 'generate_text_embedding_v2',
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
-const CaptionSearchPopover = ({ text, setText, textEmbedding, setTextEmbedding }) => {
+const CaptionSearchPopover = ({ canBeOpen, text, setText, textEmbedding, setTextEmbedding }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const textAreaRef = useRef();
@@ -46,7 +46,7 @@ const CaptionSearchPopover = ({ text, setText, textEmbedding, setTextEmbedding }
   return (
     <Popover
       placement="bottom"
-      isOpen={isOpen}
+      isOpen={canBeOpen && (isOpen || isLoading || !textEmbedding)}
       target="ordering-mode"
       trigger="hover"
       toggle={() => setIsOpen(!isOpen)}

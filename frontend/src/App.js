@@ -314,7 +314,7 @@ const App = () => {
       body.score_max = svmScoreRange[1] / 100;
     } else if (orderingMode === "clip") {
       url = new URL(`${endpoints.queryKnn}/${datasetName}`);
-      body.embeddings = [textEmbedding];
+      body.embeddings = [captionQueryEmbedding];
       body.model = "clip";
       body.use_dot_product = true;
     } else {
@@ -935,6 +935,7 @@ const App = () => {
           setText={setCaptionQuery}
           textEmbedding={captionQueryEmbedding}
           setTextEmbedding={setCaptionQueryEmbedding}
+          canBeOpen={!clusterIsOpen}
         />}
         <Container fluid>
           {(!!!(datasetInfo.isNotLoaded) && !isLoading && queryResultData.images.length == 0) &&
