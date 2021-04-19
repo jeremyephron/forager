@@ -160,7 +160,7 @@ class LabeledIndex:
             if min_d <= d <= max_d:
                 sorted_results.append(LabeledIndex.QueryResult(i, d))
 
-        sorted_results.sort(key=operator.attrgetter("dist"), reversed=dot_product)
+        sorted_results.sort(key=operator.attrgetter("dist"), reverse=dot_product)
 
         end = time.perf_counter()
         self.logger.debug(
