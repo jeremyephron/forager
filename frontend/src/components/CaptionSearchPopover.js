@@ -37,7 +37,7 @@ const CaptionSearchPopover = ({ canBeOpen, text, setText, textEmbedding, setText
   return (
     <Popover
       placement="bottom"
-      isOpen={canBeOpen && (isOpen || isLoading || !textEmbedding)}
+      isOpen={canBeOpen && (isOpen || isLoading || !!!(textEmbedding))}
       target="ordering-mode"
       trigger="hover"
       toggle={() => setIsOpen(!isOpen)}
@@ -60,7 +60,7 @@ const CaptionSearchPopover = ({ canBeOpen, text, setText, textEmbedding, setText
         <Button
           color="light"
           onClick={() => setIsLoading(true)}
-          disabled={text.trim().length === 0 || isLoading || textEmbedding}
+          disabled={text.trim().length === 0 || isLoading || !!(textEmbedding)}
           className="mt-2 mb-1 w-100"
         >{textEmbedding ? <>
           <Emoji text=":white_check_mark:"/> Ready to query
