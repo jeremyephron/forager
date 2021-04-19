@@ -42,6 +42,7 @@ class TrainingLoop():
         self.model_dir = model_kwargs['model_dir']
         assert 'aux_labels' in model_kwargs
         aux_labels = model_kwargs['aux_labels']
+        self.aux_weight = model_kwargs.get('aux_weight', 0.1)
         self.notify_callback = notify_callback
 
         # Setup dataset
@@ -123,7 +124,9 @@ class TrainingLoop():
             self.val_dataloader.batch_size)
         self.train_batch_idx = 0
         self.val_batch_idx = 0
-        print(self.train_batch_time)
+        self.train_epoch_loss = 0
+        self.train_epoch_main_loss = 0
+        self.train_epoch_aux_loss = 0
 
     def _notify(self):
         epochs_left = self.end_epoch - self.current_epoch - 1
@@ -212,6 +215,9 @@ class TrainingLoop():
         self.model.train()
         logger.info('Starting train epoch')
         load_start = time.perf_counter()
+        self.train_epoch_loss = 0
+        self.train_epoch_main_loss = 0
+        self.train_epoch_aux_loss = 0
         for batch_idx, (images, main_labels, aux_labels) in enumerate(
                 self.train_dataloader):
             load_end = time.perf_counter()
@@ -229,7 +235,10 @@ class TrainingLoop():
                 main_logits[main_labels != -1], main_labels[main_labels != -1])
             aux_loss_value = self.auxiliary_loss(
                 aux_logits[aux_labels != -1], aux_labels[aux_labels != -1])
-            loss_value = main_loss_value + aux_loss_value
+            loss_value = main_loss_value + self.aux_weight * aux_loss_value
+            self.train_epoch_loss += loss_value.item()
+            self.train_epoch_main_loss += main_loss_value.item()
+            self.train_epoch_aux_loss += aux_loss_value.item()
             # Update gradients
             self.optimizer.zero_grad()
             loss_value.backward()
@@ -244,6 +253,7 @@ class TrainingLoop():
                          f'this load time: {total_load_time}')
             self._notify()
             load_start = time.perf_counter()
+        logger.debug(f'Train epoch loss: {total_loss}')
 
     def run(self):
         last_checkpoint_path = None

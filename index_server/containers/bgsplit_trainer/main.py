@@ -132,6 +132,11 @@ class TrainingJob:
                     load_time=train_start_time - start_time,
                     train_time=end_time - train_start_time,
                 ),
+                debug=dict(
+                    train_epoch_loss=loop.train_epoch_loss,
+                    train_epoch_main_loss=loop.train_epoch_main_loss,
+                    train_epoch_aux_loss=loop.train_epoch_aux_loss
+                )
             )
 
 
