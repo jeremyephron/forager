@@ -37,12 +37,12 @@ const CaptionSearchPopover = ({ canBeOpen, text, setText, textEmbedding, setText
   return (
     <Popover
       placement="bottom"
-      isOpen={canBeOpen && (isOpen || isLoading || !!!(textEmbedding))}
+      isOpen={true}
       target="ordering-mode"
       trigger="hover"
       toggle={() => setIsOpen(!isOpen)}
       fade={false}
-      popperClassName={`caption-search-popover ${isLoading ? "loading" : ""}`}
+      popperClassName={`caption-search-popover ${isLoading ? "loading" : ""} ${(canBeOpen && (isOpen || isLoading || !!!(textEmbedding))) ? "visible" : "invisible"}`}
     >
       <PopoverBody>
         <p className="mt-1">Like Google Images... but over your own dataset!</p>
