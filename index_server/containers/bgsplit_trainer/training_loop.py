@@ -33,7 +33,7 @@ class TrainingLoop():
             notify_callback: Callable[[Dict[str, Any]], None]=lambda x: None):
         '''The training loop for background splitting models.'''
         self.model_kwargs = model_kwargs
-        batch_size = BATCH_SIZE
+        batch_size = model_kwargs.get('batch_size', 1024)
         num_workers = NUM_WORKERS
         self.val_frequency = model_kwargs.get('val_frequency', 1)
         self.checkpoint_frequency = model_kwargs.get('checkpoint_frequency', 1)
@@ -97,16 +97,24 @@ class TrainingLoop():
         self.current_epoch = 0
 
         # Setup optimizer
+        lr = model_kwargs.get('lr', 0.1)
+        endlr = model_kwargs.get('endlr', 0.0)
         optim_params = dict(
-            lr=model_kwargs.get('lr', 0.1),
+            lr=lr,
             momentum=model_kwargs.get('momentum', 0.9),
             weight_decay=model_kwargs.get('weight_decay', 0.0001),
         )
         self.optimizer = optim.SGD(self.model.parameters(), **optim_params)
+        max_epochs = model_kwargs.get('max_epochs', 90)
+        warmup_epochs = model_kwargs.get('warmup_epochs', 0)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, max_epochs - warmup_epochs,
+            eta_min=endlr)
         self.optimizer_scheduler = GradualWarmupScheduler(
             optimizer=self.optimizer,
             multiplier=1.0,
-            warmup_epochs=model_kwargs.get('warmup_epochs', 0))
+            warmup_epochs=warmup_epochs,
+            after_scheduler=scheduler)
 
         # Resume if requested
         resume_from = model_kwargs.get('resume_from', None)
@@ -253,7 +261,9 @@ class TrainingLoop():
                          f'this load time: {total_load_time}')
             self._notify()
             load_start = time.perf_counter()
-        logger.debug(f'Train epoch loss: {total_loss}')
+        logger.debug(f'Train epoch loss: {self.train_epoch_loss}, '
+                     f'main loss: {self.train_epoch_main_loss}, '
+                     f'aux loss: {self.train_epoch_aux_loss}')
 
     def run(self):
         last_checkpoint_path = None
