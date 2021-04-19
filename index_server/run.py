@@ -28,7 +28,7 @@ import numpy as np
 from PIL import Image
 from sanic import Sanic
 import sanic.response as resp
-from scipy.spatial.distance import squareform
+from scipy.spatial.distance import squareform, cdist
 from sklearn import svm
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 
@@ -40,7 +40,7 @@ from interactive_index.utils import sample_farthest_vectors
 from knn import utils
 from knn.clusters import TerraformModule
 from knn.jobs import MapReduceJob, MapperSpec
-from knn.reducers import Reducer, IsFinishedReducer, VectorReducer
+from knn.reducers import Reducer, ListReducer, IsFinishedReducer, VectorReducer
 from knn.utils import JSONType
 
 import config
@@ -128,6 +128,51 @@ class LabeledIndex:
         self.merge_task: Optional[asyncio.Task] = None
         self.cluster_unlock_fn: Optional[Callable[[None], None]] = None
 
+    def query_brute_force(
+        self,
+        query_vector: np.ndarray,
+        dot_product: bool = False,
+        min_d: float = 0.0,
+        max_d: float = 1.0,
+        chunk_size: int = config.BRUTE_FORCE_QUERY_CHUNK_SIZE,
+    ) -> List[QueryResult]:
+        assert self.local_flat_index and self.local_flat_index.index is not None
+
+        self.logger.info(f"Brute force query: dot_product={dot_product}")
+        start = time.perf_counter()
+
+        # TODO(mihirg): Process CHUNK_SIZE rows at a time for large datasets
+        if dot_product:
+            dists = self.local_flat_index.index @ query_vector
+        else:
+            dists = cdist(
+                np.expand_dims(query_vector, axis=0), self.local_flat_index.index
+            )
+            dists = np.squeeze(dists, axis=0)
+
+        sorted_results = []
+        lowest_dist = np.min(dists)
+        highest_dist = np.max(dists)
+
+        for i, d in enumerate(dists):
+            d = float(d)
+            d = (d - lowest_dist) / (highest_dist - lowest_dist)  # normalize
+            if min_d <= d <= max_d:
+                sorted_results.append(LabeledIndex.QueryResult(i, d))
+
+        sorted_results.sort(key=operator.attrgetter("dist"))
+
+        end = time.perf_counter()
+        self.logger.debug(
+            f"Brute force query of size {query_vector.shape} with "
+            f"n_vectors={len(self.labels)} took {end - start:.3f}s, and "
+            f"got {len(sorted_results)} results."
+        )
+
+        for result in sorted_results:
+            result.label = self.labels[result.id]
+        return sorted_results
+
     def query(
         self,
         query_vector: np.ndarray,
@@ -161,7 +206,7 @@ class LabeledIndex:
                 i, d = int(i), float(d)  # cast numpy types
                 d = (d - lowest_dist) / (highest_dist - lowest_dist)  # normalize
                 if i >= 0 and min_d <= d <= max_d:
-                    sorted_results.append(LabeledIndex.QueryResult(int(i), float(d)))
+                    sorted_results.append(LabeledIndex.QueryResult(i, d))
         else:
             assert (
                 min_d == 0.0 and max_d == 1.0
@@ -1478,11 +1523,30 @@ async def generate_embedding(request):
     return resp.json({"embedding": utils.numpy_to_base64(embedding)})
 
 
+@app.route("generate_text_embedding", methods=["POST"])
+async def generate_text_embedding(request):
+    text = request.json["text"]
+    mapper = MapperSpec(
+        url=config.CLIP_TEXT_INFERENCE_CLOUD_RUN_URL,
+        n_mappers=config.CLOUD_RUN_N_MAPPERS,
+    )
+    job = MapReduceJob(
+        mapper,
+        ListReducer(),
+        n_retries=config.CLOUD_RUN_N_RETRIES,
+        chunk_size=1,
+    )
+    embedding_base64 = (await job.run_until_complete([text]))[0]
+
+    return resp.json({"embedding": embedding_base64})
+
+
 @app.route("/query_knn_v2", methods=["POST"])
 async def query_knn_v2(request):
     embeddings = request.json["embeddings"]
     index_id = request.json["index_id"]
     use_full_image = request.json["use_full_image"]
+    assert not use_full_image
 
     index = await get_index(index_id)
 
@@ -1490,7 +1554,7 @@ async def query_knn_v2(request):
     query_vector = np.mean([utils.base64_to_numpy(e) for e in embeddings], axis=0)
 
     # Run query and return results
-    query_results = index.query(query_vector, use_full_image=use_full_image, svm=False)
+    query_results = index.query_brute_force(query_vector, dot_product=False)
     return resp.json({"results": [r.to_dict() for r in query_results]})
 
 
@@ -1543,8 +1607,8 @@ async def query_svm_v2(request):
     index = await get_index(index_id)
 
     # Run query and return results
-    query_results = index.query(
-        svm_vector, use_full_image=True, svm=True, min_d=score_min, max_d=score_max
+    query_results = index.query_brute_force(
+        svm_vector, dot_product=True, min_d=score_min, max_d=score_max
     )
     return resp.json({"results": [r.to_dict() for r in query_results]})
 

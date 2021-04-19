@@ -1363,6 +1363,17 @@ def generate_embedding_v2(request):
 
 @api_view(["POST"])
 @csrf_exempt
+def generate_text_embedding_v2(request):
+    payload = json.loads(request.body)
+    r = requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/generate_text_embedding",
+        json=payload,
+    )
+    return JsonResponse(r.json())
+
+
+@api_view(["POST"])
+@csrf_exempt
 def query_knn_v2(request, dataset_name):
     payload = json.loads(request.body)
     index_id = payload["index_id"]
