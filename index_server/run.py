@@ -146,7 +146,7 @@ class LabeledIndex:
         self, model: str, min_s: float = 0.0, max_s: float = 1.0
     ) -> List[QueryResult]:
         local_flat_index = self.get_local_flat_index(model)
-        assert local_flat_index.scores
+        assert local_flat_index.scores is not None
 
         ranking = np.argsort(local_flat_index.scores)[::-1]
         lowest_score = np.min(local_flat_index.scores)
