@@ -258,7 +258,10 @@ class TrainingLoop():
             self.train_batch_time += total_batch_time + total_load_time
             logger.debug(f'Train batch time: {self.train_batch_time.value}, '
                          f'this batch time: {total_batch_time}, '
-                         f'this load time: {total_load_time}')
+                         f'this load time: {total_load_time}, '
+                         f'batch epoch loss: {loss_value.item()}, '
+                         f'main loss: {main_loss_value.item()}, '
+                         f'aux loss: {aux_loss_value.item()}')
             self._notify()
             load_start = time.perf_counter()
         logger.debug(f'Train epoch loss: {self.train_epoch_loss}, '
