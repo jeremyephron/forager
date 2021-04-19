@@ -475,7 +475,7 @@ class LabeledIndex:
         # Start a background task that consumes Map outputs as they're generated and
         # builds a local flat index of full-image embeddings
         self.local_flat_index = LocalFlatIndex.create(
-            len(self.labels), self.cluster.mount_parent_dir
+            self.index_dir, len(self.labels), self.cluster.mount_parent_dir
         )
         self.build_local_flat_index_task = self.build_local_flat_index_in_background()
 

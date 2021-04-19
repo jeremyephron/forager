@@ -91,7 +91,7 @@ BGSPLIT_NUM_NEGS_MULTIPLIER = 10
 UPLOADED_IMAGE_BUCKET = "foragerml"
 UPLOADED_IMAGE_DIR = "uploads/"
 
-CLIP_INFERENCE_CLOUD_RUN_URL = (
+CLIP_TEXT_INFERENCE_CLOUD_RUN_URL = (
     "https://forager-clip-text-inference-g6rwrca4fq-uc.a.run.app"
 )
 
