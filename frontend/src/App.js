@@ -44,6 +44,7 @@ import {
   FeatureInput,
   NewModeInput,
   KnnPopover,
+  CaptionSearchPopover,
 } from "./components";
 
 var disjointSet = require("disjoint-set");
@@ -61,6 +62,8 @@ const orderingModes = [
   {id: "id", label: "Dataset order"},
   {id: "svm", label: "SVM"},
   {id: "knn", label: "KNN"},
+  {id: "dnn", label: "Model ranking"},
+  {id: "clip", label: "Caption search"},
 ];
 
 const dnns = [
@@ -178,14 +181,7 @@ const App = () => {
 
   const setCategories = (categories) => setDatasetInfo({...datasetInfo, categories});
 
-  // Run queries after dataset info has loaded and whenever user clicks "query" button
-  const [datasetIncludeTags, setDatasetIncludeTags] = useState([]);
-  const [datasetExcludeTags, setDatasetExcludeTags] = useState([]);
-  const [googleQuery, setGoogleQuery] = useState("");
-  const [orderingMode, setOrderingMode] = useState(orderingModes[0].id);
-  const [orderByClusterSize, setOrderByClusterSize] = useState(true);
-  const [clusteringStrength, setClusteringStrength] = useState(20);
-
+  // KNN queries
   const generateEmbedding = async (req, uuid) => {
     const url = new URL(endpoints.generateEmbedding);
     const body = {
@@ -240,6 +236,14 @@ const App = () => {
   const [knnImages, knnImagesDispatch] = useReducer(knnReducer, {});
   const [knnUseSpatial, setKnnUseSpatial] = useState(false);
 
+  // Run queries after dataset info has loaded and whenever user clicks "query" button
+  const [datasetIncludeTags, setDatasetIncludeTags] = useState([]);
+  const [datasetExcludeTags, setDatasetExcludeTags] = useState([]);
+  const [googleQuery, setGoogleQuery] = useState("");
+  const [orderingMode, setOrderingMode] = useState(orderingModes[0].id);
+  const [orderByClusterSize, setOrderByClusterSize] = useState(true);
+  const [clusteringStrength, setClusteringStrength] = useState(20);
+
   const svmPopoverRepositionFunc = useRef();
   const [svmPopoverOpen, setSvmPopoverOpen] = useState(false);
   const [svmScoreRange, setSvmScoreRange] = useState([0, 100]);
@@ -249,6 +253,9 @@ const App = () => {
   const [svmAugmentIncludeTags, setSvmAugmentIncludeTags] = useState([]);
   const [svmAugmentExcludeTags, setSvmAugmentExcludeTags] = useState([]);
   const [svmFeature, setSvmFeature] = useState([]);
+
+  const [captionQuery, setCaptionQuery] = useState("");
+  const [captionQueryEmbedding, setCaptionQueryEmbedding] = useState("");
 
   const [subset, setSubset_] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -305,6 +312,11 @@ const App = () => {
       body.svm_vector = trainedSvmData.svm_vector;
       body.score_min = svmScoreRange[0] / 100;
       body.score_max = svmScoreRange[1] / 100;
+    } else if (orderingMode === "clip") {
+      url = new URL(`${endpoints.queryKnn}/${datasetName}`);
+      body.embeddings = [textEmbedding];
+      body.model = "clip";
+      body.use_dot_product = true;
     } else {
       console.error(`Query type (${orderingMode}) not implemented`);
       return;
@@ -347,20 +359,6 @@ const App = () => {
   const setSubset = (subset) => {
     setSubset_(subset);
     setIsLoading(true);
-  }
-
-  // Add KNN image whenever user clicks "find similar" button
-  const findSimilar = (image) => {
-    const uuid = uuidv4();
-    knnImagesDispatch({
-      type: "ADD_IMAGE_FROM_DATASET",
-      image,
-      uuid,
-    });
-    setOrderingMode("knn");
-    setClusterIsOpen(false);
-    setSelection({});
-    generateEmbedding({image_id: image.id}, uuid);
   }
 
   // Automatically (re-)cluster whenever new results load; also run this manually when
@@ -553,7 +551,18 @@ const App = () => {
         selection={selection}
         setSelection={setSelection}
         clusters={clusters}
-        findSimilar={findSimilar}
+        findSimilar={(image) => {
+          const uuid = uuidv4();
+          knnImagesDispatch({
+            type: "ADD_IMAGE_FROM_DATASET",
+            image,
+            uuid,
+          });
+          setOrderingMode("knn");
+          setClusterIsOpen(false);
+          setSelection({});
+          generateEmbedding({image_id: image.id}, uuid);
+        }}
         tags={datasetInfo.categories}
         setCategories={setCategories}
         username={username}
@@ -751,7 +760,8 @@ const App = () => {
                 onClick={() => setIsLoading(true)}
                 disabled={
                   (orderingMode === "svm" && !!!(trainedSvmData)) ||
-                  (orderingMode === "knn" && (size(knnImages) === 0 || some(Object.values(knnImages).map(i => !(i.embedding)))))
+                  (orderingMode === "knn" && (size(knnImages) === 0 || some(Object.values(knnImages).map(i => !(i.embedding))))) ||
+                  (orderingMode === "clip" && !captionQueryEmbedding)
                 }
               >Run query</Button>
             </div>
@@ -919,6 +929,12 @@ const App = () => {
           useSpatial={knnUseSpatial}
           setUseSpatial={setKnnUseSpatial}
           hasDrag={hasDrag}
+        />}
+        {orderingMode === "clip" && <CaptionSearchPopover
+          text={captionQuery}
+          setText={setCaptionQuery}
+          textEmbedding={captionQueryEmbedding}
+          setTextEmbedding={setCaptionQueryEmbedding}
         />}
         <Container fluid>
           {(!!!(datasetInfo.isNotLoaded) && !isLoading && queryResultData.images.length == 0) &&

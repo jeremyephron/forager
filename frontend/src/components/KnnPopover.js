@@ -1,9 +1,7 @@
-import React, { useState, useEffect, useReducer } from "react";
+import React, { useState } from "react";
 import {
   Popover,
   PopoverBody,
-  Alert,
-  Input,
   Spinner,
 } from "reactstrap";
 import Dropzone from "react-dropzone";

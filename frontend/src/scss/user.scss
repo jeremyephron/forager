@@ -20,6 +20,7 @@ html, body, #root, .main {
 
 .loading,
 .loading input,
+.loading textarea,
 .loading .stack,
 .loading label,
 .loading div,
@@ -92,7 +93,7 @@ html, body, #root, .main {
   width: 100%;
 
   select {
-    width: 9rem;
+    width: 10rem;
   }
 
   .rc-slider {
@@ -181,7 +182,6 @@ $semi-transparent-white: rgba(255, 255, 255, 0.92);
 .knn-popover {
   padding-top: 0.4rem;
   padding-bottom: 0.4rem;
-  width: 15rem;
 
   .dropzone {
     width: 100%;
@@ -212,6 +212,10 @@ $semi-transparent-white: rgba(255, 255, 255, 0.92);
       color: $semi-transparent-white;
     }
   }
+}
+
+.caption-search-popover, .knn-popover {
+  width: 20rem;
 }
 
 .rc-slider-track {
