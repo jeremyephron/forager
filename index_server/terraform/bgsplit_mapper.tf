@@ -10,7 +10,7 @@ variable "bgsplit_mapper_node_pool_name" {
 
 variable "bgsplit_mapper_num_nodes" {
   type    = number
-  default = 4
+  default = 40
 }
 
 variable "bgsplit_mapper_node_type" {
