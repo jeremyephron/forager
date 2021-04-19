@@ -73,7 +73,7 @@ BGSPLIT_MAPPER_REQUEST_TIMEOUT = (
 )  # seconds; more than a minute per image is probably too much
 BGSPLIT_MAPPER_CLOUD_RUN_URL = "https://forager-bgsplit-mapper-g6rwrca4fq-uc.a.run.app"
 
-GCS_PUBLIC_ROOT_URL = 'https://storage.googleapis.com/'
+GCS_PUBLIC_ROOT_URL = "https://storage.googleapis.com/"
 
 INDEX_PARENT_DIR = Path("~/forager/indexes").expanduser().resolve()
 INDEX_UPLOAD_GCS_PATH = "gs://foragerml/indexes/"  # trailing slash = directory
@@ -91,8 +91,9 @@ AUX_GCS_PUBLIC_TMPL = os.path.join(
 )
 
 MODEL_OUTPUTS_PARENT_DIR = Path("~/forager/model_outputs").expanduser().resolve()
-MODEL_OUTPUTS_UPLOAD_GCS_PATH = "gs://foragerml/models_outputs/"  # trailing slash = directory
-MODEL_OUTPUTS_TMPL_DIR = MODEL_OUTPUTS_PARENT_DIR / "{}"
+MODEL_OUTPUTS_UPLOAD_GCS_PATH = (
+    "gs://foragerml/models_outputs/"  # trailing slash = directory
+)
 
 QUERY_PATCHES_PER_IMAGE = 8
 QUERY_NUM_RESULTS_MULTIPLE = 80
@@ -113,3 +114,7 @@ EMBEDDING_DIMS_BY_MODEL = {
     "imagenet": 2048,
     "clip": 512,
 }
+BGSPLIT_EMBEDDING_DIM = 2048
+
+EMBEDDING_FILE_NAME = "embeddings.npy"
+MODEL_SCORES_FILE_NAME = "scores.npy"

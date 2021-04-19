@@ -1547,6 +1547,7 @@ def query_svm_v2(request, dataset_name):
     score_min = float(payload.get("score_min", 0.0))
     score_max = float(payload.get("score_max", 1.0))
     num_results = int(payload.get("num", 1000))
+    model = payload.get("model", "imagenet")
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
@@ -1555,6 +1556,7 @@ def query_svm_v2(request, dataset_name):
         "svm_vector": svm_vector,
         "score_min": score_min,
         "score_max": score_max,
+        "model": model,
     }
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/query_svm_v2",
@@ -1572,6 +1574,42 @@ def query_svm_v2(request, dataset_name):
         num_results,
     )
     return JsonResponse(build_result_set_v2(request, dataset, result_images, "svm"))
+
+
+@api_view(["POST"])
+@csrf_exempt
+def query_ranking_v2(request, dataset_name):
+    payload = json.loads(request.body)
+    index_id = payload["index_id"]
+    score_min = float(payload.get("score_min", 0.0))
+    score_max = float(payload.get("score_max", 1.0))
+    num_results = int(payload.get("num", 1000))
+    model = payload.get("model", "imagenet")
+
+    dataset = get_object_or_404(Dataset, name=dataset_name)
+
+    params = {
+        "index_id": index_id,
+        "score_min": score_min,
+        "score_max": score_max,
+        "model": model,
+    }
+    r = requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/query_svm_v2",
+        json=params,
+    )
+    response_data = r.json()
+
+    # TODO(mihirg, jeremye): Consider some smarter pagination/filtering scheme to avoid
+    # running a separate query over the index every single time the user adjusts score
+    # thresholds
+    result_images = process_image_query_results_v2(
+        request,
+        dataset,
+        response_data,
+        num_results,
+    )
+    return JsonResponse(build_result_set_v2(request, dataset, result_images, "ranking"))
 
 
 @api_view(["POST"])

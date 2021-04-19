@@ -10,6 +10,7 @@ import time
 import uuid
 import logging
 import aiohttp
+import json
 
 from typing import Any, Callable, Dict, List, Optional, Set
 from interactive_index.config import auto_config
@@ -109,8 +110,8 @@ class BGSplitTrainingJob:
                             trainer_url, json=request
                         ) as response:
                             if response.status != 200:
-                               await asyncio.sleep(5)
-                               continue
+                                await asyncio.sleep(5)
+                                continue
                         await self._failed_or_finished.wait()
             except asyncio.CancelledError:
                 pass
@@ -154,41 +155,42 @@ class BGSplitTrainingJob:
             "val_negative_paths": [],
             "val_unlabeled_paths": [],
             "model_kwargs": self.model_kwargs,
-
             "model_id": self.model_id,
             "model_name": self.model_name,
             "notify_url": config.BGSPLIT_TRAINER_STATUS_CALLBACK,
         }
 
+
 class BGSplitInferenceReducer(Reducer):
     @dataclass
     class Result:
         data_dir: Optional[str]
-        embeddings_path: Optional[str]
-        scores_path: Optional[str]
 
     CallbackType = Callable[[Result], None]
 
-    def __init__(self, model_id: str, shared_dir: str):
+    def __init__(self, model_id: str, shared_dir: str, num_images: int):
         self.model_id = model_id
         self.shared_dir = shared_dir
-        self.data_paths: List[str] = []
-        self.embeddings: List[np.ndarray] = []
-        self.scores: List[np.ndarray] = []
-        self.ids: List[np.ndarray] = []
-        self.collected_embeddings_path: Optional[str] = None
-        self.collected_scores_path: Optional[str] = None
-        self.collected_data_dir: Optional[str] = None
+
+        self.collected_data_dir = config.MODEL_OUTPUTS_PARENT_DIR / model_id
+        os.makedirs(self.collected_data_dir, exist_ok=True)
+
+        self.embeddings = np.memmap(
+            self.collected_data_dir / config.EMBEDDING_FILE_NAME,
+            dtype=np.float32,
+            mode="w+",
+            shape=(num_images, config.BGSPLIT_EMBEDDING_DIM),
+        )
+        self.scores = np.zeros((num_images,), dtype=np.float32)
 
     def handle_chunk_result(self, chunk, chunk_output):
         chunk_data_path = chunk_output
         chunk_data_path = os.path.join(self.shared_dir, chunk_data_path[1:])
-        self.data_paths.append(chunk_data_path)
         # Read into memory
         data = np.load(chunk_data_path, allow_pickle=True).item()
-        self.ids.append(data['ids'])
-        self.embeddings.append(data['embeddings'])
-        self.scores.append(data['scores'])
+
+        self.embeddings[data["ids"]] = data["embeddings"]
+        self.scores[data["ids"]] = data["scores"]
 
     def handle_result(self, input, output):
         pass
@@ -196,26 +198,12 @@ class BGSplitInferenceReducer(Reducer):
     @property
     def result(self) -> BGSplitInferenceReducer.Result:
         return BGSplitInferenceReducer.Result(
-            data_dir=self.collected_data_dir,
-            embeddings_path=self.collected_embeddings_path,
-            scores_path=self.collected_scores_path,
+            data_dir=str(self.collected_data_dir),
         )
 
     def finish(self):
-        # Process chunks
-        collected_embeddings = np.concatenate(self.embeddings, axis=0)
-        collected_scores = np.concatenate(self.scores, axis=0)
-        collected_ids = np.concatenate(self.ids, axis=0)
-        sorted_ind = np.argsort(collected_ids)
-        self.collected_data_dir = (
-            str(config.MODEL_OUTPUTS_TMPL_DIR).format(self.model_id))
-        os.makedirs(self.collected_data_dir, exist_ok=True)
-        self.collected_embeddings_path = os.path.join(
-            self.collected_data_dir, 'embeddings.npy')
-        self.collected_scores_path = os.path.join(
-            self.collected_data_dir, 'scores.npy')
-        np.save(self.collected_embeddings_path, collected_embeddings[sorted_ind])
-        np.save(self.collected_scores_path, collected_scores[sorted_ind])
+        self.embeddings.flush()
+        np.save(self.collected_data_dir / config.MODEL_SCORES_FILE_NAME, self.scores)
 
 
 class BGSplitInferenceJob:
@@ -267,10 +255,10 @@ class BGSplitInferenceJob:
             perf = self.mapper_job.performance
             end_time = self._end_time or time.time()
             start_time = self._start_time or end_time
-            total_processed = prog['n_processed'] + prog['n_skipped']
-            total_left = prog['n_total'] - total_processed
+            total_processed = prog["n_processed"] + prog["n_skipped"]
+            total_left = prog["n_total"] - total_processed
             if total_processed > 0:
-                time_left = total_left * (prog['elapsed_time'] / total_processed)
+                time_left = total_left * (prog["elapsed_time"] / total_processed)
             else:
                 time_left = -1
             if prog["finished"]:
@@ -284,7 +272,7 @@ class BGSplitInferenceJob:
                 "performance": perf,
                 "model_id": self.model_id,
                 "output_dir": self.result.data_dir if self.result else None,
-               }
+            }
         else:
             return {
                 "started": self.started,
@@ -304,10 +292,9 @@ class BGSplitInferenceJob:
         self._start_time = time.time()
         self._construct_mapper()
         logger.info(f"BGSplit Map: started with {len(self.paths)} images")
-        await self.mapper_job.run_until_complete([
-            {'path': path,
-             'id': idx}
-            for idx, path in enumerate(self.paths)])
+        await self.mapper_job.run_until_complete(
+            [{"path": path, "id": idx} for idx, path in enumerate(self.paths)]
+        )
         logger.info(f"BGSplit Map: finished with {len(self.paths)} images")
         self.result = self.mapper_job.result
         self._end_time = time.time()
@@ -320,19 +307,19 @@ class BGSplitInferenceJob:
     def _construct_mapper(self) -> MapReduceJob:
         nproc = self.cluster.output["bgsplit_mapper_nproc"]
         n_mappers = int(
-            self.cluster.output["num_bgsplit_mappers"] *
-            config.BGSPLIT_MAPPER_REQUEST_MULTIPLE(nproc)
-           )
+            self.cluster.output["num_bgsplit_mappers"]
+            * config.BGSPLIT_MAPPER_REQUEST_MULTIPLE(nproc)
+        )
         chunk_size = config.BGSPLIT_MAPPER_CHUNK_SIZE(nproc)
         self.mapper_job = MapReduceJob(
             mapper=MapperSpec(
                 url=self.cluster.output["bgsplit_mapper_url"],
-                #url=config.BGSPLIT_MAPPER_CLOUD_RUN_URL,
+                # url=config.BGSPLIT_MAPPER_CLOUD_RUN_URL,
                 n_mappers=n_mappers,
             ),
             reducer=BGSplitInferenceReducer(
-                model_id=self.model_id,
-                shared_dir=self.cluster_shared_dir),
+                model_id=self.model_id, shared_dir=self.cluster_shared_dir
+            ),
             mapper_args={
                 "input_bucket": self.bucket,
                 "return_type": "save",
@@ -342,5 +329,5 @@ class BGSplitInferenceJob:
             n_retries=config.BGSPLIT_MAPPER_NUM_RETRIES,
             chunk_size=chunk_size,
             request_timeout=config.BGSPLIT_MAPPER_REQUEST_TIMEOUT,
-           )
+        )
         return self.mapper_job

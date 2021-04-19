@@ -131,6 +131,37 @@ class LabeledIndex:
         self.merge_task: Optional[asyncio.Task] = None
         self.cluster_unlock_fn: Optional[Callable[[None], None]] = None
 
+    def get_local_flat_index(self, model: str):
+        if model not in self.local_flat_indexes:
+            # model = path to directory on disk containing embeddings.npy file
+            self.local_flat_indexes[model] = LocalFlatIndex.load(
+                Path(model), len(self.labels), config.BGSPLIT_EMBEDDING_DIM
+            )
+        index = self.local_flat_indexes[model]
+        assert index.index
+        return index
+
+    def rank_brute_force(
+        self, model: str, min_s: float = 0.0, max_s: float = 1.0
+    ) -> List[QueryResult]:
+        local_flat_index = self.get_local_flat_index(model)
+        assert local_flat_index.scores
+
+        ranking = np.argsort(local_flat_index.score)[::-1]
+        lowest_score = np.min(dists)
+        highest_score = np.max(dists)
+
+        sorted_results = []
+        for i in ranking:
+            s = float(local_flat_index.scores[i])
+            s = (s - lowest_score) / (highest_score - lowest_score)  # normalize
+            if min_s <= s <= max_s:
+                sorted_results.append(LabeledIndex.QueryResult(i, s))
+
+        for result in sorted_results:
+            result.label = self.labels[result.id]
+        return sorted_results
+
     def query_brute_force(
         self,
         query_vector: np.ndarray,
@@ -140,8 +171,7 @@ class LabeledIndex:
         chunk_size: int = config.BRUTE_FORCE_QUERY_CHUNK_SIZE,
         model: str = config.DEFAULT_QUERY_MODEL,
     ) -> List[QueryResult]:
-        local_flat_index = self.local_flat_indexes.get(model)
-        assert local_flat_index and local_flat_index.index is not None
+        local_flat_index = self.get_local_flat_index(model)
 
         self.logger.info(f"Brute force query: dot_product={dot_product}")
         start = time.perf_counter()
@@ -308,10 +338,8 @@ class LabeledIndex:
     def get_embeddings(
         self, identifiers: List[str], model: str = config.DEFAULT_QUERY_MODEL
     ) -> np.ndarray:
-        local_flat_index = self.local_flat_indexes.get(model)
-        assert (
-            self.identifiers and local_flat_index and local_flat_index.index is not None
-        )
+        local_flat_index = self.get_local_flat_index(model)
+        assert self.identifiers
         inds = [self.identifiers[id] for id in identifiers]
         return local_flat_index.index[inds]
 
@@ -331,8 +359,8 @@ class LabeledIndex:
     def _cluster(self, inds: List[int], model: str) -> List[List[float]]:
         # TODO(mihirg): Consider performing hierarchical clustering once over the entire
         # dataset during index build time
-        local_flat_index = self.local_flat_indexes.get(model)
-        assert local_flat_index and local_flat_index.distance_matrix is not None
+        local_flat_index = self.get_local_flat_index(model)
+        assert local_flat_index.distance_matrix is not None
         if len(inds) <= 1:
             return []
 
@@ -1141,9 +1169,11 @@ async def bgsplit_job_status(request):
         status = {"has_model": False, "failed": False}
     return resp.json(status)
 
+
 current_model_inference_jobs: CleanupDict[str, BGSplitInferenceJob] = CleanupDict(
     lambda job: job.stop()
 )
+
 
 @app.route("/start_bgsplit_inference_job", methods=["POST"])
 async def start_bgsplit_inference_job(request):
@@ -1167,8 +1197,7 @@ async def start_bgsplit_inference_job(request):
 
     # Get image paths from index
     gcs_root_path = os.path.join(config.GCS_PUBLIC_ROOT_URL, bucket)
-    all_paths = [index.labels[index.identifiers[i]]
-                 for i in index.get_identifier_set()]
+    all_paths = [index.labels[index.identifiers[i]] for i in index.get_identifier_set()]
 
     http_session = utils.create_unlimited_aiohttp_session()
     job_id = str(uuid.uuid4())
@@ -1183,9 +1212,7 @@ async def start_bgsplit_inference_job(request):
     )
     current_model_inference_jobs[job_id] = inference_job
     inference_job.start()
-    logger.info(
-        f"Inference ({checkpoint_path}): started "
-    )
+    logger.info(f"Inference ({checkpoint_path}): started ")
 
     return resp.json({"job_id": job_id})
 
@@ -1196,10 +1223,9 @@ async def bgsplit_inference_job_status(request):
     if job_id in current_model_inference_jobs:
         job = current_model_inference_jobs[job_id]
         status = job.status
-        status['has_output'] = status['finished']
+        status["has_output"] = status["finished"]
     else:
-        status = {'has_output': False,
-                  'finished': False}
+        status = {"has_output": False, "finished": False}
     return resp.json(status)
 
 
@@ -1210,12 +1236,12 @@ async def bgsplit_inference_job_status(request):
         job = current_model_inference_jobs[job_id]
         job.stop()
         del current_model_inference_jobs[job_id]
-        status['has_output'] = False
-        status['finished'] = True
-        status['failed'] = False
+        status["has_output"] = False
+        status["finished"] = True
+        status["failed"] = False
         return resp.json(status)
     else:
-        status = {'reason': f'Job id {job_id} does not exist.'}
+        status = {"reason": f"Job id {job_id} does not exist."}
         return resp.json(status, status=400)
 
 
@@ -1695,13 +1721,28 @@ async def query_svm_v2(request):
     score_max = float(request.json["score_max"])
     svm_vector = utils.base64_to_numpy(request.json["svm_vector"])
     index_id = request.json["index_id"]
+    model = request.json["model"]
 
     index = await get_index(index_id)
 
     # Run query and return results
     query_results = index.query_brute_force(
-        svm_vector, dot_product=True, min_d=score_min, max_d=score_max
+        svm_vector, dot_product=True, min_d=score_min, max_d=score_max, model=model
     )
+    return resp.json({"results": [r.to_dict() for r in query_results]})
+
+
+@app.route("/query_ranking_v2", methods=["POST"])
+async def query_ranking_v2(request):
+    index_id = request.json["index_id"]
+    model = request.json["model"]
+    score_min = float(request.json["score_min"])
+    score_max = float(request.json["score_max"])
+
+    index = await get_index(index_id)
+
+    # Run query and return results
+    query_results = index.rank_brute_force(model, score_min, score_max)
     return resp.json({"results": [r.to_dict() for r in query_results]})
 
 

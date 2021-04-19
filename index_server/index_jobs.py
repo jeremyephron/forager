@@ -312,7 +312,8 @@ class TrainingJob:
 
 
 class LocalFlatIndex:
-    INDEX_FILENAME = "embeddings.npy"
+    INDEX_FILENAME = config.EMBEDDING_FILE_NAME
+    SCORES_FILENAME = config.MODEL_SCORES_FILE_NAME
     DISTANCE_MATRIX_FILENAME = "distances.npy"
 
     @classmethod
@@ -331,6 +332,10 @@ class LocalFlatIndex:
                 mode="r",
                 shape=(num_images, num_images),
             )
+        except Exception:
+            pass
+        try:
+            self.scores = np.load(dir / self.SCORES_FILENAME)
         except Exception:
             pass
         return self
@@ -359,6 +364,7 @@ class LocalFlatIndex:
     def __init__(self):
         self.index: Optional[np.ndarray] = None
         self.distance_matrix: Optional[np.ndarray] = None
+        self.scores: Optional[np.ndarray] = None
         self.cluster_mount_parent_dir: Optional[Path] = None
 
     def add_from_file(self, path_tmpl: str):
