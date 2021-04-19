@@ -1595,7 +1595,7 @@ def query_ranking_v2(request, dataset_name):
         "model": model,
     }
     r = requests.post(
-        settings.EMBEDDING_SERVER_ADDRESS + "/query_svm_v2",
+        settings.EMBEDDING_SERVER_ADDRESS + "/query_ranking_v2",
         json=params,
     )
     response_data = r.json()

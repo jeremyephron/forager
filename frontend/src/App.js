@@ -435,7 +435,7 @@ const App = () => {
     }).then(res => res.json());
     console.log(res.models);
     setModelInfo(res.models);
-  }, [modelEpoch])
+  }, [modelEpoch, dnnIsInferring])
 
   const setMode = (mode) => {
     setMode_(mode);
@@ -778,6 +778,7 @@ const App = () => {
                 </select>
                 <ReactSVG className="icon" src="assets/arrow-caret.svg" />
               </FormGroup>
+              <Input placeholder="Model name"></Input>
               <CategoryInput
                 id="dnn-pos-bar"
                 className="mr-2"
