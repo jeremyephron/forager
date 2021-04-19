@@ -152,7 +152,7 @@ class TrainingLoop():
         logger.debug('Send notify')
         self.notify_callback(**{"training_time_left": time_left})
 
-    def load_checkpoint(self, path: str, restart: bool=True):
+    def load_checkpoint(self, path: str, restart: bool=False):
         checkpoint_state = torch.load(path)
         self.model.load_state_dict(checkpoint_state['state_dict'])
         if not restart:
