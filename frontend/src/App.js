@@ -852,7 +852,7 @@ const App = () => {
                 <FeatureInput
                   id="dnn-inference-model-bar"
                   className="mr-2"
-                  placeholder="Model to performance inference for"
+                  placeholder="Model to perform inference for"
                   features={modelInfo.filter(m => m.latest.has_checkpoint && !m.latest.has_output)}
                   selected={dnnInferenceModel}
                   setSelected={setDnnInferenceModel}

@@ -157,7 +157,7 @@ class TrainingLoop():
         checkpoint_state = torch.load(path)
         self.model.load_state_dict(checkpoint_state['state_dict'])
         if not restart:
-            self.start_epoch = checkpoint_state['epoch']
+            self.start_epoch = checkpoint_state['epoch'] + 1
             self.current_epoch = self.start_epoch
             self.end_epoch = self.start_epoch + 1
 
