@@ -140,7 +140,6 @@ class LabeledIndex:
                 config.BGSPLIT_EMBEDDING_DIM,
             )
         index = self.local_flat_indexes[model]
-        assert index.index
         return index
 
     def rank_brute_force(
