@@ -7,6 +7,7 @@ import os
 import os.path
 import logging
 import time
+import math
 from typing import Dict, List, Any, Callable
 from torch.utils.data import DataLoader
 from torchvision import transforms
@@ -239,14 +240,22 @@ class TrainingLoop():
 
             main_logits, aux_logits = self.model(images)
             # Compute loss
+            valid_main_labels = main_labels != -1
+            valid_aux_labels = aux_labels != -1
             main_loss_value = self.main_loss(
-                main_logits[main_labels != -1], main_labels[main_labels != -1])
+                main_logits[valid_main_labels],
+                main_labels[valid_main_labels])
             aux_loss_value = self.auxiliary_loss(
-                aux_logits[aux_labels != -1], aux_labels[aux_labels != -1])
+                aux_logits[valid_aux_labels],
+                aux_labels[valid_aux_labels])
+            print('num main labels', torch.sum(main_labels != -1))
+            print('num aux labels', torch.sum(aux_labels != -1))
             loss_value = main_loss_value + self.aux_weight * aux_loss_value
             self.train_epoch_loss += loss_value.item()
-            self.train_epoch_main_loss += main_loss_value.item()
-            self.train_epoch_aux_loss += aux_loss_value.item()
+            if torch.sum(valid_main_labels) > 0:
+                self.train_epoch_main_loss += main_loss_value.item()
+            if torch.sum(valid_aux_labels) > 0:
+                self.train_epoch_aux_loss += aux_loss_value.item()
             # Update gradients
             self.optimizer.zero_grad()
             loss_value.backward()
