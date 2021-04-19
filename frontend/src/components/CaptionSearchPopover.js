@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Popover,
   PopoverBody,
@@ -17,15 +17,6 @@ const endpoints = fromPairs(toPairs({
 const CaptionSearchPopover = ({ canBeOpen, text, setText, textEmbedding, setTextEmbedding }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const textAreaRef = useRef();
-
-  const setTextFromLink = (e, text) => {
-    setText(text);
-    e.preventDefault();
-    textAreaRef.current.focus();
-    textAreaRef.current.selectionStart = text.length;
-    textAreaRef.current.selectionEnd = text.length;
-  }
 
   const generateEmbedding = async () => {
     const url = new URL(endpoints.generateTextEmbedding);
@@ -54,32 +45,9 @@ const CaptionSearchPopover = ({ canBeOpen, text, setText, textEmbedding, setText
       popperClassName={`caption-search-popover ${isLoading ? "loading" : ""}`}
     >
       <PopoverBody>
-        <p className="mt-1">
-          Good queries generally begin with:
-          <ul className="pl-3 text-secondary">
-            <li>
-              <a
-                href="#"
-                onClick={e => setTextFromLink(e, "A photo of a ")}
-                className="text-secondary"
-              >
-                A photo of a(n)...
-              </a>
-            </li>
-            <li>
-              <a
-                href="#"
-                onClick={e => setTextFromLink(e, "A photo containing a ")}
-                className="text-secondary"
-              >
-                A photo containing a(n)...
-              </a>
-            </li>
-          </ul>
-        </p>
+        <p className="mt-1">Like Google image search... but over your own data!</p>
         <Input
           autoFocus
-          innerRef={textAreaRef}
           type="textarea"
           value={text}
           onChange={e => {
