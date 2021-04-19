@@ -50,8 +50,11 @@ from index_jobs import (
     MapperReducer,
     Trainer,
     TrainingJob,
-    BGSplitTrainingJob,
     LocalFlatIndex,
+)
+from bgsplit_jobs import (
+    BGSplitTrainingJob,
+    BGSplitInferenceJob,
 )
 from utils import CleanupDict
 
@@ -1099,6 +1102,7 @@ async def start_bgsplit_job(request):
         neg_paths=neg_paths + extra_neg_paths,
         unlabeled_paths=unlabeled_paths,
         aux_labels_path=aux_labels_gcs_path,
+        model_name=model_name,
         model_id=model_id,
         resume_from=resume_from,
         trainer=trainers[0],
@@ -1136,6 +1140,83 @@ async def bgsplit_job_status(request):
     else:
         status = {"has_model": False, "failed": False}
     return resp.json(status)
+
+current_model_inference_jobs: CleanupDict[str, BGSplitInferenceJob] = CleanupDict(
+    lambda job: job.stop()
+)
+
+@app.route("/start_bgsplit_inference_job", methods=["POST"])
+async def start_bgsplit_inference_job(request):
+    # HACK(mihirg): sometimes we get empty identifiers (i.e., "") from the server that
+    # would otherwise cause a crash here; we should probably figure out why this is, but
+    # just filtering out for now.
+    bucket = request.json["bucket"]
+    model_id = request.json["model_id"]
+    checkpoint_path = request.json["checkpoint_path"]
+    cluster_id = request.json["cluster_id"]
+    index_id = request.json["index_id"]
+
+    # Get cluster
+    cluster = current_clusters[cluster_id]
+    # lock_id = current_clusters.lock(cluster_id)
+    # cluster_unlock_fn = functools.partial(current_clusters.unlock, cluster_id, lock_id)
+    await asyncio.gather(cluster.ready.wait(), cluster.mounted.wait())
+
+    # Get index
+    index = await get_index(index_id)
+
+    # Get image paths from index
+    gcs_root_path = os.path.join(config.GCS_PUBLIC_ROOT_URL, bucket)
+    all_paths = [index.labels[index.identifiers[i]]
+                 for i in index.get_identifier_set()]
+
+    http_session = utils.create_unlimited_aiohttp_session()
+    job_id = str(uuid.uuid4())
+
+    inference_job = BGSplitInferenceJob(
+        paths=all_paths,
+        bucket=bucket,
+        model_id=model_id,
+        model_checkpoint_path=checkpoint_path,
+        cluster=cluster,
+        session=http_session,
+    )
+    current_model_inference_jobs[job_id] = inference_job
+    inference_job.start()
+    logger.info(
+        f"Inference ({checkpoint_path}): started "
+    )
+
+    return resp.json({"job_id": job_id})
+
+
+@app.route("/bgsplit_inference_job_status", methods=["GET"])
+async def bgsplit_inference_job_status(request):
+    job_id = request.args["job_id"][0]
+    if job_id in current_model_inference_jobs:
+        job = current_model_inference_jobs[job_id]
+        status = job.status
+        status['has_output'] = status['finished']
+    else:
+        status = {'has_output': False,
+                  'finished': False}
+    return resp.json(status)
+
+
+@app.route("/stop_bgsplit_inference_job", methods=["POST"])
+async def bgsplit_inference_job_status(request):
+    job_id = request.args["job_id"][0]
+    if job_id in current_model_inference_jobs:
+        job = current_model_inference_jobs[job_id]
+        job.stop()
+        del current_model_inference_jobs[job_id]
+        status['has_output'] = False
+        status['finished'] = True
+        status['failed'] = False
+        return resp.json(status)
+    else:
+        status = {'reason': f'Job id {job_id} does not exist.'}
+        return resp.json(status, status=400)
 
 
 # -> POST-BUILD

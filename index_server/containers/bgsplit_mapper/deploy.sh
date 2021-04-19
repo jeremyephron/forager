@@ -1,6 +1,6 @@
 project=`gcloud config get-value project 2> /dev/null`
 folder=.
-name=forager-index-${PWD##*/}
+name=forager-bgsplit-mapper
 gcr_region=us-central1
 root_path=../../..
 
@@ -9,7 +9,7 @@ cp -r $root_path/mihir_run/src/knn $folder
 
 # Submit build from within subdirectory
 gcloud config set builds/use_kaniko True
-(cd $folder; gcloud builds submit --tag gcr.io/$project/$name)
+(cd $folder; gcloud builds submit --tag gcr.io/$project/$name --machine-type=N1_HIGHCPU_32)
 
 # Remove shared resources
 rm -rf $folder/knn
@@ -25,3 +25,4 @@ gcloud run deploy $name --image gcr.io/$project/$name \
                         --region $gcr_region \
                         --update-env-vars NPROC=1 \
                         --allow-unauthenticated
+

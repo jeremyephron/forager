@@ -7,6 +7,6 @@ detectron2==0.1.1+cpu
 Pillow
 aiohttp[speedups]
 numpy
-sanic
+sanic==20.12.3
 uvicorn
 sanic_compress

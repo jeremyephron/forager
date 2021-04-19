@@ -1,27 +1,18 @@
-FROM python:3.7-slim
+FROM nvidia/cuda:10.2-base-ubuntu18.04
 
 ENV APP_HOME /app
 WORKDIR $APP_HOME
 
 # Install dependencies.
-COPY requirements-build.txt ./
 COPY requirements.txt ./
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential python3.7-dev wget \
+    && apt-get install -y --no-install-recommends python3.8 python3.8-distutils build-essential python3.8-dev wget \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install -r requirements-build.txt \
+    && wget https://bootstrap.pypa.io/get-pip.py \
+    && python3.8 get-pip.py \
     && pip install -r requirements.txt \
-    && grep -F -x -v -f requirements.txt requirements-build.txt | pip uninstall -y -r /dev/stdin \
-    && apt-get purge -y --auto-remove build-essential python3.7-dev
-
-# Download external resources.
-COPY resources.txt ./
-RUN wget -i resources.txt \
-    && apt-get purge -y --auto-remove wget
+    && apt-get purge -y --auto-remove build-essential python3.8-dev wget
 
 # Run the web service on container startup.
 COPY . ./
-ENV LRU_CACHE_CAPACITY=1
-ENV OMP_NUM_THREADS=1
-ENV MKL_NUM_THREADS=1
 CMD exec uvicorn --host "0.0.0.0" --port $PORT --workers $NPROC --log-level warning handler:app

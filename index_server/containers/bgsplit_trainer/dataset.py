@@ -18,6 +18,9 @@ class AuxiliaryDataset(Dataset):
              [0] * len(negative_paths) +
              [-1] * len(unlabeled_paths)),
             dtype=torch.long)
+        self.num_aux_classes = \
+            len(torch.unique(torch.tensor(list(auxiliary_labels.values()),
+                                          dtype=torch.long)))
         self.aux_labels = torch.tensor(
             [auxiliary_labels[os.path.basename(path)]
              if path in auxiliary_labels else -1
@@ -27,7 +30,7 @@ class AuxiliaryDataset(Dataset):
 
     @property
     def num_auxiliary_classes(self):
-        return len(torch.unique(self.aux_labels))
+        return self.num_aux_classes
 
     def __len__(self):
         return len(self.paths)

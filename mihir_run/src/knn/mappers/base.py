@@ -145,6 +145,7 @@ class Mapper(abc.ABC):
         self._init_time = 0.0
 
         request_id = str(uuid.uuid4())
+        await request.receive_body()
         with self.profiler(request_id, "billed_time", additional=init_time):
             with self.profiler(request_id, "request_time"):
                 job_id = request.json["job_id"]

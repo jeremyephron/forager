@@ -25,3 +25,4 @@ ENV LRU_CACHE_CAPACITY=1
 ENV OMP_NUM_THREADS=1
 ENV MKL_NUM_THREADS=1
 CMD exec uvicorn --host "0.0.0.0" --port $PORT --workers $NPROC --log-level warning handler:app
+

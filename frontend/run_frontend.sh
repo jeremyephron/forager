@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-export REACT_APP_SERVER_URL="http://35.199.179.109:8000"
+
+ip_addr=$(curl -H "Metadata-Flavor: Google" http://metadata/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip)
+export REACT_APP_SERVER_URL=http://$ip_addr:8000
 export PORT=4000
 
 npm run build

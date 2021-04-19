@@ -357,6 +357,75 @@ def get_model_status(request, model_id):
 
 @api_view(['POST'])
 @csrf_exempt
+def run_model_inference(request, dataset_name, dataset=None):
+    payload = json.loads(request.body)
+    model_id = payload['model_id']
+    cluster_id = payload['cluster_id']
+    bucket_name = payload['bucket']
+    index_id = payload['index_id']
+
+    dataset = get_object_or_404(Dataset, name=dataset_name)
+    model_checkpoint_path = (
+        get_object_or_404(DNNModel, model_id=model_id)
+        .checkpoint_path)
+    if model_checkpoint_path is None or len(model_checkpoint_path) == 0:
+        return JsonResponse({
+            "status": "failure",
+            "reason": f"Model {model_id} does not have a model checkpoint."
+        }, status=400)
+
+    params = {
+        "bucket": bucket_name,
+        "model_id": model_id,
+        "checkpoint_path": model_checkpoint_path,
+        "cluster_id": cluster_id,
+        "index_id": index_id,
+    }
+    r = requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/start_bgsplit_inference_job",
+        json=params,
+    )
+    response_data = r.json()
+
+    return JsonResponse({
+        "status": "success",
+        "job_id": response_data["job_id"],
+    })
+
+
+@api_view(['GET'])
+@csrf_exempt
+def get_model_inference_status(request, job_id):
+    params = {"job_id": job_id}
+    r = requests.get(
+        settings.EMBEDDING_SERVER_ADDRESS + "/bgsplit_inference_job_status",
+        params=params
+    )
+    response_data = r.json()
+    if response_data["has_output"]:
+        model_id = response_data["model_id"]
+        # Index has been successfully created & uploaded -> persist
+        m = get_object_or_404(DNNModel, model_id=model_id)
+        m.output_directory = response_data['output_dir']
+        m.save()
+
+    return JsonResponse(response_data)
+
+
+@api_view(['POST'])
+@csrf_exempt
+def stop_model_inference(request, job_id):
+    params = {"job_id": job_id}
+    r = requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/stop_bgsplit_inference_job",
+        json=params
+    )
+    response_data = r.json()
+    return JsonResponse(response_data, status=r.status_code)
+
+
+@api_view(['POST'])
+@csrf_exempt
 def create_dataset(request):
     try:
         data = json.loads(request.body)
@@ -1558,13 +1627,15 @@ def get_dataset_info_v2(request, dataset_name):
     }
 
     model_objs = DNNModel.objects.filter(
-        dataset=dataset
+        dataset=dataset, checkpoint_path__isnull=False,
     ).order_by(
         "name", "-last_updated"
     ).distinct("name")
     models = [
         {'name': m.name,
          'model_id': m.model_id,
+         'has_checkpoint': m.checkpoint_path is not None,
+         'has_output': m.output_directory is not None,
          'timestamp': m.last_updated}
         for m in model_objs]
 
@@ -1577,6 +1648,27 @@ def get_dataset_info_v2(request, dataset_name):
             "num_google": dataset.datasetitem_set.filter(google=True).count(),
         }
     )
+
+
+@api_view(["GET"])
+@csrf_exempt
+def get_models_v2(request, dataset_name):
+    dataset = get_object_or_404(Dataset, name=dataset_name)
+
+    model_objs = DNNModel.objects.filter(
+        dataset=dataset, checkpoint_path__isnull=False,
+    ).order_by(
+        "name", "-last_updated"
+    ).distinct("name")
+    models = [
+        {'name': m.name,
+         'model_id': m.model_id,
+         'has_checkpoint': m.checkpoint_path is not None,
+         'has_output': m.output_directory is not None,
+         'timestamp': m.last_updated}
+        for m in model_objs]
+
+    return JsonResponse({'models': models})
 
 
 @api_view(["GET"])

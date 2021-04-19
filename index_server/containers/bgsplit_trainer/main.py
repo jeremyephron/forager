@@ -98,7 +98,7 @@ class TrainingJob:
             for p, v in auxiliary_labels.items():
                 aux_labels[os.path.basename(p)] = v
             model_dir = config.MODEL_DIR_TMPL.format(
-                self.model_id, self.model_name)
+                self.model_name, self.model_id)
             self.model_kwargs['aux_labels'] = auxiliary_labels
             self.model_kwargs['model_dir'] = model_dir
 

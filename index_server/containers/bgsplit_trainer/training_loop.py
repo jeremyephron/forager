@@ -7,7 +7,6 @@ import os
 import os.path
 import logging
 import time
-import math
 from typing import Dict, List, Any, Callable
 from torch.utils.data import DataLoader
 from torchvision import transforms
@@ -33,6 +32,7 @@ class TrainingLoop():
             val_unlabeled_paths: List[str],
             notify_callback: Callable[[Dict[str, Any]], None]=lambda x: None):
         '''The training loop for background splitting models.'''
+        self.model_kwargs = model_kwargs
         batch_size = BATCH_SIZE
         num_workers = NUM_WORKERS
         self.val_frequency = model_kwargs.get('val_frequency', 1)
@@ -83,6 +83,7 @@ class TrainingLoop():
         # Setup model
         num_classes = 2
         num_aux_classes = self.train_dataloader.dataset.num_auxiliary_classes
+        self.model_kwargs['num_aux_classes'] = num_aux_classes
         self.model = Model(num_main_classes=num_classes,
                            num_aux_classes=num_aux_classes)
         if self.use_cuda:
@@ -128,11 +129,11 @@ class TrainingLoop():
         epochs_left = self.end_epoch - self.current_epoch - 1
         num_train_batches_left = (
             epochs_left * self.train_batches_per_epoch +
-            self.train_batches_per_epoch - self.train_batch_idx - 1
+            max(0, self.train_batches_per_epoch - self.train_batch_idx - 1)
         )
         num_val_batches_left = (
             (1 + round(epochs_left / self.val_frequency)) * self.val_batches_per_epoch +
-            self.val_batches_per_epoch - self.val_batch_idx - 1
+            max(0, self.val_batches_per_epoch - self.val_batch_idx - 1)
         )
         time_left = (
             num_train_batches_left * self.train_batch_time.value +
@@ -149,7 +150,10 @@ class TrainingLoop():
             self.end_epoch = self.start_epoch + 1
 
     def save_checkpoint(self, epoch, checkpoint_path: str):
+        kwargs = dict(self.model_kwargs)
+        del kwargs['aux_labels']
         state = dict(
+            model_kwargs=kwargs,
             epoch=epoch,
             state_dict=self.model.state_dict(),
         )

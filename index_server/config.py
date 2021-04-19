@@ -65,7 +65,15 @@ BGSPLIT_TRAINER_STATUS_CALLBACK = (
     f"http://{INSTANCE_IP}:5000{BGSPLIT_TRAINER_STATUS_ENDPOINT}"
 )
 
-GCS_PUBLIC_ROOT_URL = "https://storage.googleapis.com/"
+BGSPLIT_MAPPER_NUM_RETRIES = 5
+BGSPLIT_MAPPER_CHUNK_SIZE = lambda nproc: 128
+BGSPLIT_MAPPER_REQUEST_MULTIPLE = lambda nproc: nproc
+BGSPLIT_MAPPER_REQUEST_TIMEOUT = (
+    3 * 60
+)  # seconds; more than a minute per image is probably too much
+BGSPLIT_MAPPER_CLOUD_RUN_URL = "https://forager-bgsplit-mapper-g6rwrca4fq-uc.a.run.app"
+
+GCS_PUBLIC_ROOT_URL = 'https://storage.googleapis.com/'
 
 INDEX_PARENT_DIR = Path("~/forager/indexes").expanduser().resolve()
 INDEX_UPLOAD_GCS_PATH = "gs://foragerml/indexes/"  # trailing slash = directory
@@ -81,6 +89,10 @@ AUX_GCS_TMPL = os.path.join(AUX_UPLOAD_GCS_PATH, "{}/{}.pickle")
 AUX_GCS_PUBLIC_TMPL = os.path.join(
     GCS_PUBLIC_ROOT_URL, "foragerml/aux_labels/{}/{}.pickle"
 )
+
+MODEL_OUTPUTS_PARENT_DIR = Path("~/forager/model_outputs").expanduser().resolve()
+MODEL_OUTPUTS_UPLOAD_GCS_PATH = "gs://foragerml/models_outputs/"  # trailing slash = directory
+MODEL_OUTPUTS_TMPL_DIR = MODEL_OUTPUTS_PARENT_DIR / "{}"
 
 QUERY_PATCHES_PER_IMAGE = 8
 QUERY_NUM_RESULTS_MULTIPLE = 80
