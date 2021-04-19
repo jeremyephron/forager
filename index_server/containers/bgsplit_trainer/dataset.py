@@ -18,12 +18,15 @@ class AuxiliaryDataset(Dataset):
              [0] * len(negative_paths) +
              [-1] * len(unlabeled_paths)),
             dtype=torch.long)
-        self.num_aux_classes = \
-            len(torch.unique(torch.tensor(list(auxiliary_labels.values()),
-                                          dtype=torch.long)))
+        self.num_aux_classes = 1000
+            #len(torch.unique(torch.tensor(list(auxiliary_labels.values()),
+            #                              dtype=torch.long)))
+        if len(positive_paths) > 0:
+            print(positive_paths[0])
+            print(os.path.basename(positive_paths[0]))
+            print(list(auxiliary_labels.keys())[0])
         self.aux_labels = torch.tensor(
-            [auxiliary_labels[os.path.basename(path)]
-             if path in auxiliary_labels else -1
+            [auxiliary_labels.get(os.path.basename(path), -1)
              for path in positive_paths + negative_paths + unlabeled_paths],
             dtype=torch.long)
         self.transform = transform

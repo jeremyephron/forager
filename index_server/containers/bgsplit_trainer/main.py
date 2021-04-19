@@ -99,7 +99,7 @@ class TrainingJob:
                 aux_labels[os.path.basename(p)] = v
             model_dir = config.MODEL_DIR_TMPL.format(
                 self.model_name, self.model_id)
-            self.model_kwargs['aux_labels'] = auxiliary_labels
+            self.model_kwargs['aux_labels'] = aux_labels
             self.model_kwargs['model_dir'] = model_dir
 
             end_time = time.perf_counter()

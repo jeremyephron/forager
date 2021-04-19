@@ -18,7 +18,7 @@ def main():
     payload['_lock'] = working_lock
     payload['model_kwargs']['use_cuda'] = False
     current_job = TrainingJob(**payload)
-    current_job.start()
+    current_job.run()
 
 if __name__ == "__main__":
     main()
