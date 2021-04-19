@@ -139,6 +139,8 @@ class LabeledIndex:
                 len(self.labels),
                 config.BGSPLIT_EMBEDDING_DIM,
             )
+            print(model)
+            print(self.local_flat_indexes[model].scores)
         index = self.local_flat_indexes[model]
         return index
 
