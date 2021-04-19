@@ -9,6 +9,10 @@ from knn.mappers import Mapper
 import config
 
 
+torch.set_grad_enabled(False)
+torch.set_num_threads(1)
+
+
 class TextEmbeddingMapper(Mapper):
     def initialize_container(self):
         self.model, _ = clip.load(config.CLIP_MODEL, device="cpu")
@@ -17,10 +21,11 @@ class TextEmbeddingMapper(Mapper):
     async def process_chunk(
         self, chunk: List[str], job_id, job_args, request_id
     ) -> List[str]:
-        text = clip.tokenize(chunk)
-        text_features = self.model.encode_text(text)
-        text_features /= text_features.norm(dim=-1, keepdim=True)
-        return list(map(utils.numpy_to_base64, text_features.numpy()))
+        with torch.no_grad():
+            text = clip.tokenize(chunk)
+            text_features = self.model.encode_text(text)
+            text_features /= text_features.norm(dim=-1, keepdim=True)
+            return list(map(utils.numpy_to_base64, text_features.numpy()))
 
     async def process_element(self, *args, **kwargs):
         raise NotImplementedError()
