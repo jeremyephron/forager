@@ -133,9 +133,11 @@ class LabeledIndex:
 
     def get_local_flat_index(self, model: str):
         if model not in self.local_flat_indexes:
-            # model = path to directory on disk containing embeddings.npy file
+            # TODO(mihirg, fpoms): Don't hardcode path and dims here?
             self.local_flat_indexes[model] = LocalFlatIndex.load(
-                Path(model), len(self.labels), config.BGSPLIT_EMBEDDING_DIM
+                config.MODEL_OUTPUTS_PARENT_DIR / model,
+                len(self.labels),
+                config.BGSPLIT_EMBEDDING_DIM,
             )
         index = self.local_flat_indexes[model]
         assert index.index
@@ -147,9 +149,9 @@ class LabeledIndex:
         local_flat_index = self.get_local_flat_index(model)
         assert local_flat_index.scores
 
-        ranking = np.argsort(local_flat_index.score)[::-1]
-        lowest_score = np.min(dists)
-        highest_score = np.max(dists)
+        ranking = np.argsort(local_flat_index.scores)[::-1]
+        lowest_score = np.min(local_flat_index.scores)
+        highest_score = np.max(local_flat_index.scores)
 
         sorted_results = []
         for i in ranking:
