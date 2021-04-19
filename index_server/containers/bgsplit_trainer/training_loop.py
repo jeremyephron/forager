@@ -11,7 +11,7 @@ from typing import Dict, List, Any, Callable
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
-from config import BATCH_SIZE, NUM_WORKERS
+from config import NUM_WORKERS
 from model import Model
 from dataset import AuxiliaryDataset
 from warmup_scheduler import GradualWarmupScheduler
@@ -108,7 +108,7 @@ class TrainingLoop():
         max_epochs = model_kwargs.get('max_epochs', 90)
         warmup_epochs = model_kwargs.get('warmup_epochs', 0)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, max_epochs - warmup_epochs,
+            self.optimizer, max_epochs - warmup_epochs,
             eta_min=endlr)
         self.optimizer_scheduler = GradualWarmupScheduler(
             optimizer=self.optimizer,
@@ -152,7 +152,7 @@ class TrainingLoop():
         logger.debug('Send notify')
         self.notify_callback(**{"training_time_left": time_left})
 
-    def load_checkpoint(self, path: str, restart: bool=True):
+    def load_checkpoint(self, path: str, restart: bool=False):
         checkpoint_state = torch.load(path)
         self.model.load_state_dict(checkpoint_state['state_dict'])
         if not restart:
