@@ -49,6 +49,7 @@ import {
 } from "./components";
 
 var disjointSet = require("disjoint-set");
+var dateFormat = require("dateformat");
 
 // TODO(mihirg): Combine with this same constant in other places
 const LABEL_VALUES = [
@@ -418,7 +419,7 @@ const App = () => {
   const [modelId, setModelId] = useState(null);
   const [dnnIsTraining, setDnnIsTraining] = useState(false);
   const [modelEpoch, setModelEpoch] = useState(1);
-  const [modelName, setModelName] = useState("kayvonf_04-06-2021");
+  const [modelName, setModelName] = useState("");
   const [prevModelId, setPrevModelId] = useState(null);
 
   const [dnnInferenceModel, setDnnInferenceModel] = useState(null);
@@ -437,8 +438,16 @@ const App = () => {
     setModelInfo(res.models);
   }, [modelEpoch, dnnIsInferring])
 
+  const autofillModelName = () => {
+    if (!!!(username)) return;
+    const name = username.slice(0, username.indexOf("@"));
+    const date = dateFormat(new Date(), "mm-dd-yy_HH-MM");
+    setModelName(`${name}_${date}`);
+  };
+
   const setMode = (mode) => {
     setMode_(mode);
+    if (mode === "train") autofillModelName();
     if (svmPopoverRepositionFunc.current) svmPopoverRepositionFunc.current();
   }
 
@@ -480,6 +489,7 @@ const App = () => {
 
   const stopTrainingDnn = () => {
     setRequestDnnTraining(false);
+    autofillModelName();
   };
 
   const trainDnnEpoch = async () => {
@@ -778,7 +788,12 @@ const App = () => {
                 </select>
                 <ReactSVG className="icon" src="assets/arrow-caret.svg" />
               </FormGroup>
-              <Input placeholder="Model name"></Input>
+              <Input
+                className="mr-2"
+                placeholder="Model name"
+                value={modelName}
+                onChange={(e) => setModelName(e.target.value)}
+              />
               <CategoryInput
                 id="dnn-pos-bar"
                 className="mr-2"
@@ -815,11 +830,11 @@ const App = () => {
               <Button
                 color="light"
                 onClick={startTrainingNewDnn}
-                disabled={dnnPosTags.length === 0 || (dnnNegTags.length === 0 && !dnnAugmentNegs) || requestDnnTraining}
+                disabled={!!!(username) || dnnPosTags.length === 0 || (dnnNegTags.length === 0 && !dnnAugmentNegs) || requestDnnTraining}
                 >Start training</Button>
                 </>}
               </div>
-              <div className="d-flex flex-row align-items-center justify-content-between">
+              <div className="d-flex flex-row align-items-center justify-content-between mt-2 mb-1">
               {requestDnnInference ? <>
                 <div className="d-flex flex-row align-items-center">
                   <Spinner color="dark" className="my-1 mr-2" />
@@ -840,8 +855,8 @@ const App = () => {
                   <ReactSVG className="icon" src="assets/arrow-caret.svg" />
                 </FormGroup>
                 <FeatureInput
-                  id="svm-feature-bar"
-                  className="mt-3 mb-2"
+                  id="dnn-inference-model-bar"
+                  className="mr-2"
                   placeholder="Model to performance inference for"
                   features={modelInfo.filter(m => m.has_checkpoint && !m.has_output)}
                   selected={dnnInferenceModel}
@@ -850,7 +865,7 @@ const App = () => {
                 <Button
                   color="light"
                   onClick={startDnnInference}
-                  disabled={!dnnInferenceModel || requestDnnInference}
+                  disabled={!!!(username) || !dnnInferenceModel || requestDnnInference}
               >Start inference</Button>
                 </>}
               </div>
