@@ -11,7 +11,7 @@ from typing import Dict, List, Any, Callable
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
-from config import BATCH_SIZE, NUM_WORKERS
+from config import NUM_WORKERS
 from model import Model
 from dataset import AuxiliaryDataset
 from warmup_scheduler import GradualWarmupScheduler
