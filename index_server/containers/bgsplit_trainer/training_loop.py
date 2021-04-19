@@ -108,7 +108,7 @@ class TrainingLoop():
         max_epochs = model_kwargs.get('max_epochs', 90)
         warmup_epochs = model_kwargs.get('warmup_epochs', 0)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, max_epochs - warmup_epochs,
+            self.optimizer, max_epochs - warmup_epochs,
             eta_min=endlr)
         self.optimizer_scheduler = GradualWarmupScheduler(
             optimizer=self.optimizer,
