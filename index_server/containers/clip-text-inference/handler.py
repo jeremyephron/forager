@@ -18,8 +18,9 @@ class TextEmbeddingMapper(Mapper):
         self, chunk: List[str], job_id, job_args, request_id
     ) -> List[str]:
         text = clip.tokenize(chunk)
-        text_features = self.model.encode_text(text).numpy()
-        return list(map(utils.numpy_to_base64, text_features))
+        text_features = self.model.encode_text(text)
+        text_features /= text_features.norm(dim=-1, keepdim=True)
+        return list(map(utils.numpy_to_base64, text_features.numpy()))
 
     async def process_element(self, *args, **kwargs):
         raise NotImplementedError()

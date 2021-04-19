@@ -34,7 +34,8 @@ for i in tqdm(range(0, len(image_paths), BATCH_SIZE)):
     images = torch.cat(images)
 
     with torch.no_grad():
-        image_features = model.encode_image(images).cpu().numpy()
-        embeddings[i : i + BATCH_SIZE] = image_features
+        image_features = model.encode_image(images)
+        image_features /= image_features.norm(dim=-1, keepdim=True)
+        embeddings[i : i + BATCH_SIZE] = image_features.cpu().numpy()
 
 embeddings.flush()
