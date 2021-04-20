@@ -112,9 +112,7 @@ const TagManagementModal = ({
 
     const newTag = categories[idx].tag;
     const oldTag = categoryList[srcIdx];
-    if (newTag === oldTag) {
-      return;
-    }
+    if (newTag === oldTag) return;
 
     if (categoryList.find((name) => name === newTag) !== undefined) {
       e.target.setCustomValidity(`"${newTag}" already exists`);
@@ -138,7 +136,9 @@ const TagManagementModal = ({
     }).then(res => res.json());
 
     setPreventCountReload(true);
-    const newDatasetCategories = fromPairs(categories.map(obj => [obj.tag, datasetCategories[obj.tag]]));
+    const newDatasetCategories = {...datasetCategories};
+    newDatasetCategories[newTag] = newDatasetCategories[oldTag];
+    delete newDatasetCategories[oldTag];
     setDatasetCategories(newDatasetCategories);
 
     delete Object.assign(categoryCounts, {[newTag]: categoryCounts[oldTag]})[oldTag];
