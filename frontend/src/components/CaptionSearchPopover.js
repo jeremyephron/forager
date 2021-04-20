@@ -45,7 +45,9 @@ const CaptionSearchPopover = ({ canBeOpen, text, setText, textEmbedding, setText
       popperClassName={`caption-search-popover ${isLoading ? "loading" : ""} ${(canBeOpen && (isOpen || isLoading || !!!(textEmbedding))) ? "visible" : "invisible"}`}
     >
       <PopoverBody>
-        <p className="mt-1">Like Google Images... but over your own dataset!</p>
+        <div className="mt-1 mb-2">
+          Like Google Images... but over your own dataset!
+        </div>
         <Input
           autoFocus
           type="textarea"
