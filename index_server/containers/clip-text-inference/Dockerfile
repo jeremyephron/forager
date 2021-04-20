@@ -6,10 +6,15 @@ WORKDIR $APP_HOME
 # Install dependencies.
 COPY requirements.txt ./
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git build-essential python3.7-dev \
+    && apt-get install -y --no-install-recommends git build-essential python3.7-dev wget \
     && rm -rf /var/lib/apt/lists/* \
     && pip install -r requirements.txt \
     && apt-get purge -y --auto-remove git build-essential python3.7-dev
+
+# Download external resources.
+COPY resources.txt ./
+RUN wget -i resources.txt \
+    && apt-get purge -y --auto-remove wget
 
 # Run the web service on container startup.
 COPY . ./
