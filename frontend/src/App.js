@@ -326,7 +326,7 @@ const App = () => {
       if (svmModel[0]) body.model = svmModel[0].with_output.model_id;
     } else if (orderingMode === "dnn") {
       url = new URL(`${endpoints.queryRanking}/${datasetName}`);
-      body.model = rankingModel[0].with_output_model_id;
+      body.model = rankingModel[0].with_output.model_id;
     } else if (orderingMode === "clip") {
       url = new URL(`${endpoints.queryKnn}/${datasetName}`);
       body.embeddings = [captionQueryEmbedding];
