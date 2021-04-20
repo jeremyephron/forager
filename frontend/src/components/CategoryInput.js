@@ -88,13 +88,13 @@ const MyToken = forwardRef((props, ref) => {
         <InteractiveToken {...allProps} ref={ref} id={innerId} /> :
         <StaticToken {...allProps} id={innerId} />}
       <Popover
-          placement="top"
-          isOpen={isOpen}
-          target={innerId}
-          trigger="hover"
-          toggle={() => setIsOpen(!isOpen)}
-          fade={false}
-        >
+        placement="top"
+        isOpen={isOpen && !!(document.getElementById(innerId))}
+        target={innerId}
+        trigger="hover"
+        toggle={() => setIsOpen(!isOpen)}
+        fade={false}
+      >
         <PopoverBody onClick={e => e.stopPropagation()}>
           {LABEL_VALUES.map(([value, name]) =>
             <div>

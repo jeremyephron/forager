@@ -673,7 +673,7 @@ const App = () => {
         mode={mode}
         labelCategory={labelModeCategories[0]}
       />
-      <Navbar color="primary-3" className="text-light justify-content-between" dark expand="sm">
+      <Navbar color="primary" className="text-light justify-content-between" dark expand="sm">
         <Container fluid>
           <span>
             <NavbarBrand href="/"><b>Forager</b></NavbarBrand>
