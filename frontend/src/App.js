@@ -17,6 +17,7 @@ import {
   Popover,
   PopoverBody,
   Spinner,
+  Collapse,
 } from "reactstrap";
 import { Typeahead } from "react-bootstrap-typeahead";
 import { ReactSVG } from "react-svg";
@@ -24,6 +25,8 @@ import Slider, { Range } from "rc-slider";
 import Emoji from "react-emoji-render";
 import ReactTimeAgo from "react-time-ago";
 import { v4 as uuidv4 } from "uuid";
+import { faCog, faChevronUp } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
 import fromPairs from "lodash/fromPairs";
 import size from "lodash/size";
@@ -406,6 +409,7 @@ const App = () => {
   //
   const [mode, setMode_] = useState("explore");
   const [labelModeCategories, setLabelModeCategories_] = useState([]);
+  const [dnnAdvancedIsOpen, setDnnAdvancedIsOpen] = useState(false);
   const [modelStatus, setModelStatus] = useState({});
 
   const [modelInfo, setModelInfo] = useState([]);
@@ -769,72 +773,81 @@ const App = () => {
               </div>
             </div>}
             {mode === "train" && <>
-              <div className="d-flex flex-row align-items-center justify-content-between">
-              {requestDnnTraining ? <>
-              <div className="d-flex flex-row align-items-center">
-                <Spinner color="dark" className="my-1 mr-2" />
-                {clusterStatus.ready ?
-                  <span><b>Training</b> model <b>{modelName}</b> (Epoch {modelEpoch}), Time left: {modelStatus.training_time_left && modelStatus.training_time_left >= 0 ? new Date(Math.max(modelStatus.training_time_left, 0) * 1000).toISOString().substr(11, 8) : 'estimating...'} </span> :
-                  <span><b>Starting cluster</b></span>
-                }
-              </div>
-              <Button
-                color="danger"
-                onClick={stopTrainingDnn}
-              >Stop training</Button>
+              <div className="d-flex flex-row align-items-center justify-content-between mb-2">
+                {requestDnnTraining ? <>
+                  <div className="d-flex flex-row align-items-center">
+                    <Spinner color="dark" className="my-1 mr-2" />
+                    {clusterStatus.ready ?
+                      <span><b>Training</b> model <b>{modelName}</b> (Epoch {modelEpoch}), Time left: {modelStatus.training_time_left && modelStatus.training_time_left >= 0 ? new Date(Math.max(modelStatus.training_time_left, 0) * 1000).toISOString().substr(11, 8) : 'estimating...'} </span> :
+                      <span><b>Starting cluster</b></span>
+                    }
+                  </div>
+                  <Button
+                    color="danger"
+                    onClick={stopTrainingDnn}
+                  >Stop training</Button>
                 </> : <>
-              <FormGroup className="mb-0">
-                <select className="custom-select mr-2" value={dnnType} onChange={e => setDnnType(e.target.value)}>
-                  {dnns.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-                </select>
-                <ReactSVG className="icon" src="assets/arrow-caret.svg" />
-              </FormGroup>
-              <Input
-                className="mr-2"
-                placeholder="Model name"
-                value={modelName}
-                onChange={(e) => setModelName(e.target.value)}
-              />
-              <CategoryInput
-                id="dnn-pos-bar"
-                className="mr-2"
-                placeholder="Positive example tags"
-                disabled={requestDnnTraining}
-                categories={datasetInfo.categories}
-                setCategories={setCategories}
-                selected={dnnPosTags}
-                setSelected={setDnnPosTags}
-              />
-              <CategoryInput
-                id="dnn-neg-bar"
-                className="mr-2"
-                placeholder="Negative example tags"
-                disabled={requestDnnTraining}
-                categories={datasetInfo.categories}
-                setCategories={setCategories}
-                selected={dnnNegTags}
-                setSelected={setDnnNegTags}
-              />
-              <div className="my-2 custom-control custom-checkbox">
-                <input
-                  type="checkbox"
-                  className="custom-control-input"
-                  id="dnn-augment-negs-checkbox"
-                  disabled={requestDnnTraining}
-                  checked={dnnAugmentNegs}
-                  onChange={(e) => setDnnAugmentNegs(e.target.checked)}
-                />
-                <label className="custom-control-label text-nowrap mr-2" htmlFor="dnn-augment-negs-checkbox">
-                  Automatically augment negative set
-                </label>
-              </div>
-              <Button
-                color="light"
-                onClick={startTrainingNewDnn}
-                disabled={!!!(username) || dnnPosTags.length === 0 || (dnnNegTags.length === 0 && !dnnAugmentNegs) || requestDnnTraining}
-                >Start training</Button>
+                  <FontAwesomeIcon
+                    icon={dnnAdvancedIsOpen ? faChevronUp : faCog}
+                    style={{cursor: "pointer"}}
+                    onClick={() => setDnnAdvancedIsOpen(!dnnAdvancedIsOpen)}
+                  />
+                  <FormGroup className="mb-0">
+                    <select className="custom-select mx-2" value={dnnType} onChange={e => setDnnType(e.target.value)}>
+                      {dnns.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+                    </select>
+                    <ReactSVG className="icon" src="assets/arrow-caret.svg" />
+                  </FormGroup>
+                  <Input
+                    className="mr-2"
+                    placeholder="Model name"
+                    value={modelName}
+                    onChange={(e) => setModelName(e.target.value)}
+                  />
+                  <CategoryInput
+                    id="dnn-pos-bar"
+                    className="mr-2"
+                    placeholder="Positive example tags"
+                    disabled={requestDnnTraining}
+                    categories={datasetInfo.categories}
+                    setCategories={setCategories}
+                    selected={dnnPosTags}
+                    setSelected={setDnnPosTags}
+                  />
+                  <CategoryInput
+                    id="dnn-neg-bar"
+                    className="mr-2"
+                    placeholder="Negative example tags"
+                    disabled={requestDnnTraining}
+                    categories={datasetInfo.categories}
+                    setCategories={setCategories}
+                    selected={dnnNegTags}
+                    setSelected={setDnnNegTags}
+                  />
+                  <div className="my-2 custom-control custom-checkbox">
+                    <input
+                      type="checkbox"
+                      className="custom-control-input"
+                      id="dnn-augment-negs-checkbox"
+                      disabled={requestDnnTraining}
+                      checked={dnnAugmentNegs}
+                      onChange={(e) => setDnnAugmentNegs(e.target.checked)}
+                    />
+                    <label className="custom-control-label text-nowrap mr-2" htmlFor="dnn-augment-negs-checkbox">
+                      Auto-augment negative set
+                    </label>
+                  </div>
+                  <Button
+                    color="light"
+                    onClick={startTrainingNewDnn}
+                    disabled={!!!(username) || dnnPosTags.length === 0 || (dnnNegTags.length === 0 && !dnnAugmentNegs) || requestDnnTraining}
+                    >Start training
+                  </Button>
                 </>}
               </div>
+              <Collapse isOpen={dnnAdvancedIsOpen && !requestDnnTraining} timeout={200} className="pb-2">
+                @FAIT ADD ADVANCED SETTINGS HERE
+              </Collapse>
               <div className="d-flex flex-row align-items-center justify-content-between mt-2 mb-1">
               {requestDnnInference ? <>
                 <div className="d-flex flex-row align-items-center">
@@ -1016,7 +1029,7 @@ const App = () => {
                       }}
                     />
                     <label className="custom-control-label" htmlFor="svm-augment-negs-checkbox">
-                      Automatically augment negative set
+                      Auto-augment negative set
                     </label>
                   </div>
                   {svmAugmentNegs && <>
