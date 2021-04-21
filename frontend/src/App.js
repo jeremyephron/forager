@@ -440,7 +440,7 @@ const App = () => {
   }, [modelEpoch, dnnIsInferring])
 
   const autofillModelName = () => {
-    if (!!!(username)) return;
+    if (!!!(username) || requestDnnTraining) return;
     const name = username.slice(0, username.indexOf("@"));
     const date = dateFormat(new Date(), "mm-dd-yy_HH-MM");
     setModelName(`${name}_${date}`);
