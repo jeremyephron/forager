@@ -440,7 +440,7 @@ const App = () => {
   }, [modelEpoch, dnnIsInferring])
 
   const autofillModelName = () => {
-    if (!!!(username) || requestDnnTraining) return;
+    if (!!!(username)) return;
     const name = username.slice(0, username.indexOf("@"));
     const date = dateFormat(new Date(), "mm-dd-yy_HH-MM");
     setModelName(`${name}_${date}`);
@@ -448,7 +448,7 @@ const App = () => {
 
   const setMode = (mode) => {
     setMode_(mode);
-    if (mode === "train") autofillModelName();
+    if (mode === "train" && !requestDnnTraining) autofillModelName();
     if (svmPopoverRepositionFunc.current) svmPopoverRepositionFunc.current();
   }
 
