@@ -789,11 +789,14 @@ const App = () => {
                 </> : <>
                   <FontAwesomeIcon
                     icon={dnnAdvancedIsOpen ? faChevronUp : faCog}
-                    style={{cursor: "pointer"}}
+                    style={{
+                      cursor: "pointer",
+                      position: "absolute",
+                    }}
                     onClick={() => setDnnAdvancedIsOpen(!dnnAdvancedIsOpen)}
                   />
-                  <FormGroup className="mb-0">
-                    <select className="custom-select mx-2" value={dnnType} onChange={e => setDnnType(e.target.value)}>
+                  <FormGroup className="mb-0 ml-3">
+                    <select className="custom-select mr-2" value={dnnType} onChange={e => setDnnType(e.target.value)}>
                       {dnns.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
                     </select>
                     <ReactSVG className="icon" src="assets/arrow-caret.svg" />
