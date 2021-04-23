@@ -25,8 +25,6 @@ import Slider, { Range } from "rc-slider";
 import Emoji from "react-emoji-render";
 import ReactTimeAgo from "react-time-ago";
 import { v4 as uuidv4 } from "uuid";
-import { faCog, faChevronUp } from "@fortawesome/free-solid-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
 import fromPairs from "lodash/fromPairs";
 import size from "lodash/size";
@@ -848,7 +846,7 @@ const App = () => {
             <Collapse isOpen={dnnAdvancedIsOpen && !requestDnnTraining} timeout={200} className="pb-1">
               @FAIT ADD ADVANCED SETTINGS HERE
             </Collapse>
-            <div className="d-flex flex-row align-items-center justify-content-between mt-3 mb-1">
+            <div className="d-flex flex-row align-items-center justify-content-between mt-2 mb-1">
             {requestDnnInference ? <>
               <div className="d-flex flex-row align-items-center">
                 <Spinner color="dark" className="my-1 mr-2" />
