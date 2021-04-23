@@ -88,8 +88,8 @@ const KnnPopover = ({ images, dispatch, generateEmbedding, useSpatial, setUseSpa
         {/* </div> */}
         {size(images) > 0 && <div className="mt-2">
           {isLoading ?
-            <Spinner size="sm" color="secondary" /> :
-            <Emoji text=":white_check_mark:"/>}&nbsp;&nbsp;&nbsp;
+            <Spinner size="sm" color="secondary" className="mr-1"/> :
+            <Emoji text=":white_check_mark:"/>}&nbsp;
           <span className="text-secondary">Load{isLoading ? "ing" : "ed"} embedding{size(images) > 1 && "s"}</span>
         </div>}
       </PopoverBody>
