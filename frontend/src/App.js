@@ -736,152 +736,156 @@ const App = () => {
       </Popover>
       {mode !== "explore" && <div className="border-bottom py-2 mode-container">
         <Container fluid>
-            {mode === "label" && <div className="d-flex flex-row align-items-center justify-content-between">
-              <Typeahead
-                multiple
-                id="label-mode-bar"
-                className="typeahead-bar mr-2"
-                options={sortBy(Object.keys(datasetInfo.categories), c => c.toLowerCase())}
-                placeholder="Category to label"
-                selected={labelModeCategories}
-                onChange={setLabelModeCategories}
-                newSelectionPrefix="New category: "
-                allowNew={true}
-              />
-              <div className="text-nowrap">
-                {LABEL_VALUES.map(([value, name], i) =>
-                  <>
-                    <kbd>{(i + 1) % 10}</kbd> <span className={`rbt-token ${value}`}>{name.toLowerCase()}</span>&nbsp;
-                  </>)}
-                {labelModeCategories.length > 0 &&
-                  (datasetInfo.categories[labelModeCategories[0]] || []).map((name, i) =>
-                  <>
-                    <kbd>{(LABEL_VALUES.length + i + 1) % 10}</kbd> <span className="rbt-token CUSTOM">{name}</span>&nbsp;
-                  </>)}
-                {labelModeCategories.length > 0 &&
-                  <NewModeInput
-                    category={labelModeCategories[0]}
-                    categories={datasetInfo.categories}
-                    setCategories={setCategories}
-                  />
-                }
-              </div>
-            </div>}
-            {mode === "train" && <>
-              <div className="d-flex flex-row align-items-center justify-content-between">
-                {requestDnnTraining ? <>
-                  <div className="d-flex flex-row align-items-center">
-                    <Spinner color="dark" className="my-1 mr-2" />
-                    {clusterStatus.ready ?
-                      <span><b>Training</b> model <b>{modelName}</b> (Epoch {modelEpoch}), Time left: {modelStatus.training_time_left && modelStatus.training_time_left >= 0 ? new Date(Math.max(modelStatus.training_time_left, 0) * 1000).toISOString().substr(11, 8) : 'estimating...'} </span> :
-                      <span><b>Starting cluster</b></span>
-                    }
-                  </div>
-                  <Button
-                    color="danger"
-                    onClick={stopTrainingDnn}
-                  >Stop training</Button>
-                </> : <>
-                  <FormGroup className="mb-0">
-                    <select className="custom-select mr-2" value={dnnType} onChange={e => setDnnType(e.target.value)}>
-                      {dnns.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-                    </select>
-                    <ReactSVG className="icon" src="assets/arrow-caret.svg" />
-                  </FormGroup>
-                  <Input
-                    className="mr-2"
-                    placeholder="Model name"
-                    value={modelName}
-                    onChange={(e) => setModelName(e.target.value)}
-                  />
-                  <CategoryInput
-                    id="dnn-pos-bar"
-                    className="mr-2"
-                    placeholder="Positive example tags"
-                    disabled={requestDnnTraining}
-                    categories={datasetInfo.categories}
-                    setCategories={setCategories}
-                    selected={dnnPosTags}
-                    setSelected={setDnnPosTags}
-                  />
-                  <CategoryInput
-                    id="dnn-neg-bar"
-                    className="mr-2"
-                    placeholder="Negative example tags"
-                    disabled={requestDnnTraining}
-                    categories={datasetInfo.categories}
-                    setCategories={setCategories}
-                    selected={dnnNegTags}
-                    setSelected={setDnnNegTags}
-                  />
-                  <div className="my-2 custom-control custom-checkbox">
-                    <input
-                      type="checkbox"
-                      className="custom-control-input"
-                      id="dnn-augment-negs-checkbox"
-                      disabled={requestDnnTraining}
-                      checked={dnnAugmentNegs}
-                      onChange={(e) => setDnnAugmentNegs(e.target.checked)}
-                    />
-                    <label className="custom-control-label text-nowrap mr-2" htmlFor="dnn-augment-negs-checkbox">
-                      Auto-augment negative set
-                    </label>
-                  </div>
-                  <Button
-                    color="light"
-                    onClick={startTrainingNewDnn}
-                    disabled={!!!(username) || dnnPosTags.length === 0 || (dnnNegTags.length === 0 && !dnnAugmentNegs) || requestDnnTraining}
-                    >Start training
-                  </Button>
-                </>}
-              </div>
-              {!requestDnnTraining && <a
-                href="#"
-                className="text-small text-muted mb-1"
-                onClick={e => {
-                  setDnnAdvancedIsOpen(!dnnAdvancedIsOpen);
-                  e.preventDefault();
-                }}
-              >
-                {dnnAdvancedIsOpen ? "Hide" : "Show"} advanced training options
-              </a>}
-              <Collapse isOpen={dnnAdvancedIsOpen && !requestDnnTraining} timeout={200} className="pb-1">
-                @FAIT ADD ADVANCED SETTINGS HERE
-              </Collapse>
-              <div className="d-flex flex-row align-items-center justify-content-between mt-3 mb-1">
-              {requestDnnInference ? <>
+          {mode === "label" && <div className="d-flex flex-row align-items-center justify-content-between">
+            <Typeahead
+              multiple
+              id="label-mode-bar"
+              className="typeahead-bar mr-2"
+              options={sortBy(Object.keys(datasetInfo.categories), c => c.toLowerCase())}
+              placeholder="Category to label"
+              selected={labelModeCategories}
+              onChange={setLabelModeCategories}
+              newSelectionPrefix="New category: "
+              allowNew={true}
+            />
+            <div className="text-nowrap">
+              {LABEL_VALUES.map(([value, name], i) =>
+                <>
+                  <kbd>{(i + 1) % 10}</kbd> <span className={`rbt-token ${value}`}>{name.toLowerCase()}</span>&nbsp;
+                </>)}
+              {labelModeCategories.length > 0 &&
+                (datasetInfo.categories[labelModeCategories[0]] || []).map((name, i) =>
+                <>
+                  <kbd>{(LABEL_VALUES.length + i + 1) % 10}</kbd> <span className="rbt-token CUSTOM">{name}</span>&nbsp;
+                </>)}
+              {labelModeCategories.length > 0 &&
+                <NewModeInput
+                  category={labelModeCategories[0]}
+                  categories={datasetInfo.categories}
+                  setCategories={setCategories}
+                />
+              }
+            </div>
+          </div>}
+          {mode === "train" && <>
+            <div className="d-flex flex-row align-items-center justify-content-between">
+              {requestDnnTraining ? <>
                 <div className="d-flex flex-row align-items-center">
                   <Spinner color="dark" className="my-1 mr-2" />
                   {clusterStatus.ready ?
-                    <span><b>Inferring</b> model <b>{modelName}</b>, Time left: {dnnInferenceStatus.time_left && dnnInferenceStatus.time_left >= 0 ? new Date(Math.max(dnnInferenceStatus.time_left, 0) * 1000).toISOString().substr(11, 8) : 'estimating...'} </span> :
+                    <span><b>Training</b> model <b>{modelName}</b> (Epoch {modelEpoch}), Time left: {modelStatus.training_time_left && modelStatus.training_time_left >= 0 ? new Date(Math.max(modelStatus.training_time_left, 0) * 1000).toISOString().substr(11, 8) : 'estimating...'} </span> :
                     <span><b>Starting cluster</b></span>
                   }
                 </div>
                 <Button
                   color="danger"
-                  onClick={stopDnnInference}
-                >Stop inference</Button>
-                </> : <>
-                <FeatureInput
-                  id="dnn-inference-model-bar"
+                  onClick={stopTrainingDnn}
+                >Stop training</Button>
+              </> : <>
+                <FormGroup className="mb-0">
+                  <select className="custom-select mr-2" value={dnnType} onChange={e => setDnnType(e.target.value)}>
+                    {dnns.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
+                  </select>
+                  <ReactSVG className="icon" src="assets/arrow-caret.svg" />
+                </FormGroup>
+                <Input
                   className="mr-2"
-                  placeholder="Model to perform inference for"
-                  features={modelInfo.filter(m => m.latest.has_checkpoint && !m.latest.has_output)}
-                  selected={dnnInferenceModel}
-                  setSelected={setDnnInferenceModel}
+                  placeholder="Model name"
+                  value={modelName}
+                  onChange={(e) => setModelName(e.target.value)}
                 />
+                <CategoryInput
+                  id="dnn-pos-bar"
+                  className="mr-2"
+                  placeholder="Positive example tags"
+                  disabled={requestDnnTraining}
+                  categories={datasetInfo.categories}
+                  setCategories={setCategories}
+                  selected={dnnPosTags}
+                  setSelected={setDnnPosTags}
+                />
+                <CategoryInput
+                  id="dnn-neg-bar"
+                  className="mr-2"
+                  placeholder="Negative example tags"
+                  disabled={requestDnnTraining}
+                  categories={datasetInfo.categories}
+                  setCategories={setCategories}
+                  selected={dnnNegTags}
+                  setSelected={setDnnNegTags}
+                />
+                <div className="my-2 custom-control custom-checkbox">
+                  <input
+                    type="checkbox"
+                    className="custom-control-input"
+                    id="dnn-augment-negs-checkbox"
+                    disabled={requestDnnTraining}
+                    checked={dnnAugmentNegs}
+                    onChange={(e) => setDnnAugmentNegs(e.target.checked)}
+                  />
+                  <label className="custom-control-label text-nowrap mr-2" htmlFor="dnn-augment-negs-checkbox">
+                    Auto-augment negative set
+                  </label>
+                </div>
                 <Button
                   color="light"
-                  onClick={startDnnInference}
-                  disabled={!!!(username) || !!!(dnnInferenceModel[0]) || requestDnnInference}
-              >Start inference</Button>
-                </>}
-              </div>
+                  onClick={startTrainingNewDnn}
+                  disabled={!!!(username) || dnnPosTags.length === 0 || (dnnNegTags.length === 0 && !dnnAugmentNegs) || requestDnnTraining}
+                  >Start training
+                </Button>
               </>}
-            {modelStatus.failed ?
-             <div className="d-flex flex-row align-items-center justify-content-between">
-              <div className="my-12">{modelStatus.failure_reason}</div>
-              </div> : null }
+            </div>
+            {!requestDnnTraining && <a
+              href="#"
+              className="text-small text-muted mb-1"
+              onClick={e => {
+                setDnnAdvancedIsOpen(!dnnAdvancedIsOpen);
+                e.preventDefault();
+              }}
+            >
+              {dnnAdvancedIsOpen ? "Hide" : "Show"} advanced training options
+            </a>}
+            <Collapse isOpen={dnnAdvancedIsOpen && !requestDnnTraining} timeout={200} className="pb-1">
+              @FAIT ADD ADVANCED SETTINGS HERE
+            </Collapse>
+            <div className="d-flex flex-row align-items-center justify-content-between mt-3 mb-1">
+            {requestDnnInference ? <>
+              <div className="d-flex flex-row align-items-center">
+                <Spinner color="dark" className="my-1 mr-2" />
+                {clusterStatus.ready ?
+                  <span><b>Inferring</b> model <b>{modelName}</b>, Time left: {dnnInferenceStatus.time_left && dnnInferenceStatus.time_left >= 0 ? new Date(Math.max(dnnInferenceStatus.time_left, 0) * 1000).toISOString().substr(11, 8) : 'estimating...'} </span> :
+                  <span><b>Starting cluster</b></span>
+                }
+              </div>
+              <Button
+                color="danger"
+                onClick={stopDnnInference}
+              >Stop inference</Button>
+              </> : <>
+              <FeatureInput
+                id="dnn-inference-model-bar"
+                className="mr-2"
+                placeholder="Model to perform inference for"
+                features={modelInfo.filter(m => m.latest.has_checkpoint && !m.latest.has_output)}
+                selected={dnnInferenceModel}
+                setSelected={setDnnInferenceModel}
+              />
+              <Button
+                color="light"
+                onClick={startDnnInference}
+                disabled={!!!(username) || !!!(dnnInferenceModel[0]) || requestDnnInference}
+            >Start inference</Button>
+              </>}
+            </div>
+            {modelStatus.failed && <div className="d-flex flex-row align-items-center justify-content-between">
+              <div className="my-12">
+                {modelStatus.failure_reason}
+              </div>
+            </div>}
+          </>}
+          {mode === "validate" && <div>
+
+          </div>}
         </Container>
       </div>}
       <div className="app">
