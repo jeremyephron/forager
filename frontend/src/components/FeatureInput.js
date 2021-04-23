@@ -9,6 +9,7 @@ const FeatureInput = ({ features, className, selected, setSelected, ...props }) 
       selected={selected}
       onChange={setSelected}
       labelKey="name"
+      clearButton
       {...props}
     />
   );

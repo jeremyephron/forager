@@ -75,6 +75,13 @@ const dnns = [
   {id: "dnn", label: "DNN w/ BG Splitting"},
 ];
 
+const modes = [
+  {id: "explore", label: "Explore"},
+  {id: "label", label: "Label"},
+  {id: "train", label: "Train"},
+  {id: "validate", label: "Validate"},
+];
+
 const endpoints = fromPairs(toPairs({
   getDatasetInfo: "get_dataset_info_v2",
   getModels: "get_models_v2",
@@ -407,7 +414,7 @@ const App = () => {
   //
   // MODE
   //
-  const [mode, setMode_] = useState("explore");
+  const [mode, setMode_] = useState(modes[0].id);
   const [labelModeCategories, setLabelModeCategories_] = useState([]);
   const [dnnAdvancedIsOpen, setDnnAdvancedIsOpen] = useState(false);
   const [modelStatus, setModelStatus] = useState({});
@@ -685,24 +692,12 @@ const App = () => {
           </span>
           <span>
             <Nav navbar>
-              <NavItem active={mode === "explore"}>
+              {modes.map(({ id, label }) => <NavItem active={mode === id}>
                 <NavLink href="#" onClick={(e) => {
-                  setMode("explore");
+                  setMode(id);
                   e.preventDefault();
-                }}>Explore</NavLink>
-              </NavItem>
-              <NavItem active={mode === "label"}>
-                <NavLink href="#" onClick={(e) => {
-                  setMode("label");
-                  e.preventDefault();
-                }}>Label</NavLink>
-              </NavItem>
-              <NavItem active={mode === "train"}>
-                <NavLink href="#" onClick={(e) => {
-                  setMode("train");
-                  e.preventDefault();
-                }}>Train</NavLink>
-              </NavItem>
+                }}>{label}</NavLink>
+              </NavItem>)}
             </Nav>
           </span>
           <div>
@@ -773,7 +768,7 @@ const App = () => {
               </div>
             </div>}
             {mode === "train" && <>
-              <div className="d-flex flex-row align-items-center justify-content-between mb-2">
+              <div className="d-flex flex-row align-items-center justify-content-between">
                 {requestDnnTraining ? <>
                   <div className="d-flex flex-row align-items-center">
                     <Spinner color="dark" className="my-1 mr-2" />
@@ -787,15 +782,7 @@ const App = () => {
                     onClick={stopTrainingDnn}
                   >Stop training</Button>
                 </> : <>
-                  <FontAwesomeIcon
-                    icon={dnnAdvancedIsOpen ? faChevronUp : faCog}
-                    style={{
-                      cursor: "pointer",
-                      position: "absolute",
-                    }}
-                    onClick={() => setDnnAdvancedIsOpen(!dnnAdvancedIsOpen)}
-                  />
-                  <FormGroup className="mb-0 ml-3">
+                  <FormGroup className="mb-0">
                     <select className="custom-select mr-2" value={dnnType} onChange={e => setDnnType(e.target.value)}>
                       {dnns.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
                     </select>
@@ -848,10 +835,20 @@ const App = () => {
                   </Button>
                 </>}
               </div>
-              <Collapse isOpen={dnnAdvancedIsOpen && !requestDnnTraining} timeout={200} className="pb-2">
+              {!requestDnnTraining && <a
+                href="#"
+                className="text-small text-muted mb-1"
+                onClick={e => {
+                  setDnnAdvancedIsOpen(!dnnAdvancedIsOpen);
+                  e.preventDefault();
+                }}
+              >
+                {dnnAdvancedIsOpen ? "Hide" : "Show"} advanced training options
+              </a>}
+              <Collapse isOpen={dnnAdvancedIsOpen && !requestDnnTraining} timeout={200} className="pb-1">
                 @FAIT ADD ADVANCED SETTINGS HERE
               </Collapse>
-              <div className="d-flex flex-row align-items-center justify-content-between mt-2 mb-1">
+              <div className="d-flex flex-row align-items-center justify-content-between mt-3 mb-1">
               {requestDnnInference ? <>
                 <div className="d-flex flex-row align-items-center">
                   <Spinner color="dark" className="my-1 mr-2" />

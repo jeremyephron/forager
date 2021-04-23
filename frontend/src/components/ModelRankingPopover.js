@@ -12,12 +12,12 @@ const ModelRankingPopover = ({ canBeOpen, features, rankingModel, setRankingMode
   return (
     <Popover
       placement="bottom"
-      isOpen={canBeOpen && (isOpen || !!!(rankingModel[0]))}
+      isOpen={true}
       target="ordering-mode"
       trigger="hover"
       toggle={() => setIsOpen(!isOpen)}
       fade={false}
-      popperClassName="model-ranking-popover"
+      popperClassName={`model-ranking-popover ${(canBeOpen && (isOpen || !!!(rankingModel[0]))) ? "visible" : "invisible"}`}
     >
       <PopoverBody>
         <FeatureInput
