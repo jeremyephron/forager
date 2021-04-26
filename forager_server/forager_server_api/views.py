@@ -1485,7 +1485,6 @@ def query_knn_v2(request, dataset_name):
         request,
         dataset,
         response_data,
-        num_results,
     )
     return JsonResponse(create_result_set_v2(results, "knn"))
 
@@ -1586,7 +1585,6 @@ def query_svm_v2(request, dataset_name):
         request,
         dataset,
         response_data,
-        num_results,
     )
     return JsonResponse(create_result_set_v2(results, "svm"))
 
@@ -1622,7 +1620,6 @@ def query_ranking_v2(request, dataset_name):
         request,
         dataset,
         response_data,
-        num_results,
     )
     return JsonResponse(create_result_set_v2(results, "ranking"))
 
