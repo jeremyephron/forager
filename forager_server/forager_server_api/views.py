@@ -1421,12 +1421,12 @@ def get_results_v2(request, dataset_name):
     ]
     dataset_item_identifiers = [di.pk for di in dataset_items]
 
-    return {
+    return JsonResponse({
         "type": type,
         "paths": dataset_item_paths,
         "identifiers": dataset_item_identifiers,
         "clustering": clustering_data["clustering"],
-    }
+    })
 
 
 @api_view(["POST"])
