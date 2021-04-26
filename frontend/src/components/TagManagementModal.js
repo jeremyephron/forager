@@ -23,7 +23,6 @@ import styled from "styled-components";
 import fromPairs from "lodash/fromPairs";
 import toPairs from "lodash/toPairs";
 
-
 import { ConfirmModal } from "../components";
 
 const endpoints = fromPairs(toPairs({
@@ -242,7 +241,9 @@ const TagManagementModal = ({
       backdropTransition={{ timeout: 75 }}
       size="lg"
     >
-      <ModalHeader>Manage Tags</ModalHeader>
+      <ModalHeader toggle={toggle}>
+        Manage Tags
+      </ModalHeader>
       <ModalBody>
         <TableContainer className="pr-2">
           <Table hover borderless size="sm">
@@ -274,7 +275,7 @@ const TagManagementModal = ({
             deleteCategoryByIndex(confirmCategoryIdx);
             toggleConfirmIsOpen();
           }}>Delete</Button>}
-          cancelBtn={<Button color="secondary" onClick={(e) => toggleConfirmIsOpen()}>Cancel</Button>}
+          cancelBtn={<Button color="light" onClick={(e) => toggleConfirmIsOpen()}>Cancel</Button>}
         />
       </ModalBody>
     </Modal>

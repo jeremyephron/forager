@@ -17,7 +17,7 @@ const ModelRankingPopover = ({ canBeOpen, features, rankingModel, setRankingMode
       trigger="hover"
       toggle={() => setIsOpen(!isOpen)}
       fade={false}
-      popperClassName={`model-ranking-popover ${(canBeOpen && (isOpen || !!!(rankingModel[0]))) ? "visible" : "invisible"}`}
+      popperClassName={`model-ranking-popover ${(canBeOpen && (isOpen || !!!(rankingModel))) ? "visible" : "invisible"}`}
     >
       <PopoverBody>
         <FeatureInput

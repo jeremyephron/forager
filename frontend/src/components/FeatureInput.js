@@ -6,8 +6,8 @@ const FeatureInput = ({ features, className, selected, setSelected, ...props }) 
     <Typeahead
       className={`typeahead-bar ${className || ""}`}
       options={features}
-      selected={selected}
-      onChange={setSelected}
+      selected={selected ? [selected] : []}
+      onChange={s => setSelected(s.length === 0 ? null : s[0])}
       labelKey="name"
       clearButton
       {...props}

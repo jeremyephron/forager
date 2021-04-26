@@ -25,6 +25,9 @@ import Slider, { Range } from "rc-slider";
 import Emoji from "react-emoji-render";
 import ReactTimeAgo from "react-time-ago";
 import { v4 as uuidv4 } from "uuid";
+import { faTags } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import ReactPaginate from "react-paginate";
 
 import fromPairs from "lodash/fromPairs";
 import size from "lodash/size";
@@ -47,10 +50,13 @@ import {
   KnnPopover,
   ModelRankingPopover,
   CaptionSearchPopover,
+  BulkTagModal,
 } from "./components";
 
 var disjointSet = require("disjoint-set");
 var dateFormat = require("dateformat");
+
+const PAGE_SIZE = 1000;
 
 // TODO(mihirg): Combine with this same constant in other places
 const LABEL_VALUES = [
@@ -82,9 +88,10 @@ const modes = [
 
 const endpoints = fromPairs(toPairs({
   getDatasetInfo: "get_dataset_info_v2",
+  getResults: "get_results_v2",
   getModels: "get_models_v2",
-  getNextImages: "get_next_images_v2",
   trainSvm: "train_svm_v2",
+  queryImages: "query_images_v2",
   querySvm: "query_svm_v2",
   queryKnn: "query_knn_v2",
   queryRanking: "query_ranking_v2",
@@ -167,6 +174,12 @@ const App = () => {
   //
   const [tagManagementIsOpen, setTagManagementIsOpen] = useState(false);
   const toggleTagManagement = () => setTagManagementIsOpen(!tagManagementIsOpen);
+
+  //
+  // BULK TAG MODAL
+  //
+  const [bulkTagModalIsOpen, setBulkTagModalIsOpen] = useState(false);
+  const toggleBulkTag = () => setBulkTagModalIsOpen(!bulkTagModalIsOpen);
 
   //
   // DATA CONNECTIONS
@@ -269,21 +282,25 @@ const App = () => {
   const [svmNegTags, setSvmNegTags] = useState([]);
   const [svmAugmentIncludeTags, setSvmAugmentIncludeTags] = useState([]);
   const [svmAugmentExcludeTags, setSvmAugmentExcludeTags] = useState([]);
-  const [svmModel, setSvmModel] = useState([]);
+  const [svmModel, setSvmModel] = useState(null);
 
-  const [rankingModel, setRankingModel] = useState([]);
+  const [rankingModel, setRankingModel] = useState(null);
 
   const [captionQuery, setCaptionQuery] = useState("");
   const [captionQueryEmbedding, setCaptionQueryEmbedding] = useState("");
 
   const [subset, setSubset_] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [queryResultData, setQueryResultData] = useState({
+  const [queryResultSet, setQueryResultSet] = useState({
+    id: null,
+    num_results: 0,
     type: null,
-    images: [],
-    clustering: []
   });
-  const [isTraining, setIsTraining] = useState(false);
+  const [queryResultData, setQueryResultData] = useState({
+    images: [],
+    clustering: [],
+  });
+  const [svmIsTraining, setSvmIsTraining] = useState(false);
   const [trainedSvmData, setTrainedSvmData] = useState(null);
 
   const trainSvm = async () => {
@@ -303,8 +320,8 @@ const App = () => {
     setTrainedSvmData({...svmData, date: Date.now()});
   };
   useEffect(() => {
-    if (isTraining) trainSvm().finally(() => setIsTraining(false));
-  }, [isTraining]);
+    if (svmIsTraining) trainSvm().finally(() => setSvmIsTraining(false));
+  }, [svmIsTraining]);
 
   const runQuery = async () => {
     setClusterIsOpen(false);
@@ -312,7 +329,6 @@ const App = () => {
 
     let url;
     let body = {
-      num: 1000,
       index_id: datasetInfo.index_id,
       include: datasetIncludeTags.map(t => `${t.category}:${t.value}`),
       exclude: datasetExcludeTags.map(t => `${t.category}:${t.value}`),
@@ -322,7 +338,7 @@ const App = () => {
     };
 
     if (orderingMode === "id" || orderingMode === "random") {
-      url = new URL(`${endpoints.getNextImages}/${datasetName}`);
+      url = new URL(`${endpoints.queryImages}/${datasetName}`);
       body.order = orderingMode;
     } else if (orderingMode === "knn") {
       url = new URL(`${endpoints.queryKnn}/${datasetName}`);
@@ -331,7 +347,7 @@ const App = () => {
     } else if (orderingMode === "svm") {
       url = new URL(`${endpoints.querySvm}/${datasetName}`);
       body.svm_vector = trainedSvmData.svm_vector;
-      if (svmModel[0]) body.model = svmModel[0].with_output.model_id;
+      if (svmModel) body.model = svmModel.with_output.model_id;
     } else if (orderingMode === "dnn") {
       url = new URL(`${endpoints.queryRanking}/${datasetName}`);
       body.model = rankingModel[0].with_output.model_id;
@@ -344,10 +360,36 @@ const App = () => {
       console.error(`Query type (${orderingMode}) not implemented`);
       return;
     }
-    const results = await fetch(url, {
+    const resultSet = await fetch(url, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(body),
+    }).then(r => r.json());
+
+    if ((resultSet.type === "knn" || resultSet.type === "svm") &&
+        (queryResultSet.type !== "knn" && queryResultSet.type !== "svm")) {
+      setOrderByClusterSize(false);
+    }
+
+    setPage(0);
+    setQueryResultSet(resultSet);
+  };
+
+  const [page, setPage] = useState(0);
+  const [pageIsLoading, setPageIsLoading] = useState(false);
+
+  const getPage = async () => {
+    if (queryResultSet.num_results === 0) return;
+
+    let url = new URL(`${endpoints.getResults}/${datasetName}`);
+    url.search = new URLSearchParams({
+      index_id: datasetInfo.index_id,
+      result_set_id: queryResultSet.id,
+      offset: page * PAGE_SIZE,
+      num: PAGE_SIZE,
+    }).toString();
+    const results = await fetch(url, {
+      method: "GET",
     }).then(r => r.json());
 
     const images = results.paths.map((path, i) => {
@@ -361,23 +403,22 @@ const App = () => {
       };
     });
 
-    if (results.type !== "svm") {
-      setTrainedSvmData(null);
-    }
-    if ((results.type === "knn" || results.type === "svm") &&
-        (queryResultData.type !== "knn" && queryResultData.type !== "svm")) {
-      setOrderByClusterSize(false);
-    }
+    window.scrollTo(0, 0);
 
     setQueryResultData({
       images,
       clustering: results.clustering,
-      type: results.type,
     });
   };
+
   useEffect(() => {
     if (isLoading) runQuery().finally(() => setIsLoading(false));
   }, [isLoading]);
+
+  useEffect(() => {
+    setPageIsLoading(true);
+    getPage().finally(() => setPageIsLoading(false));
+  }, [page, queryResultSet]);
 
   const setSubset = (subset) => {
     setSubset_(subset);
@@ -413,23 +454,47 @@ const App = () => {
   // MODE
   //
   const [mode, setMode_] = useState(modes[0].id);
-  const [labelModeCategories, setLabelModeCategories_] = useState([]);
-  const [dnnAdvancedIsOpen, setDnnAdvancedIsOpen] = useState(false);
-  const [modelStatus, setModelStatus] = useState({});
 
-  const [modelInfo, setModelInfo] = useState([]);
+  // Label mode
+  const [labelModeCategories, setLabelModeCategories_] = useState([]);
+
+  const setLabelModeCategories = (selection) => {
+    if (selection.length === 0) {
+      setLabelModeCategories_([]);
+    } else {
+      let c = selection[selection.length - 1];
+      if (c.customOption) {  // new
+        c = c.label;
+
+        let newCategories = {...datasetInfo.categories};
+        newCategories[c] = [];  // no custom values to start
+        setCategories(newCategories);
+      }
+      setLabelModeCategories_([c]);
+    }
+  };
+
+  // Train mode
+  // -> UI state
+  const [modelName, setModelName] = useState("");
+  const [dnnAdvancedIsOpen, setDnnAdvancedIsOpen] = useState(false);
   const [dnnType, setDnnType] = useState(dnns[0].id);
   const [dnnAugmentNegs, setDnnAugmentNegs] = useState(true);
   const [dnnPosTags, setDnnPosTags] = useState([]);
   const [dnnNegTags, setDnnNegTags] = useState([]);
-  const [requestDnnTraining, setRequestDnnTraining] = useState(false);
+
+  // -> Cluster creation
   const [clusterId, setClusterId] = useState(null);
   const [clusterCreating, setClusterCreating] = useState(false);
   const [clusterStatus, setClusterStatus] = useState({});
+
+  const [modelStatus, setModelStatus] = useState({});
+
+  const [modelInfo, setModelInfo] = useState([]);
+  const [requestDnnTraining, setRequestDnnTraining] = useState(false);
   const [modelId, setModelId] = useState(null);
   const [dnnIsTraining, setDnnIsTraining] = useState(false);
   const [modelEpoch, setModelEpoch] = useState(1);
-  const [modelName, setModelName] = useState("");
   const [prevModelId, setPrevModelId] = useState(null);
 
   const [dnnInferenceModel, setDnnInferenceModel] = useState([]);
@@ -446,7 +511,7 @@ const App = () => {
     }).then(res => res.json());
     console.log(res.models);
     setModelInfo(res.models);
-  }, [modelEpoch, dnnIsInferring])
+  }, [modelEpoch, dnnIsTraining, dnnIsInferring])
 
   const autofillModelName = () => {
     if (!!!(username)) return;
@@ -470,9 +535,7 @@ const App = () => {
         method: "POST",
       }).then(r => r.json());
 
-      _clusterId = clusterResponse.cluster_id;
-
-      setClusterId(_clusterId);
+      setClusterId(clusterResponse.cluster_id);
       setClusterCreating(true);
     }
   }, [requestDnnTraining, requestDnnInference, clusterId]);
@@ -615,28 +678,15 @@ const App = () => {
   };
   useInterval(checkDnnInferenceStatus, dnnIsInferring ? 3000 : null)
 
-  const setLabelModeCategories = (selection) => {
-    if (selection.length === 0) {
-      setLabelModeCategories_([]);
-    } else {
-      let c = selection[selection.length - 1];
-      if (c.customOption) {  // new
-        c = c.label;
-
-        let newCategories = {...datasetInfo.categories};
-        newCategories[c] = [];  // no custom values to start
-        setCategories(newCategories);
-      }
-      setLabelModeCategories_([c]);
-    }
-  };
+  // Validate mode
+  const [validateModel, setValidateModel] = useState(null);
 
   //
   // RENDERING
   //
 
   return (
-    <div className={`main ${isLoading ? "loading" : ""}`}>
+    <div className={`main ${(isLoading || pageIsLoading) ? "loading" : ""}`}>
       <SignInModal
         isOpen={loginIsOpen}
         toggle={() => setLoginIsOpen(false)}
@@ -654,6 +704,14 @@ const App = () => {
         setDatasetCategories={setCategories}
         username={username}
         isReadOnly={!!!(username)}
+      />
+      <BulkTagModal
+        isOpen={bulkTagModalIsOpen}
+        toggle={toggleBulkTag}
+        resultSet={queryResultSet}
+        categories={datasetInfo.categories}
+        setCategories={setCategories}
+        username={username}
       />
       <ClusterModal
         isOpen={clusterIsOpen}
@@ -791,6 +849,7 @@ const App = () => {
                   placeholder="Model name"
                   value={modelName}
                   onChange={(e) => setModelName(e.target.value)}
+                  spellcheck="false"
                 />
                 <CategoryInput
                   id="dnn-pos-bar"
@@ -843,46 +902,29 @@ const App = () => {
             >
               {dnnAdvancedIsOpen ? "Hide" : "Show"} advanced training options
             </a>}
-            <Collapse isOpen={dnnAdvancedIsOpen && !requestDnnTraining} timeout={200} className="pb-1">
+            <Collapse isOpen={dnnAdvancedIsOpen && !requestDnnTraining} timeout={200}>
               @FAIT ADD ADVANCED SETTINGS HERE
             </Collapse>
-            <div className="d-flex flex-row align-items-center justify-content-between mt-2 mb-1">
-            {requestDnnInference ? <>
-              <div className="d-flex flex-row align-items-center">
-                <Spinner color="dark" className="my-1 mr-2" />
-                {clusterStatus.ready ?
-                  <span><b>Inferring</b> model <b>{modelName}</b>, Time left: {dnnInferenceStatus.time_left && dnnInferenceStatus.time_left >= 0 ? new Date(Math.max(dnnInferenceStatus.time_left, 0) * 1000).toISOString().substr(11, 8) : 'estimating...'} </span> :
-                  <span><b>Starting cluster</b></span>
-                }
-              </div>
-              <Button
-                color="danger"
-                onClick={stopDnnInference}
-              >Stop inference</Button>
-              </> : <>
-              <FeatureInput
-                id="dnn-inference-model-bar"
-                className="mr-2"
-                placeholder="Model to perform inference for"
-                features={modelInfo.filter(m => m.latest.has_checkpoint && !m.latest.has_output)}
-                selected={dnnInferenceModel}
-                setSelected={setDnnInferenceModel}
-              />
-              <Button
-                color="light"
-                onClick={startDnnInference}
-                disabled={!!!(username) || !!!(dnnInferenceModel[0]) || requestDnnInference}
-            >Start inference</Button>
-              </>}
-            </div>
             {modelStatus.failed && <div className="d-flex flex-row align-items-center justify-content-between">
               <div className="my-12">
                 {modelStatus.failure_reason}
               </div>
             </div>}
           </>}
-          {mode === "validate" && <div>
-
+          {mode === "validate" && <div className="d-flex flex-row align-items-center justify-content-between">
+            <FeatureInput
+              id="validate-model-bar"
+              className="mr-2"
+              placeholder="Model to validate"
+              features={modelInfo.filter(m => m.with_output)}
+              selected={validateModel}
+              setSelected={setValidateModel}
+            />
+            <Button
+              color="light"
+              // onClick={startDnnInference}
+              disabled={!!!(validateModel)}
+            >Start validation</Button>
           </div>}
         </Container>
       </div>}
@@ -919,7 +961,7 @@ const App = () => {
                 disabled={
                   (orderingMode === "svm" && !!!(trainedSvmData)) ||
                   (orderingMode === "knn" && (size(knnImages) === 0 || some(Object.values(knnImages).map(i => !(i.embedding))))) ||
-                  (orderingMode === "dnn" && !!!(rankingModel[0])) ||
+                  (orderingMode === "dnn" && !!!(rankingModel)) ||
                   (orderingMode === "clip" && !!!(captionQueryEmbedding))
                 }
               >Run query</Button>
@@ -944,8 +986,21 @@ const App = () => {
                   onChange={setClusteringStrength}
                   onAfterChange={recluster}
                 />
+                <Button
+                  color="primary"
+                  size="sm"
+                  className="ml-4"
+                  onClick={toggleBulkTag}
+                  disabled={!!!(username)}
+                >
+                  <FontAwesomeIcon
+                    icon={faTags}
+                    className="mr-1"
+                  />
+                  Bulk tag results
+                </Button>
               </div>
-              {(queryResultData.type === "svm" || queryResultData.type === "ranking") && <div className="d-flex flex-row align-items-center">
+              {(queryResultSet.type === "svm" || queryResultSet.type === "ranking") && <div className="d-flex flex-row align-items-center">
                 <label className="mb-0 mr-2 text-nowrap">Score range:</label>
                 <Range
                   allowCross={false}
@@ -968,12 +1023,12 @@ const App = () => {
         </div>
         {orderingMode === "svm" && <Popover
           placement="bottom"
-          isOpen={!clusterIsOpen && (svmPopoverOpen || isTraining || !!!(trainedSvmData))}
+          isOpen={!clusterIsOpen && (svmPopoverOpen || svmIsTraining || !!!(trainedSvmData))}
           target="ordering-mode"
           trigger="hover"
           toggle={() => setSvmPopoverOpen(!svmPopoverOpen)}
           fade={false}
-          popperClassName={`svm-popover ${isTraining ? "loading" : ""}`}
+          popperClassName={`svm-popover ${svmIsTraining ? "loading" : ""}`}
         >
           {({ scheduleUpdate }) => {
             svmPopoverRepositionFunc.current = scheduleUpdate;
@@ -987,7 +1042,7 @@ const App = () => {
                     categories={datasetInfo.categories}
                     setCategories={setCategories}
                     selected={svmPosTags}
-                    disabled={isTraining}
+                    disabled={svmIsTraining}
                     setSelected={selected => {
                       setSvmPosTags(selected);
                       setTrainedSvmData(null);
@@ -1000,7 +1055,7 @@ const App = () => {
                     categories={datasetInfo.categories}
                     setCategories={setCategories}
                     selected={svmNegTags}
-                    disabled={isTraining}
+                    disabled={svmIsTraining}
                     setSelected={selected => {
                       setSvmNegTags(selected);
                       setTrainedSvmData(null);
@@ -1011,7 +1066,7 @@ const App = () => {
                     className="mb-2"
                     placeholder="Model features to use (optional)"
                     features={modelInfo.filter(m => m.with_output)}
-                    disabled={isTraining}
+                    disabled={svmIsTraining}
                     selected={svmModel}
                     setSelected={selected => {
                       setSvmModel(selected);
@@ -1023,7 +1078,7 @@ const App = () => {
                       type="checkbox"
                       className="custom-control-input"
                       id="svm-augment-negs-checkbox"
-                      disabled={isTraining}
+                      disabled={svmIsTraining}
                       checked={svmAugmentNegs}
                       onChange={(e) => {
                         setSvmAugmentNegs(e.target.checked);
@@ -1042,7 +1097,7 @@ const App = () => {
                       categories={datasetInfo.categories}
                       setCategories={setCategories}
                       selected={svmAugmentIncludeTags}
-                      disabled={isTraining}
+                      disabled={svmIsTraining}
                       setSelected={selected => {
                         setSvmAugmentIncludeTags(selected);
                         setTrainedSvmData(null);
@@ -1055,7 +1110,7 @@ const App = () => {
                       categories={datasetInfo.categories}
                       setCategories={setCategories}
                       selected={svmAugmentExcludeTags}
-                      disabled={isTraining}
+                      disabled={svmIsTraining}
                       setSelected={selected => {
                         setSvmAugmentExcludeTags(selected);
                         setTrainedSvmData(null);
@@ -1064,8 +1119,8 @@ const App = () => {
                   </>}
                   <Button
                     color="light"
-                    onClick={() => setIsTraining(true)}
-                    disabled={svmPosTags.length === 0 || (svmNegTags.length === 0 && !svmAugmentNegs) || isTraining}
+                    onClick={() => setSvmIsTraining(true)}
+                    disabled={svmPosTags.length === 0 || (svmNegTags.length === 0 && !svmAugmentNegs) || svmIsTraining}
                     className="mt-2 mb-1 w-100"
                   >Train</Button>
                   {!!(trainedSvmData) && <div className="mt-1">
@@ -1104,7 +1159,7 @@ const App = () => {
           canBeOpen={!clusterIsOpen}
         />}
         <Container fluid>
-          {(!!!(datasetInfo.isNotLoaded) && !isLoading && queryResultData.images.length == 0) &&
+          {(!!!(datasetInfo.isNotLoaded) && !isLoading && queryResultSet.num_results === 0) &&
             <p className="text-center text-muted">No results match your query.</p>}
           <Row>
             <Col className="stack-grid">
@@ -1122,6 +1177,25 @@ const App = () => {
               )}
             </Col>
           </Row>
+          {(!!!(datasetInfo.isNotLoaded) && queryResultSet.num_results > PAGE_SIZE) &&
+            <div className="mt-4 d-flex justify-content-center">
+              <ReactPaginate
+                pageCount={Math.ceil(queryResultSet.num_results / PAGE_SIZE)}
+                containerClassName="pagination"
+                previousClassName="page-item"
+                previousLinkClassName="page-link"
+                nextClassName="page-item"
+                nextLinkClassName="page-link"
+                activeClassName="active"
+                pageLinkClassName="page-link"
+                pageClassName="page-item"
+                breakClassName="page-item"
+                breakLinkClassName="page-link"
+                forcePage={page}
+                onPageChange={({ selected }) => setPage(selected)}
+              />
+            </div>
+          }
         </Container>
       </div>
     </div>
