@@ -9,10 +9,10 @@ import requests
 import urllib.request
 import uuid
 
-from typing import List, Union, NamedTuple
+from typing import List, Dict, NamedTuple
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
-from django.db.models import Q, QuerySet
+from django.db.models import Q
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
@@ -1246,7 +1246,10 @@ def active_batch(request, dataset_name):
 Tag = namedtuple("Tag", "category value")  # type: NamedTuple[str, str]
 PkType = int
 
-current_result_sets = ExpiringDict(max_age_seconds=30 * 60)  # type: Dict[str, List[PkType]]
+current_result_sets = ExpiringDict(
+    max_age_seconds=30 * 60,
+    max_len=1000,
+)  # type: Dict[str, List[PkType]]
 
 
 def parse_tag_set_from_query_v2(s):
