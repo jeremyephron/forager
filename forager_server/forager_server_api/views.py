@@ -1,8 +1,8 @@
 from collections import defaultdict, namedtuple
 import distutils.util
-from google.cloud import storage
 from enum import IntEnum
 import json
+import math
 import os
 import random
 import requests
@@ -17,6 +17,7 @@ from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
 from django.conf import settings
+from google.cloud import storage
 from rest_framework import status
 from rest_framework.decorators import api_view
 from pycocotools.coco import COCO
@@ -1765,8 +1766,8 @@ def add_annotations_to_result_set_v2(request):
 
     result_set = current_result_sets[result_set_id]
     # e.g., lower_bound=0.0, upper_bound=0.5 -> second half of the result set
-    start_index = len(result_set) * (1.0 - upper_bound)
-    end_index = len(result_set) * (1.0 - lower_bound)
+    start_index = math.ceil(len(result_set) * (1.0 - upper_bound))
+    end_index = math.floor(len(result_set) * (1.0 - lower_bound))
     image_identifiers = result_set[start_index:end_index]
 
     num_created = bulk_add_annotations_v2(payload, image_identifiers)
