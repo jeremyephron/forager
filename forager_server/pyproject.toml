@@ -16,6 +16,7 @@ numpy = "*"
 django-sslserver = "^0.22"
 pycocotools = "^2.0.2"
 google-cloud-storage = "^1.33.0"
+expiringdict = "*"
 
 [tool.poetry.dev-dependencies]
 
