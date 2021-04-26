@@ -1248,7 +1248,7 @@ PkType = int
 
 current_result_sets = ExpiringDict(
     max_age_seconds=30 * 60,
-    max_len=1000,
+    max_len=50,
 )  # type: Dict[str, List[PkType]]
 
 
