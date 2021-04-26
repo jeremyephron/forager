@@ -89,7 +89,7 @@ urlpatterns = [
     path('api/import_annotations/<slug:dataset_name>',
          views.import_annotations,
          name='import_annotations'),
-    path('api/get_results_v2',
+    path('api/get_results_v2/<slug:dataset_name>',
          views.get_results_v2,
          name='get_results_v2'),
     path('api/generate_embedding_v2',
