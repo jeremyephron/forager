@@ -464,6 +464,7 @@ class LabeledIndex:
         np.random.shuffle(inds)
         self.labels = [paths[i] for i in inds]
         self.train_identifiers = {identifiers[i]: new_i for new_i, i in enumerate(inds)}
+        self.val_identifiers = {}  # TODO(mihirg): fix this to properly take val paths
         iterable = (
             {"id": i, "image": path, "augmentations": {}}
             for i, path in enumerate(self.labels)
@@ -767,8 +768,12 @@ class LabeledIndex:
         # Dump labels, identifiers, full-image embeddings, and distance matrix
         json.dump(self.labels, (self.index_dir / self.LABELS_FILENAME).open("w"))
         json.dump(
-            dict(self.train_identifiers),
+            self.train_identifiers,
             (self.index_dir / self.TRAIN_IDENTIFIERS_FILENAME).open("w"),
+        )
+        json.dump(
+            self.val_identifiers,
+            (self.index_dir / self.VAL_IDENTIFIERS_FILENAME).open("w"),
         )
         self.local_flat_index.save(self.index_dir)
 
