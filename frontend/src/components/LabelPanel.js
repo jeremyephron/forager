@@ -18,6 +18,7 @@ const LabelPanel = ({
   setCategories,
   category,
   setCategory,
+  isVisible,
 }) => {
   const setSelected = (selection) => {
     if (selection.length === 0) {
@@ -35,6 +36,7 @@ const LabelPanel = ({
     }
   };
 
+  if (!isVisible) return null;
   return (
     <div className="d-flex flex-row align-items-center justify-content-between">
       <Typeahead

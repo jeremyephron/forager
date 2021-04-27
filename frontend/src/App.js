@@ -17,7 +17,6 @@ import {
   Popover,
   PopoverBody,
   Spinner,
-  Collapse,
 } from "reactstrap";
 import { ReactSVG } from "react-svg";
 import Slider, { Range } from "rc-slider";
@@ -50,11 +49,11 @@ import {
   CaptionSearchPopover,
   BulkTagModal,
   ValidatePanel,
-  LabelPanel
+  LabelPanel,
+  TrainPanel,
 } from "./components";
 
 var disjointSet = require("disjoint-set");
-var dateFormat = require("dateformat");
 
 const PAGE_SIZE = 1000;
 
@@ -65,10 +64,6 @@ const orderingModes = [
   {id: "knn", label: "KNN"},
   {id: "dnn", label: "Model ranking"},
   {id: "clip", label: "Caption search"},
-];
-
-const dnns = [
-  {id: "dnn", label: "DNN w/ BG Splitting"},
 ];
 
 const modes = [
@@ -87,13 +82,6 @@ const endpoints = fromPairs(toPairs({
   querySvm: "query_svm_v2",
   queryKnn: "query_knn_v2",
   queryRanking: "query_ranking_v2",
-  trainModel: "train_model_v2",
-  modelStatus: "model_v2",
-  modelInference: "model_inference_v2",
-  modelInferenceStatus: "model_inference_status_v2",
-  stopModelInference: "stop_model_inference_v2",
-  startCluster: "start_cluster",
-  clusterStatus: "cluster",
   generateEmbedding: 'generate_embedding_v2',
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
@@ -186,18 +174,31 @@ const App = () => {
     num_images: 0,
     num_google: 0,
   });
+  const [modelInfo, setModelInfo] = useState([]);
   const [popoverOpen, setPopoverOpen] = useState(false);
 
+  const getDatasetInfo = async () => {
+    const url = new URL(`${endpoints.getDatasetInfo}/${datasetName}`);
+    let _datasetInfo = await fetch(url, {
+      method: "GET",
+    }).then(r => r.json());
+    setDatasetInfo(_datasetInfo);
+    setIsLoading(true);
+  }
+
+  const updateModels = async () => {
+    const url = new URL(`${endpoints.getModels}/${datasetName}`);
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {"Content-Type": "application/json"},
+    }).then(res => res.json());
+    console.log(res.models);
+    setModelInfo(res.models);
+  }
+
   useEffect(() => {
-    const getDatasetInfo = async () => {
-      const url = new URL(`${endpoints.getDatasetInfo}/${datasetName}`);
-      let _datasetInfo = await fetch(url, {
-        method: "GET",
-      }).then(r => r.json());
-      setDatasetInfo(_datasetInfo);
-      setIsLoading(true);
-    }
     getDatasetInfo();
+    updateModels();
   }, [datasetName]);
 
   const setCategories = (categories) => setDatasetInfo({...datasetInfo, categories});
@@ -446,213 +447,11 @@ const App = () => {
   // MODE
   //
   const [mode, setMode_] = useState(modes[0].id);
-
-  // Label mode
-  const [labelModeCategory, setLabelModeCategory] = useState(null);
-
-  // Train mode
-  // -> UI state
-  const [modelName, setModelName] = useState("");
-  const [dnnAdvancedIsOpen, setDnnAdvancedIsOpen] = useState(false);
-  const [dnnType, setDnnType] = useState(dnns[0].id);
-  const [dnnAugmentNegs, setDnnAugmentNegs] = useState(true);
-  const [dnnPosTags, setDnnPosTags] = useState([]);
-  const [dnnNegTags, setDnnNegTags] = useState([]);
-
-  // -> Cluster creation
-  const [clusterId, setClusterId] = useState(null);
-  const [clusterCreating, setClusterCreating] = useState(false);
-  const [clusterStatus, setClusterStatus] = useState({});
-
-  const [modelStatus, setModelStatus] = useState({});
-
-  const [modelInfo, setModelInfo] = useState([]);
-  const [requestDnnTraining, setRequestDnnTraining] = useState(false);
-  const [modelId, setModelId] = useState(null);
-  const [dnnIsTraining, setDnnIsTraining] = useState(false);
-  const [modelEpoch, setModelEpoch] = useState(1);
-  const [prevModelId, setPrevModelId] = useState(null);
-
-  const [dnnInferenceModel, setDnnInferenceModel] = useState([]);
-  const [requestDnnInference, setRequestDnnInference] = useState(false);
-  const [dnnIsInferring, setDnnIsInferring] = useState(false);
-  const [dnnInferenceJobId, setDnnInferenceJobId] = useState(null);
-  const [dnnInferenceStatus, setDnnInferenceStatus] = useState({});
-
-  useEffect(async () => {
-    const getModelsUrl = new URL(`${endpoints.getModels}/${datasetName}`);
-    const res = await fetch(getModelsUrl, {
-      method: "GET",
-      headers: {"Content-Type": "application/json"},
-    }).then(res => res.json());
-    console.log(res.models);
-    setModelInfo(res.models);
-  }, [modelEpoch, dnnIsTraining, dnnIsInferring])
-
-  const autofillModelName = () => {
-    if (!!!(username)) return;
-    const name = username.slice(0, username.indexOf("@"));
-    const date = dateFormat(new Date(), "mm-dd-yy_HH-MM");
-    setModelName(`${name}_${date}`);
-  };
-
   const setMode = (mode) => {
     setMode_(mode);
-    if (mode === "train" && !requestDnnTraining) autofillModelName();
     if (svmPopoverRepositionFunc.current) svmPopoverRepositionFunc.current();
   }
-
-  useEffect(async () => {
-    let _clusterId = clusterId;
-    if ((requestDnnTraining || requestDnnInference) && !_clusterId) {
-      // Start cluster
-      const startClusterUrl = new URL(`${endpoints.startCluster}`);
-      var clusterResponse = await fetch(startClusterUrl, {
-        method: "POST",
-      }).then(r => r.json());
-
-      setClusterId(clusterResponse.cluster_id);
-      setClusterCreating(true);
-    }
-  }, [requestDnnTraining, requestDnnInference, clusterId]);
-
-  const checkClusterStatus = async () => {
-    // Wait until cluster is booted
-    const clusterStatusUrl = new URL(`${endpoints.clusterStatus}/${clusterId}`);
-    const _clusterStatus = await fetch(clusterStatusUrl, {
-      method: "GET",
-    }).then(r => r.json());
-    setClusterStatus(_clusterStatus);
-    if (_clusterStatus.ready) {
-      setClusterCreating(false);
-    }
-  }
-  useInterval(checkClusterStatus, clusterCreating ? 3000 : null);
-
-  const startTrainingNewDnn = () => {
-    setModelEpoch(0);
-    setModelId(null);
-    setDnnIsTraining(false);
-    setRequestDnnTraining(true);
-  };
-
-  const stopTrainingDnn = () => {
-    setRequestDnnTraining(false);
-    autofillModelName();
-  };
-
-  const trainDnnEpoch = async () => {
-    let _clusterId = clusterId;
-    // Start training DNN
-    const url = new URL(`${endpoints.trainModel}/${datasetName}`);
-    let body = {
-      model_name: modelName,
-      cluster_id: _clusterId,
-      bucket: "foragerml",
-      index_id: datasetInfo.index_id,
-      pos_tags: dnnPosTags.map(t => `${t.category}:${t.value}`).join(","),
-      neg_tags: dnnNegTags.map(t => `${t.category}:${t.value}`).join(","),
-      augment_negs: dnnAugmentNegs.toString(),
-      aux_label_type: "imagenet",
-    }
-    if (modelId) {
-      body.resume = modelId;
-    }
-    const _modelId = await fetch(url, {
-      method: "POST",
-      body: JSON.stringify(body),
-      headers: {
-        'Content-type': 'application/json; charset=UTF-8'
-      }
-    }).then(r => r.json()).then(r => r.model_id);
-    setModelId(_modelId);
-    setDnnIsTraining(true);
-  };
-
-  useEffect(() => {
-    if (requestDnnTraining && clusterStatus.ready && !dnnIsTraining) {
-      trainDnnEpoch();
-    }
-  }, [requestDnnTraining, clusterStatus, dnnIsTraining]);
-
-  const checkDnnStatus = async () => {
-      // Wait until DNN trains for 1 epoch
-    const modelStatusUrl = new URL(`${endpoints.modelStatus}/${modelId}`);
-    const _modelStatus = await fetch(modelStatusUrl, {
-      method: "GET",
-    }).then(r => r.json());
-    setModelStatus(_modelStatus);
-    if (_modelStatus.has_model) {
-      setDnnIsTraining(false);
-      setPrevModelId(modelId);
-      setModelEpoch(modelEpoch + 1);
-    }
-    if (_modelStatus.failed) {
-      setRequestDnnTraining(false);
-      setDnnIsTraining(false);
-    }
-  };
-  useInterval(checkDnnStatus, dnnIsTraining ? 3000 : null)
-
-  const startDnnInference = () => {
-    setDnnIsInferring(false);
-    setRequestDnnInference(true);
-  };
-
-  const stopDnnInference = () => {
-    const stop = async () => {
-      const url = new URL(`${endpoints.stopModelInference}/${dnnInferenceJobId}`);
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: {
-          'Content-type': 'application/json; charset=UTF-8'
-        }
-      }).then(r => r.json());
-      setDnnIsInferring(false);
-    }
-    setRequestDnnInference(false);
-    stop();
-  };
-
-  const dnnInference = async () => {
-    let _clusterId = clusterId;
-    // Start training DNN
-    const url = new URL(`${endpoints.modelInference}/${datasetName}`);
-    let body = {
-      model_id: dnnInferenceModel[0].latest.model_id,
-      cluster_id: _clusterId,
-      bucket: "foragerml",
-      index_id: datasetInfo.index_id,
-    }
-    const _jobId = await fetch(url, {
-      method: "POST",
-      body: JSON.stringify(body),
-      headers: {
-        'Content-type': 'application/json; charset=UTF-8'
-      }
-    }).then(r => r.json()).then(r => r.job_id);
-    setDnnInferenceJobId(_jobId);
-    setDnnIsInferring(true);
-  };
-
-  useEffect(() => {
-    if (requestDnnInference && clusterStatus.ready && !dnnIsInferring) {
-      dnnInference();
-    }
-  }, [requestDnnInference, clusterStatus, dnnIsInferring, dnnInferenceModel]);
-
-  const checkDnnInferenceStatus = async () => {
-    const inferenceStatusUrl = new URL(`${endpoints.modelInferenceStatus}/${dnnInferenceJobId}`);
-    const _inferenceStatus = await fetch(inferenceStatusUrl, {
-      method: "GET",
-    }).then(r => r.json());
-    setDnnInferenceStatus(_inferenceStatus);
-    if (_inferenceStatus.has_output) {
-      setRequestDnnInference(false);
-      setDnnIsInferring(false);
-    }
-  };
-  useInterval(checkDnnInferenceStatus, dnnIsInferring ? 3000 : null)
+  const [labelModeCategory, setLabelModeCategory] = useState(null);
 
   //
   // RENDERING
@@ -765,139 +564,27 @@ const App = () => {
       </Popover>
       {mode !== "explore" && <div className="border-bottom py-2 mode-container">
         <Container fluid>
-          {mode === "label" && <LabelPanel
+          <LabelPanel
             categories={datasetInfo.categories}
             setCategories={setCategories}
             category={labelModeCategory}
             setCategory={setLabelModeCategory}
-          />}
-          {mode === "train" && <>
-            <div className="d-flex flex-row align-items-center justify-content-between">
-              {requestDnnTraining ? <>
-                <div className="d-flex flex-row align-items-center">
-                  <Spinner color="dark" className="my-1 mr-2" />
-                  {clusterStatus.ready ?
-                    <span><b>Training</b> model <b>{modelName}</b> (Epoch {modelEpoch}), Time left: {modelStatus.training_time_left && modelStatus.training_time_left >= 0 ? new Date(Math.max(modelStatus.training_time_left, 0) * 1000).toISOString().substr(11, 8) : 'estimating...'} </span> :
-                    <span><b>Starting cluster</b></span>
-                  }
-                </div>
-                <Button
-                  color="danger"
-                  onClick={stopTrainingDnn}
-                >Stop training</Button>
-              </> : <>
-                <FormGroup className="mb-0">
-                  <select className="custom-select mr-2" value={dnnType} onChange={e => setDnnType(e.target.value)}>
-                    {dnns.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-                  </select>
-                  <ReactSVG className="icon" src="assets/arrow-caret.svg" />
-                </FormGroup>
-                <Input
-                  className="mr-2"
-                  placeholder="Model name"
-                  value={modelName}
-                  onChange={(e) => setModelName(e.target.value)}
-                  spellcheck="false"
-                />
-                <CategoryInput
-                  id="dnn-pos-bar"
-                  className="mr-2"
-                  placeholder="Positive example tags"
-                  disabled={requestDnnTraining}
-                  categories={datasetInfo.categories}
-                  setCategories={setCategories}
-                  selected={dnnPosTags}
-                  setSelected={setDnnPosTags}
-                />
-                <CategoryInput
-                  id="dnn-neg-bar"
-                  className="mr-2"
-                  placeholder="Negative example tags"
-                  disabled={requestDnnTraining}
-                  categories={datasetInfo.categories}
-                  setCategories={setCategories}
-                  selected={dnnNegTags}
-                  setSelected={setDnnNegTags}
-                />
-                <div className="my-2 custom-control custom-checkbox">
-                  <input
-                    type="checkbox"
-                    className="custom-control-input"
-                    id="dnn-augment-negs-checkbox"
-                    disabled={requestDnnTraining}
-                    checked={dnnAugmentNegs}
-                    onChange={(e) => setDnnAugmentNegs(e.target.checked)}
-                  />
-                  <label className="custom-control-label text-nowrap mr-2" htmlFor="dnn-augment-negs-checkbox">
-                    Auto-augment negative set
-                  </label>
-                </div>
-                <Button
-                  color="light"
-                  onClick={startTrainingNewDnn}
-                  disabled={!!!(username) || dnnPosTags.length === 0 || (dnnNegTags.length === 0 && !dnnAugmentNegs) || requestDnnTraining}
-                  >Start training
-                </Button>
-              </>}
-            </div>
-            {!requestDnnTraining && <a
-              href="#"
-              className="text-small text-muted mb-1"
-              onClick={e => {
-                setDnnAdvancedIsOpen(!dnnAdvancedIsOpen);
-                e.preventDefault();
-              }}
-            >
-              {dnnAdvancedIsOpen ? "Hide" : "Show"} advanced training options
-            </a>}
-            <Collapse isOpen={dnnAdvancedIsOpen && !requestDnnTraining} timeout={200}>
-              <div className="d-flex flex-row align-items-center justify-content-between my-1">
-                <FeatureInput
-                  id="checkpoint-model-bar"
-                  placeholder="Checkpoint to train from (optional)"
-                  features={modelInfo.filter(m => m.latest.has_checkpoint)}
-                  // selected={validateModel}
-                  // setSelected={setValidateModel}
-                />
-                {dnnAugmentNegs && <>
-                  <CategoryInput
-                    id="svm-augment-negs-include-bar"
-                    className="ml-2"
-                    placeholder="Tags to include in auto-negative pool"
-                    categories={datasetInfo.categories}
-                    setCategories={setCategories}
-                    selected={svmAugmentIncludeTags}
-                    disabled={svmIsTraining}
-                    setSelected={selected => {
-                      setSvmAugmentIncludeTags(selected);
-                      setTrainedSvmData(null);
-                    }}
-                  />
-                  <CategoryInput
-                    id="svm-augment-negs-exclude-bar"
-                    className="ml-2"
-                    placeholder="Tags to exclude from auto-negative pool"
-                    categories={datasetInfo.categories}
-                    setCategories={setCategories}
-                    selected={svmAugmentExcludeTags}
-                    disabled={svmIsTraining}
-                    setSelected={selected => {
-                      setSvmAugmentExcludeTags(selected);
-                      setTrainedSvmData(null);
-                    }}
-                  />
-                </>}
-              </div>
-            </Collapse>
-            {modelStatus.failed && <div className="d-flex flex-row align-items-center justify-content-between">
-              <div className="my-12">
-                {modelStatus.failure_reason}
-              </div>
-            </div>}
-          </>}
-          {mode === "validate" && <ValidatePanel
+            isVisible={mode === "label"}
+          />
+          <TrainPanel
+            datasetName={datasetName}
+            datasetInfo={datasetInfo}
             modelInfo={modelInfo}
-          />}
+            isVisible={mode === "train"}
+            username={username}
+            disabled={!!!(username)}
+            categories={datasetInfo.categories}
+            updateModels={updateModels}
+          />
+          <ValidatePanel
+            modelInfo={modelInfo}
+            isVisible={mode === "validate"}
+          />
         </Container>
       </div>}
       <div className="app">

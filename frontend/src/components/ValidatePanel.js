@@ -14,9 +14,11 @@ const endpoints = fromPairs(toPairs({
 
 const ValidatePanel = ({
   modelInfo,
+  isVisible,
 }) => {
   const [validateModel, setValidateModel] = useState(null);
 
+  if (!isVisible) return null;
   return (
     <div>
       <div className="d-flex flex-row align-items-center justify-content-between">

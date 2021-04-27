@@ -13,3 +13,4 @@ export { default as ModelRankingPopover } from "./ModelRankingPopover.js";
 export { default as BulkTagModal } from "./BulkTagModal.js";
 export { default as ValidatePanel } from "./ValidatePanel.js";
 export { default as LabelPanel } from "./LabelPanel.js";
+export { default as TrainPanel } from "./TrainPanel.js";
