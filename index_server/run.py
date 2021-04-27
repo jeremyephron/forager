@@ -1070,6 +1070,7 @@ async def start_bgsplit_job(request):
 
     http_session = utils.create_unlimited_aiohttp_session()
     # 1. If aux labels have not been generated, then generate them
+    # TODO(fpoms): Actually generate aux labels; and maybe move this to index build?
     alt = aux_labels_type
     aux_labels_local_path = None
     if alt == "imagenet":
@@ -1078,43 +1079,7 @@ async def start_bgsplit_job(request):
         aux_labels_local_path = ""
         assert alt == "imagenet"
 
-    if not os.path.exists(aux_labels_local_path):
-        all_paths = index.labels
-        nproc = cluster.output["mapper_nproc"]
-        n_mappers = int(
-            cluster.output["num_mappers"] * config.MAPPER_REQUEST_MULTIPLE(nproc)
-        )
-        chunk_size = config.MAPPER_CHUNK_SIZE(nproc)
-        mapper_job = MapReduceJob(
-            MapperSpec(
-                url=cluster.output["mapper_url"],
-                n_mappers=n_mappers,
-            ),
-            MapperReducer(),
-            {
-                "input_bucket": bucket,
-                "return_data": "predictions",
-                "return_type": "serialize",
-            },
-            session=http_session,
-            n_retries=config.MAPPER_NUM_RETRIES,
-            chunk_size=chunk_size,
-            request_timeout=config.MAPPER_REQUEST_TIMEOUT,
-        )
-        logger.info(f"Map: started with {len(all_paths)} images")
-        task = mapper_job.start(all_paths)
-        while True:
-            prog = mapper_job.progress()
-            logger.info(
-                f"Processed: {prog['n_processed']}/{prog['n_total']}, "
-                f"elapsed: {prog['elapsed_time']}"
-            )
-            if prog["finished"]:
-                break
-            await asyncio.sleep(5)
-        _, predictions = mapper_job.result
-        with open(aux_labels_local_path, "wb") as f:
-            pickle.dump(predictions, f)
+    assert os.path.exists(aux_labels_local_path)
 
     aux_labels_gcs_path = config.AUX_GCS_TMPL.format(index_id, alt)
     proc = await asyncio.create_subprocess_exec(
