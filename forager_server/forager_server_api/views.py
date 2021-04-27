@@ -1343,7 +1343,9 @@ def filtered_images_v2(
         exclude_pks = set(exclude_pks)
         pks = [pk for pk in pks if pk not in exclude_pks]
     elif not pks:
-        dataset_items = DatasetItem.objects.filter(dataset=dataset, google=False)
+        dataset_items = DatasetItem.objects.filter(
+            dataset=dataset, google=False, is_val=False
+        )
         if exclude_pks:
             dataset_items = dataset_items.exclude(pk__in=exclude_pks)
         pks = list(dataset_items.values_list("pk", flat=True))
@@ -1731,6 +1733,9 @@ def get_models_v2(request, dataset_name):
 
 
 def model_info(model):
+    if model is None:
+        return None
+
     pos_tags = serialize_tag_set_for_client_v2(model.category_spec.get("pos_tags", []))
     neg_tags = serialize_tag_set_for_client_v2(model.category_spec.get("neg_tags", []))
     augment_negs_include = serialize_tag_set_for_client_v2(
@@ -1743,7 +1748,7 @@ def model_info(model):
         "has_output": model.output_directory is not None,
         "pos_tags": pos_tags,
         "neg_tags": neg_tags + augment_negs_include,
-    } if model is not None else None
+    }
 
 
 @api_view(["GET"])
