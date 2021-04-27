@@ -1736,9 +1736,9 @@ def model_info(model):
     if model is None:
         return None
 
-    pos_tags = serialize_tag_set_for_client_v2(model.category_spec.get("pos_tags", []))
-    neg_tags = serialize_tag_set_for_client_v2(model.category_spec.get("neg_tags", []))
-    augment_negs_include = serialize_tag_set_for_client_v2(
+    pos_tags = parse_tag_set_from_query_v2(model.category_spec.get("pos_tags", []))
+    neg_tags = parse_tag_set_from_query_v2(model.category_spec.get("neg_tags", []))
+    augment_negs_include = parse_tag_set_from_query_v2(
         model.category_spec.get("augment_negs_include", [])
     )
     return {
@@ -1746,8 +1746,8 @@ def model_info(model):
         "timestamp": model.last_updated,
         "has_checkpoint": model.checkpoint_path is not None,
         "has_output": model.output_directory is not None,
-        "pos_tags": pos_tags,
-        "neg_tags": neg_tags + augment_negs_include,
+        "pos_tags": serialize_tag_set_for_client_v2(pos_tags),
+        "neg_tags": serialize_tag_set_for_client_v2(neg_tags + augment_negs_include),
     }
 
 
