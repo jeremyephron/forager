@@ -506,7 +506,7 @@ function OrderingModeSelector(p) {
           </>}
           <Button
             color="light"
-            onClick={() => p.setIsTraining(true)}
+            onClick={() => p.setSvmIsTraining(true)}
             disabled={svmPosTags.length === 0 ||
                       (svmNegTags.length === 0 && !svmAugmentNegs) ||
                       svmIsTraining}
@@ -575,7 +575,7 @@ function ImageClusterViewer(props) {
   let page = props.page;
   let queryResultSet = props.queryResultSet;
   return (<Container fluid>
-    {(!!!(datasetInfo.isNotLoaded) && !isLoading && queryResultData.images.length == 0) &&
+    {(!!!(datasetInfo.isNotLoaded) && !isLoading && queryResultSet.num_results == 0) &&
      <p className="text-center text-muted">No results match your query.</p>}
     <Row>
       <Col className="stack-grid">
@@ -833,7 +833,7 @@ const App = () => {
       if (svmModel) body.model = svmModel.with_output.model_id;
     } else if (orderingMode === "dnn") {
       url = new URL(`${endpoints.queryRanking}/${datasetName}`);
-      body.model = rankingModel[0].with_output.model_id;
+      body.model = rankingModel.with_output.model_id;
     } else if (orderingMode === "clip") {
       url = new URL(`${endpoints.queryKnn}/${datasetName}`);
       body.embeddings = [captionQueryEmbedding];
@@ -862,7 +862,13 @@ const App = () => {
   const [pageIsLoading, setPageIsLoading] = useState(false);
 
   const getPage = async () => {
-    if (queryResultSet.num_results === 0) return;
+    if (queryResultSet.num_results === 0) {
+      setQueryResultData({
+        images: [],
+        clustering: [],
+      });
+      return;
+    };
 
     let url = new URL(`${endpoints.getResults}/${datasetName}`);
     url.search = new URLSearchParams({
@@ -1017,6 +1023,7 @@ const App = () => {
     trainedSvmData: trainedSvmData,
     setTrainedSvmData: setTrainedSvmData,
     svmIsTraining: svmIsTraining,
+    setSvmIsTraining: setSvmIsTraining,
     svmModel: svmModel,
     setSvmModel: setSvmModel,
     modelInfo: modelInfo,
@@ -1029,6 +1036,7 @@ const App = () => {
     orderingMode: orderingMode,
     clusterIsOpen: clusterIsOpen,
     svmPopoverOpen: svmPopoverOpen,
+    setSvmPopoverOpen: setSvmPopoverOpen,
 
     knnImages: knnImages,
     knnImagesDispatch: knnImagesDispatch,
