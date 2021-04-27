@@ -273,7 +273,7 @@ def create_model(request, dataset_name, dataset=None):
     index_id = payload['index_id']
     pos_tags = parse_tag_set_from_query_v2(payload['pos_tags'])
     neg_tags = parse_tag_set_from_query_v2(payload['neg_tags'])
-    augment_negs = bool(distutils.util.strtobool(payload['augment_negs']))
+    augment_negs = bool(payload['augment_negs'])
     aux_label_type = payload['aux_label_type']
     resume_model_id = payload.get('resume', None)
 
