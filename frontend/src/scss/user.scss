@@ -105,6 +105,11 @@ html, body, #root, .main {
   select, input:not(.rbt-input) {
     width: 12rem;
   }
+  .collapse {
+      select, input {
+          width: 100%;
+      }
+  }
 }
 
 .new-mode-input {

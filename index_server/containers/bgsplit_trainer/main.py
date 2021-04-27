@@ -188,15 +188,20 @@ def start():
         abort(503, description="Busy")
 
     payload["_lock"] = working_lock
-    logger.debug(f'Received job payload: {payload}')
+    log_payload = dict(payload)
+    for k in ['train_positive_paths', 'train_negative_paths', 'train_unlabeled_paths',
+              'val_positive_paths', 'val_negative_paths', 'val_unlabeled_paths']:
+        log_payload[k] = len(log_payload[k])
+    logger.debug(f'Received job payload: {log_payload}')
     if last_job and last_job.last_checkpoint_path == payload['model_kwargs']['resume_from']:
         logger.info(f'Resuming from prior job ({last_job.model_id}) for model {payload["model_id"]}')
         current_job = last_job
         current_job.update_model_id_and_paths(payload)
     else:
+        last_job = None
         logger.info(f'Starting new job for model {payload["model_id"]}')
         current_job = TrainingJob(**payload)
     current_job.start()
-    logger.debug(f'Started job: {payload}')
+    logger.debug(f'Started job')
     last_job = current_job
     return "Started"

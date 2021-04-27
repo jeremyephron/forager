@@ -94,6 +94,7 @@ const TrainPanel = ({
   // TRAINING
   //
   const [requestDnnTraining, setRequestDnnTraining] = useState(false);
+  const [dnnIsTraining, setDnnIsTraining] = useState(false);
   const [trainingModelId, setTrainingModelId] = useState();
   const [prevModelId, setPrevModelId] = useState();
   const [trainingEpoch, setTrainingEpoch] = useState();
@@ -145,6 +146,7 @@ const TrainPanel = ({
   };
 
   const trainDnnOneEpoch = async () => {
+    setDnnIsTraining(true);
     const url = new URL(`${endpoints.trainModel}/${datasetName}`);
     let body = {
       model_name: modelName,
@@ -159,7 +161,7 @@ const TrainPanel = ({
       model_kwargs: dnnKwargs,
     }
     if (trainingModelId) {
-      body.resume = trainingModelId;
+      body.resume = prevModelId;
     } else if (dnnCheckpointModel) {
       body.resume = dnnCheckpointModel.latest.model_id;
     }
@@ -169,51 +171,55 @@ const TrainPanel = ({
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(body),
     }).then(r => r.json());
-
-    setPrevModelId(trainingModelId);
     setTrainingModelId(modelResponse.model_id);
   };
 
   const getTrainingStatus = async () => {
+    if (!trainingModelId) return;
     const url = new URL(`${endpoints.modelStatus}/${trainingModelId}`);
     const modelStatus = await fetch(url, {
       method: "GET",
     }).then(r => r.json());
-    if (modelStatus.has_model) {
+    if (modelStatus.has_model && dnnIsTraining) {
       // Start next epoch
       setTrainingEpoch(trainingEpoch + 1);
-      trainDnnOneEpoch();
-    }
-    if (modelStatus.failed) {
+      setPrevModelId(trainingModelId);
+      setTrainingModelId(null);
+      setDnnIsTraining(false);
+    } else if (modelStatus.failed) {
       console.error("Model training failed", modelStatus.failure_reason);
       setRequestDnnTraining(false);
+      setDnnIsTraining(false);
+      setTrainingModelId(null);
     }
     setTrainingTimeLeft(modelStatus.training_time_left);
     setTrainingTensorboardUrl(modelStatus.tensorboard_url);
   };
 
   useEffect(() => {
-    if (trainingModelId) {
+    if (dnnIsTraining && trainingModelId) {
       const interval = setInterval(() => {
         getTrainingStatus();
       }, STATUS_POLL_INTERVAL);
       return () => clearInterval(interval);
     }
-  }, [trainingModelId]);
+  }, [dnnIsTraining, trainingModelId]);
 
   // Start training
   useEffect(() => {
     if (!requestDnnTraining) return;
-    if (clusterReady) {
+    if (clusterReady && !dnnIsTraining) {
+      setDnnIsTraining(true);
       trainDnnOneEpoch();
     } else if (!clusterId) {
       startCreatingCluster();
     }
-  }, [clusterReady, clusterId, requestDnnTraining]);
+  }, [clusterReady, clusterId, requestDnnTraining, dnnIsTraining]);
 
   //
   // INFERENCE (automatically pipelined with training)
   //
+  const [dnnIsInferring, setDnnIsInferring] = useState(false);
   const [inferenceJobId, setInferenceJobId] = useState(null);
   const [inferenceEpoch, setInferenceEpoch] = useState();
   const [inferenceTimeLeft, setInferenceTimeLeft] = useState();
@@ -242,6 +248,7 @@ const TrainPanel = ({
       method: "POST",
     }).then(r => r.json());
     setInferenceJobId(null);
+    setDnnIsInferring(false);
   };
 
   const getInferenceStatus = async () => {
@@ -250,6 +257,7 @@ const TrainPanel = ({
       method: "GET",
     }).then(r => r.json());
     if (inferenceStatus.has_output) {
+      setDnnIsInferring(false);
       setInferenceJobId(null);
     }
     setInferenceTimeLeft(inferenceStatus.time_left);
@@ -265,12 +273,11 @@ const TrainPanel = ({
   }, [inferenceJobId]);
 
   useEffect(() => {
-    if (prevModelId && !inferenceJobId && trainingEpoch > inferenceEpoch + 1) inferOneEpoch();
+    if (prevModelId && !inferenceJobId && trainingEpoch > inferenceEpoch + 1 && !dnnIsInferring) {
+      setDnnIsInferring(true);
+      inferOneEpoch();
+    }
   }, [prevModelId, inferenceJobId, trainingEpoch, inferenceEpoch]);
-
-  useEffect(() => {
-    if (!requestDnnTraining && inferenceJobId) stopInference();
-  }, [inferenceJobId, requestDnnTraining]);
 
   //
   // RESET LOGIC
@@ -286,10 +293,13 @@ const TrainPanel = ({
     setPrevModelId(null);
     setTrainingEpoch(0);
     setTrainingTimeLeft(undefined);
+    setRequestDnnTraining(false);
+    setDnnIsTraining(false);
 
     // Inference status
     setInferenceEpoch(-1);
     setInferenceTimeLeft(undefined);
+    setDnnIsInferring(false);
 
     // Autofill model name
     const name = username.slice(0, username.indexOf("@"));
@@ -332,7 +342,7 @@ const TrainPanel = ({
 
   const formatOptions = (d, idx) => {
     return (
-      <FormGroup className="mr-2 mb-0">
+      <FormGroup className="mx-1">
         <Label className="mb-0" htmlFor={"formatInput" + d.param}>{d.displayName}</Label>
         {(d.type === "switch" || d.type === "checkbox") ?
          <CustomInput
