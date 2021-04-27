@@ -356,7 +356,7 @@ function QueryBar(p) {
             toggleBulkTag={props.toggleBulkTag}
             username={props.username}
           />
-          {(queryResultData.type === "svm" || queryResultData.type === "ranking") && <div className="d-flex flex-row align-items-center">
+          {(queryResultSet.type === "svm" || queryResultSet.type === "ranking") && <div className="d-flex flex-row align-items-center">
             <label className="mb-0 mr-2 text-nowrap">Score range:</label>
             <Range
               allowCross={false}
