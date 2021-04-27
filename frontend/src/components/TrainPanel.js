@@ -308,8 +308,8 @@ const TrainPanel = ({
 
   const formatOptions = (d, idx) => {
     return (
-      <FormGroup>
-        <Label>{d.displayName}</Label>
+      <FormGroup className="mr-2 mb-0">
+        <Label className="mb-0">{d.displayName}</Label>
         {d.type === "switch" ?
          <CustomInput
            id={"formatInput" + d.param}
@@ -331,7 +331,7 @@ const TrainPanel = ({
   if (!isVisible) return null;
   return (
     <>
-      <div className="d-flex flex-row align-items-center justify-content-between">
+      <div className="d-flex flex-row align-items-center justify-content-between mb-1">
         {requestDnnTraining ? <>
           <div className="d-flex flex-row align-items-center">
             <Spinner color="dark" className="my-1 mr-2" />
@@ -412,44 +412,41 @@ const TrainPanel = ({
         {dnnAdvancedIsOpen ? "Hide" : "Show"} advanced training options
       </a>}
       <Collapse isOpen={dnnAdvancedIsOpen && !requestDnnTraining} timeout={200}>
-        <Form>
-          <FormGroup>
-            <FormGroup row>
-              <FeatureInput
-                id="checkpoint-model-bar"
-                placeholder="Checkpoint to train from (optional)"
-                features={modelInfo.filter(m => m.latest.has_checkpoint)}
-                selected={dnnCheckpointModel}
-                setSelected={setDnnCheckpointModel}
-              />
-              {dnnAugmentNegs && <>
-                <CategoryInput
-                  id="dnn-augment-negs-include-bar"
-                  className="ml-2"
-                  placeholder="Tags to include in auto-negative pool"
-                  categories={categories}
-                  selected={dnnAugmentIncludeTags}
-                  setSelected={setDnnAugmentIncludeTags}
-                />
-                <CategoryInput
-                  id="dnn-augment-negs-exclude-bar"
-                  className="ml-2"
-                  placeholder="Tags to exclude from auto-negative pool"
-                  categories={categories}
-                  selected={dnnAugmentExcludeTags}
-                  setSelected={setDnnAugmentExcludeTags}
-                />
-              </>}
-            </FormGroup>
-            Optimizer parameters
-            <FormGroup row>
-              {optInputs.map(formatOptions)}
-            </FormGroup>
-            <FormGroup row>
-              {otherInputs.map(formatOptions)}
-            </FormGroup>
-          </FormGroup>
-        </Form>
+        <div className="d-flex flex-row align-items-center my-1">
+          <FeatureInput
+            id="checkpoint-model-bar"
+            placeholder="Checkpoint to train from (optional)"
+            features={modelInfo.filter(m => m.latest.has_checkpoint)}
+            selected={dnnCheckpointModel}
+            setSelected={setDnnCheckpointModel}
+          />
+          {dnnAugmentNegs && <>
+            <CategoryInput
+              id="dnn-augment-negs-include-bar"
+              className="ml-2"
+              placeholder="Tags to include in auto-negative pool"
+              categories={categories}
+              selected={dnnAugmentIncludeTags}
+              setSelected={setDnnAugmentIncludeTags}
+            />
+            <CategoryInput
+              id="dnn-augment-negs-exclude-bar"
+              className="ml-2"
+              placeholder="Tags to exclude from auto-negative pool"
+              categories={categories}
+              selected={dnnAugmentExcludeTags}
+              setSelected={setDnnAugmentExcludeTags}
+            />
+          </>}
+        </div>
+        <div>
+          <div className="d-flex flex-row my-1">
+            {optInputs.map(formatOptions)}
+          </div>
+          <div className="d-flex flex-row my-1">
+            {otherInputs.map(formatOptions)}
+          </div>
+        </div>
       </Collapse>
     </>
   );

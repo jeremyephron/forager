@@ -191,24 +191,12 @@ function MainHeader(props) {
         </span>
         <span>
           <Nav navbar>
-            <NavItem active={mode === "explore"}>
+            {modes.map(({ id, label }) => <NavItem active={mode === id}>
               <NavLink href="#" onClick={(e) => {
-                setMode("explore");
+                setMode(id);
                 e.preventDefault();
-              }}>Explore</NavLink>
-            </NavItem>
-            <NavItem active={mode === "label"}>
-              <NavLink href="#" onClick={(e) => {
-                setMode("label");
-                e.preventDefault();
-              }}>Label</NavLink>
-            </NavItem>
-            <NavItem active={mode === "train"}>
-              <NavLink href="#" onClick={(e) => {
-                setMode("train");
-                e.preventDefault();
-              }}>Train</NavLink>
-            </NavItem>
+              }}>{label}</NavLink>
+            </NavItem>)}
           </Nav>
         </span>
         <div>
@@ -1153,7 +1141,7 @@ const App = () => {
         <OrderingModeSelector {...orderingModeProps}/>
         <ImageClusterViewer
           datasetInfo={datasetInfo}
-          isLoading={isLoading}
+          isLoading={isLoading || pageIsLoading}
           queryResultData={queryResultData}
           queryResultSet={queryResultSet}
           clusters={clusters}
