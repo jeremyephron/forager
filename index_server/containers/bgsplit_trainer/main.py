@@ -13,7 +13,7 @@ import types
 import numpy as np
 from flask import Flask, request, abort
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Any
+from typing import Callable, Dict, List, Any, Optional
 
 import config
 from training_loop import TrainingLoop
@@ -53,6 +53,21 @@ class TrainingJob:
     _done: bool = False
     _done_lock: threading.Lock = field(default_factory=threading.Lock)
 
+    last_checkpoint_path: Optional[str] = None
+    training_loop: Optional[TrainingLoop] = None
+
+    def update_model_id_and_paths(self, payload):
+        # NOTE(fpoms): We don't currently allow changing the model_kwargs
+        self.train_positive_paths = payload['train_positive_paths']
+        self.train_negative_paths = payload['train_negative_paths']
+        self.train_unlabeled_paths = payload['train_unlabeled_paths']
+        self.val_positive_paths = payload['val_positive_paths']
+        self.val_negative_paths = payload['val_negative_paths']
+        self.val_unlabeled_paths = payload['val_unlabeled_paths']
+        self.model_id = payload['model_id']
+        self.model_name = payload['model_name']
+        with self._done_lock:
+            self._done = False
 
     def start(self):
         thread = threading.Thread(target=self.run, daemon=True)
@@ -89,35 +104,51 @@ class TrainingJob:
         # maybe start a subprocess?
         try:
             start_time = time.perf_counter()
+            if self.training_loop:
+                logger.info('Reusing training model')
+                train_start_time = time.perf_counter()
+                self.training_loop.setup_resume(
+                    train_positive_paths=self.train_positive_paths,
+                    train_negative_paths=self.train_negative_paths,
+                    train_unlabeled_paths=self.train_unlabeled_paths,
+                    val_positive_paths=self.val_positive_paths,
+                    val_negative_paths=self.val_negative_paths,
+                    val_unlabeled_paths=self.val_unlabeled_paths,
+                )
+            else:
+                aux_labels_path = self.model_kwargs['aux_labels_path']
+                logger.info(f'Downloading aux labels: {aux_labels_path}')
+                aux_labels = {}
+                data = download(aux_labels_path)
+                auxiliary_labels = pickle.loads(data)
+                for p, v in auxiliary_labels.items():
+                    aux_labels[os.path.basename(p)] = v
+                model_dir = config.MODEL_DIR_TMPL.format(
+                    self.model_name, self.model_id
+                   )
+                self.model_kwargs['aux_labels'] = aux_labels
+                self.model_kwargs['model_dir'] = model_dir
+                log_dir = config.LOG_DIR_TMPL.format(
+                    self.model_name, self.model_id
+                   )
+                self.model_kwargs['log_dir'] = log_dir
 
-            aux_labels_path = self.model_kwargs['aux_labels_path']
-            logger.info(f'Downloading aux labels: {aux_labels_path}')
-            aux_labels = {}
-            data = download(aux_labels_path)
-            auxiliary_labels = pickle.loads(data)
-            for p, v in auxiliary_labels.items():
-                aux_labels[os.path.basename(p)] = v
-            model_dir = config.MODEL_DIR_TMPL.format(
-                self.model_name, self.model_id)
-            self.model_kwargs['aux_labels'] = aux_labels
-            self.model_kwargs['model_dir'] = model_dir
-
-            end_time = time.perf_counter()
-            train_start_time = time.perf_counter()
-            # Train
-            logger.info('Creating training model')
-            loop = TrainingLoop(
-                model_kwargs=self.model_kwargs,
-                train_positive_paths=self.train_positive_paths,
-                train_negative_paths=self.train_negative_paths,
-                train_unlabeled_paths=self.train_unlabeled_paths,
-                val_positive_paths=self.val_positive_paths,
-                val_negative_paths=self.val_negative_paths,
-                val_unlabeled_paths=self.val_unlabeled_paths,
-                notify_callback=self.notify_status
-            )
+                end_time = time.perf_counter()
+                train_start_time = time.perf_counter()
+                # Train
+                logger.info('Creating training model')
+                self.training_loop = TrainingLoop(
+                    model_kwargs=self.model_kwargs,
+                    train_positive_paths=self.train_positive_paths,
+                    train_negative_paths=self.train_negative_paths,
+                    train_unlabeled_paths=self.train_unlabeled_paths,
+                    val_positive_paths=self.val_positive_paths,
+                    val_negative_paths=self.val_negative_paths,
+                    val_unlabeled_paths=self.val_unlabeled_paths,
+                    notify_callback=self.notify_status
+                   )
             logger.info('Running training')
-            self.last_checkpoint_path = loop.run()
+            self.last_checkpoint_path = self.training_loop.run()
             end_time = time.perf_counter()
         except Exception as e:
             logger.exception(f'Exception: {traceback.print_exc()}')
@@ -126,16 +157,16 @@ class TrainingJob:
             logger.info('Finished training')
             self.finish(
                 True,
-                model_dir=model_dir,
+                model_dir=self.training_loop.model_dir,
                 model_checkpoint=self.last_checkpoint_path,
                 profiling=dict(
                     load_time=train_start_time - start_time,
                     train_time=end_time - train_start_time,
                 ),
                 debug=dict(
-                    train_epoch_loss=loop.train_epoch_loss,
-                    train_epoch_main_loss=loop.train_epoch_main_loss,
-                    train_epoch_aux_loss=loop.train_epoch_aux_loss
+                    train_epoch_loss=self.training_loop.train_epoch_loss,
+                    train_epoch_main_loss=self.training_loop.train_epoch_main_loss,
+                    train_epoch_aux_loss=self.training_loop.train_epoch_aux_loss
                 )
             )
 
@@ -143,9 +174,11 @@ class TrainingJob:
 working_lock = threading.Lock()
 app = Flask(__name__)
 
+last_job: Optional[TrainingJob] = None
 
 @app.route("/", methods=["POST"])
 def start():
+    global last_job
     try:
         payload = request.json or {}
     except Exception as e:
@@ -156,7 +189,14 @@ def start():
 
     payload["_lock"] = working_lock
     logger.debug(f'Received job payload: {payload}')
-    current_job = TrainingJob(**payload)
+    if last_job and last_job.last_checkpoint_path == payload['model_kwargs']['resume_from']:
+        logger.info(f'Resuming from prior job ({last_job.model_id}) for model {payload["model_id"]}')
+        current_job = last_job
+        current_job.update_model_id_and_paths(payload)
+    else:
+        logger.info(f'Starting new job for model {payload["model_id"]}')
+        current_job = TrainingJob(**payload)
     current_job.start()
     logger.debug(f'Started job: {payload}')
+    last_job = current_job
     return "Started"

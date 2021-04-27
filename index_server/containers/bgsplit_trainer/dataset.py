@@ -11,7 +11,11 @@ import util
 class AuxiliaryDataset(Dataset):
     def __init__(self, positive_paths: List[str], negative_paths: List[str],
                  unlabeled_paths: List[str],
-                 auxiliary_labels: Dict[str, int], transform=None):
+                 auxiliary_labels: Dict[str, int], restrict_aux_labels: bool,
+                 transform=None):
+        if restrict_aux_labels:
+            unlabeled_paths = []
+
         self.paths = positive_paths + negative_paths + unlabeled_paths
         self.main_labels = torch.tensor(
             ([1] * len(positive_paths) +
@@ -21,10 +25,6 @@ class AuxiliaryDataset(Dataset):
         self.num_aux_classes = 1000
             #len(torch.unique(torch.tensor(list(auxiliary_labels.values()),
             #                              dtype=torch.long)))
-        if len(positive_paths) > 0:
-            print(positive_paths[0])
-            print(os.path.basename(positive_paths[0]))
-            print(list(auxiliary_labels.keys())[0])
         self.aux_labels = torch.tensor(
             [auxiliary_labels.get(os.path.basename(path), -1)
              for path in positive_paths + negative_paths + unlabeled_paths],

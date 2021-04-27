@@ -8,6 +8,8 @@ from pathlib import Path
 import time
 import logging
 import aiohttp
+import json
+import urllib.parse
 
 from typing import Any, Callable, Dict, List, Optional
 from knn import utils
@@ -29,23 +31,32 @@ class BGSplitTrainingJob:
         pos_paths: List[str],
         neg_paths: List[str],
         unlabeled_paths: List[str],
+        user_model_kwargs: Dict[str, Any],
         aux_labels_path: str,
         model_name: str,
         model_id: str,
         resume_from: Optional[str],
         trainer: Trainer,
-        cluster_mount_parent_dir: Path,
+        cluster: Cluster,
         session: aiohttp.ClientSession,
     ):
         self.model_name = model_name
         self.pos_paths = pos_paths
         self.neg_paths = neg_paths
         self.unlabeled_paths = unlabeled_paths
+        self.user_model_kwargs = user_model_kwargs
         self.aux_labels_path = aux_labels_path
         self.model_id = model_id
         self.resume_from = resume_from
         self.trainer = trainer
-        self.cluster_mount_parent_dir = cluster_mount_parent_dir
+        self.cluster = cluster
+        self.cluster_mount_parent_dir = cluster.mount_parent_dir
+        self.tensorboard_url = os.path.join(
+            cluster.output["bgsplit_trainer_tensorboard_urls"][0],
+            f'#scalars&regexInput=' +
+            urllib.parse.quote_plus(
+                f'{model_name}/{model_id}'
+            ))
         self.session = session
 
         self.started = False
@@ -67,6 +78,7 @@ class BGSplitTrainingJob:
 
     def configure_model(self):
         self.model_kwargs = dict(
+            **self.user_model_kwargs,
             max_ram=config.BGSPLIT_TRAINING_MAX_RAM,
             aux_labels_path=self.aux_labels_path,
             resume_from=self.resume_from,
@@ -84,6 +96,7 @@ class BGSplitTrainingJob:
             "elapsed_time": end_time - start_time,
             "training_time_left": self._training_time_left or -1,
             "profiling": self.profiling,
+            "tensorboard_url": self.tensorboard_url,
         }
 
     def start(self):

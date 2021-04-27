@@ -273,8 +273,8 @@ def create_model(request, dataset_name, dataset=None):
     index_id = payload['index_id']
     pos_tags = parse_tag_set_from_query_v2(payload['pos_tags'])
     neg_tags = parse_tag_set_from_query_v2(payload['neg_tags'])
-    augment_negs = bool(payload['augment_negs'])
-    aux_label_type = payload['aux_label_type']
+    augment_negs = bool(distutils.util.strtobool(payload['augment_negs']))
+    model_kwargs = payload['model_kwargs']
     resume_model_id = payload.get('resume', None)
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
@@ -329,7 +329,7 @@ def create_model(request, dataset_name, dataset=None):
         "pos_identifiers": pos_dataset_item_internal_identifiers,
         "neg_identifiers": neg_dataset_item_internal_identifiers,
         "augment_negs": augment_negs,
-        "aux_labels_type": aux_label_type,
+        "model_kwargs": model_kwargs,
         "model_name": model_name,
         "bucket": bucket_name,
         "cluster_id": cluster_id,

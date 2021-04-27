@@ -93,6 +93,51 @@ const TrainPanel = ({
   const [trainingModelId, setTrainingModelId] = useState();
   const [trainingEpoch, setTrainingEpoch] = useState();
   const [trainingTimeLeft, setTrainingTimeLeft] = useState();
+  const [dnnKwargs, setDnnKwargs] = useState({
+    "initial_lr": 0.01,
+    "endlr": 0.0,
+    "max_epochs": 90,
+    "warmup_epochs": 0,
+    "batch_size": 512,
+    "momentum": 0.9,
+    "weight_decay": 0.0001,
+    "aux_weight": 0.1,
+    "aux_labels_type": "imagenet",
+    "restrict_aux_labels": true,
+    "freeze_backbone": true,
+  });
+  let optInputs = [
+    {type: "number", displayName: "Initial LR", param: "initial_lr"},
+    {type: "number", displayName: "End LR", param: "endlr"},
+    {type: "number", displayName: "Momentum", param: "momentum"},
+    {type: "number", displayName: "Weight decay", param: "weight_decay"},
+    {type: "number", displayName: "Warmup epochs", param: "warmup_epochs"},
+    {type: "number", displayName: "Max epochs", param: "max_epochs"},
+  ]
+  let otherInputs = [
+    {type: "number", displayName: "Batch size", param: "batch_size"},
+    {type: "number", displayName: "Aux loss weight", param: "aux_weight"},
+    {type: "switch", displayName: "Restrict aux labels", param: "restrict_aux_labels"},
+    {type: "switch", displayName: "Freeze backbone", param: "freeze_backbone"},
+  ]
+
+  const updateDnnKwargs = (param, value) => {
+    setDnnKwargs(state => {
+      console.log(state);
+      return {...state, [param]: value};
+    });
+  };
+
+  const handleDnnKwargsChange = (e) => {
+    var param = e.target.name;
+    if (e.target.type === "checkbox" ||
+        e.target.type === "switch") {
+      var value = e.target.checked;
+    } else {
+      var value = parseFloat(e.target.value);
+    }
+    updateDnnKwargs(param, value);
+  };
 
   const trainDnnOneEpoch = async () => {
     const url = new URL(`${endpoints.trainModel}/${datasetName}`);
@@ -104,9 +149,9 @@ const TrainPanel = ({
       pos_tags: dnnPosTags.map(t => `${t.category}:${t.value}`),
       neg_tags: dnnNegTags.map(t => `${t.category}:${t.value}`),
       augment_negs: dnnAugmentNegs,
-      aux_label_type: "imagenet",
       include: dnnAugmentIncludeTags.map(t => `${t.category}:${t.value}`),
       exclude: dnnAugmentExcludeTags.map(t => `${t.category}:${t.value}`),
+      model_kwargs: dnnKwargs,
     }
     if (trainingModelId) {
       body.resume = trainingModelId;
@@ -256,6 +301,28 @@ const TrainPanel = ({
 
   const timeLeftToString = (t) => (t && t >= 0) ? new Date(t * 1000).toISOString().substr(11, 8) : "estimating...";
 
+  const formatOptions = (d, idx) => {
+    return (
+      <FormGroup>
+        <Label>{d.displayName}</Label>
+        {d.type === "switch" ?
+         <CustomInput
+           id={"formatInput" + d.param}
+           type={d.type}
+           name={d.param}
+           checked={d.type === "switch" ? dnnKwargs[d.param] : false}
+           value={d.type !== "switch" ? dnnKwargs[d.param] : "on"}
+           onChange={handleDnnKwargsChange}/> :
+         <Input
+           id={"formatInput" + d.param}
+           type={d.type}
+           name={d.param}
+           checked={d.type === "checkbox" ? dnnKwargs[d.param] : false}
+           value={d.type !== "checkbox" ? dnnKwargs[d.param] : "on"}
+           onChange={handleDnnKwargsChange}/>}
+      </FormGroup>);
+  };
+
   if (!isVisible) return null;
   return (
     <>
@@ -366,6 +433,15 @@ const TrainPanel = ({
               setSelected={setDnnAugmentExcludeTags}
             />
           </>}
+          <Form>
+            Optimizer parameters
+            <FormGroup row>
+              {optInputs.map(formatOptions)}
+            </FormGroup>
+            <FormGroup row>
+              {otherInputs.map(formatOptions)}
+            </FormGroup>
+          </Form>
         </div>
       </Collapse>
     </>

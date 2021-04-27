@@ -4,5 +4,4 @@ ip=$(curl -H "Metadata-Flavor: Google" http://metadata/computeMetadata/v1/instan
 export REACT_APP_SERVER_URL="http://${ip}:8000"
 export PORT=4000
 
-npm run build
-serve -s build
+npm run start

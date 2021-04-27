@@ -8,9 +8,11 @@ import os.path
 import logging
 import time
 import math
+import shutil
 from typing import Dict, List, Any, Callable
 from torch.utils.data import DataLoader
 from torchvision import transforms
+from torch.utils.tensorboard import SummaryWriter
 
 from config import NUM_WORKERS
 from model import Model
@@ -24,98 +26,28 @@ logger.setLevel(logging.DEBUG)
 class TrainingLoop():
     def __init__(
             self,
-            model_kwargs: Dict[str, Any],
-            train_positive_paths: List[str],
-            train_negative_paths: List[str],
-            train_unlabeled_paths: List[str],
-            val_positive_paths: List[str],
-            val_negative_paths: List[str],
-            val_unlabeled_paths: List[str],
+            model_kwargs,
+            train_positive_paths,
+            train_negative_paths,
+            train_unlabeled_paths,
+            val_positive_paths,
+            val_negative_paths,
+            val_unlabeled_paths,
             notify_callback: Callable[[Dict[str, Any]], None]=lambda x: None):
         '''The training loop for background splitting models.'''
-        self.model_kwargs = model_kwargs
-        batch_size = model_kwargs.get('batch_size', 512)
-        num_workers = NUM_WORKERS
-        self.val_frequency = model_kwargs.get('val_frequency', 1)
-        self.checkpoint_frequency = model_kwargs.get('checkpoint_frequency', 1)
-        self.use_cuda = model_kwargs.get('use_cuda', True)
-        assert 'model_dir' in model_kwargs
-        self.model_dir = model_kwargs['model_dir']
-        assert 'aux_labels' in model_kwargs
-        aux_labels = model_kwargs['aux_labels']
-        self.aux_weight = model_kwargs.get('aux_weight', 0.1)
         self.notify_callback = notify_callback
 
+        self._setup_model_kwargs(model_kwargs)
+
         # Setup dataset
-        train_transform = transforms.Compose([
-            transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ConvertImageDtype(torch.float32),
-            transforms.Normalize([0.485, 0.456, 0.406],
-                                 [0.229, 0.224, 0.225])
-        ])
-        val_transform = transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ConvertImageDtype(torch.float32),
-            transforms.Normalize([0.485, 0.456, 0.406],
-                                 [0.229, 0.224, 0.225])
-        ])
-        self.train_dataloader = DataLoader(
-            AuxiliaryDataset(
-                positive_paths=train_positive_paths,
-                negative_paths=train_negative_paths,
-                unlabeled_paths=train_unlabeled_paths,
-                auxiliary_labels=aux_labels,
-                transform=train_transform),
-            batch_size=batch_size,
-            shuffle=True,
-            num_workers=num_workers)
-        self.val_dataloader = DataLoader(
-            AuxiliaryDataset(
-                positive_paths=val_positive_paths,
-                negative_paths=val_negative_paths,
-                unlabeled_paths=val_unlabeled_paths,
-                auxiliary_labels=aux_labels,
-                transform=val_transform),
-            batch_size=batch_size,
-            shuffle=False,
-            num_workers=num_workers)
+        self._setup_dataset(
+            train_positive_paths, train_negative_paths, train_unlabeled_paths,
+            val_positive_paths, val_negative_paths, val_unlabeled_paths)
 
         # Setup model
-        num_classes = 2
-        num_aux_classes = self.train_dataloader.dataset.num_auxiliary_classes
-        self.model_kwargs['num_aux_classes'] = num_aux_classes
-        self.model = Model(num_main_classes=num_classes,
-                           num_aux_classes=num_aux_classes)
-        if self.use_cuda:
-            self.model = self.model.cuda()
-        self.model = nn.DataParallel(self.model)
-        self.main_loss = nn.CrossEntropyLoss()
-        self.auxiliary_loss = nn.CrossEntropyLoss()
-        self.start_epoch = 0
-        self.end_epoch = 1
-        self.current_epoch = 0
+        self._setup_model()
 
         # Setup optimizer
-        lr = model_kwargs.get('lr', 0.1)
-        endlr = model_kwargs.get('endlr', 0.0)
-        optim_params = dict(
-            lr=lr,
-            momentum=model_kwargs.get('momentum', 0.9),
-            weight_decay=model_kwargs.get('weight_decay', 0.0001),
-        )
-        self.optimizer = optim.SGD(self.model.parameters(), **optim_params)
-        max_epochs = model_kwargs.get('max_epochs', 90)
-        warmup_epochs = model_kwargs.get('warmup_epochs', 0)
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            self.optimizer, max_epochs - warmup_epochs,
-            eta_min=endlr)
-        self.optimizer_scheduler = GradualWarmupScheduler(
-            optimizer=self.optimizer,
-            multiplier=1.0,
-            warmup_epochs=warmup_epochs,
-            after_scheduler=scheduler)
 
         # Resume if requested
         resume_from = model_kwargs.get('resume_from', None)
@@ -137,6 +69,104 @@ class TrainingLoop():
         self.train_epoch_main_loss = 0
         self.train_epoch_aux_loss = 0
 
+    def _setup_model_kwargs(self, model_kwargs):
+        self.model_kwargs = model_kwargs
+        self.num_workers = NUM_WORKERS
+        self.val_frequency = model_kwargs.get('val_frequency', 1)
+        self.checkpoint_frequency = model_kwargs.get('checkpoint_frequency', 1)
+        self.use_cuda = bool(model_kwargs.get('use_cuda', True))
+        assert 'model_dir' in model_kwargs
+        self.model_dir = model_kwargs['model_dir']
+        assert 'aux_labels' in model_kwargs
+        self.aux_weight = float(model_kwargs.get('aux_weight', 0.1))
+        assert 'log_dir' in model_kwargs
+        self.writer = SummaryWriter(log_dir=model_kwargs['log_dir'])
+
+    def _setup_dataset(
+            self,
+            train_positive_paths, train_negative_paths, train_unlabeled_paths,
+            val_positive_paths, val_negative_paths, val_unlabeled_paths):
+        assert self.model_kwargs
+        aux_labels = self.model_kwargs['aux_labels']
+        batch_size = int(self.model_kwargs.get('batch_size', 512))
+        num_workers = self.num_workers
+        restrict_aux_labels = bool(self.model_kwargs.get('restrict_aux_labels', True))
+
+        train_transform = transforms.Compose([
+            transforms.RandomResizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ConvertImageDtype(torch.float32),
+            transforms.Normalize([0.485, 0.456, 0.406],
+                                 [0.229, 0.224, 0.225])
+        ])
+        val_transform = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ConvertImageDtype(torch.float32),
+            transforms.Normalize([0.485, 0.456, 0.406],
+                                 [0.229, 0.224, 0.225])
+        ])
+        self.train_dataloader = DataLoader(
+            AuxiliaryDataset(
+                positive_paths=train_positive_paths,
+                negative_paths=train_negative_paths,
+                unlabeled_paths=train_unlabeled_paths,
+                auxiliary_labels=aux_labels,
+                restrict_aux_labels=restrict_aux_labels,
+                transform=train_transform),
+            batch_size=batch_size,
+            shuffle=True,
+            num_workers=num_workers)
+        self.val_dataloader = DataLoader(
+            AuxiliaryDataset(
+                positive_paths=val_positive_paths,
+                negative_paths=val_negative_paths,
+                unlabeled_paths=val_unlabeled_paths,
+                auxiliary_labels=aux_labels,
+                restrict_aux_labels=restrict_aux_labels,
+                transform=val_transform),
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=num_workers)
+
+    def _setup_model(self):
+        num_classes = 2
+        num_aux_classes = self.train_dataloader.dataset.num_auxiliary_classes
+        freeze_backbone = self.model_kwargs
+        self.model_kwargs['num_aux_classes'] = num_aux_classes
+        self.model = Model(num_main_classes=num_classes,
+                           num_aux_classes=num_aux_classes,
+                           freeze_backbone=freeze_backbone)
+        if self.use_cuda:
+            self.model = self.model.cuda()
+        self.model = nn.DataParallel(self.model)
+        self.main_loss = nn.CrossEntropyLoss()
+        self.auxiliary_loss = nn.CrossEntropyLoss()
+        self.start_epoch = 0
+        self.end_epoch = 1
+        self.current_epoch = 0
+        self.global_train_batch_idx = 0
+        self.global_val_batch_idx = 0
+
+        lr = float(self.model_kwargs.get('lr', 0.1))
+        endlr = float(self.model_kwargs.get('endlr', 0.0))
+        optim_params = dict(
+            lr=lr,
+            momentum=float(self.model_kwargs.get('momentum', 0.9)),
+            weight_decay=float(self.model_kwargs.get('weight_decay', 0.0001)),
+        )
+        self.optimizer = optim.SGD(self.model.parameters(), **optim_params)
+        max_epochs = int(self.model_kwargs.get('max_epochs', 90))
+        warmup_epochs = int(self.model_kwargs.get('warmup_epochs', 0))
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            self.optimizer, max_epochs - warmup_epochs,
+            eta_min=endlr)
+        self.optimizer_scheduler = GradualWarmupScheduler(
+            optimizer=self.optimizer,
+            multiplier=1.0,
+            warmup_epochs=warmup_epochs,
+            after_scheduler=scheduler)
+
     def _notify(self):
         epochs_left = self.end_epoch - self.current_epoch - 1
         num_train_batches_left = (
@@ -150,24 +180,48 @@ class TrainingLoop():
         time_left = (
             num_train_batches_left * self.train_batch_time.value +
             num_val_batches_left * self.val_batch_time.value)
-        logger.debug('Send notify')
         self.notify_callback(**{"training_time_left": time_left})
 
-    def load_checkpoint(self, path: str, restart: bool=False):
+    def setup_resume(
+            self,
+            train_positive_paths, train_negative_paths, train_unlabeled_paths,
+            val_positive_paths, val_negative_paths, val_unlabeled_paths
+    ):
+        self._setup_dataset(train_positive_paths, train_negative_paths, train_unlabeled_paths,
+                           val_positive_paths, val_negative_paths, val_unlabeled_paths)
+        self.start_epoch += 1
+        self.current_epoch = self.start_epoch
+        self.end_epoch = self.start_epoch + 1
+
+    def load_checkpoint(self, path: str, resume_training: bool=False):
         checkpoint_state = torch.load(path)
         self.model.load_state_dict(checkpoint_state['state_dict'])
-        if not restart:
+        if resume_training:
+            self.global_train_batch_idx = checkpoint_state['global_train_batch_idx']
+            self.global_val_batch_idx = checkpoint_state['global_val_batch_idx']
             self.start_epoch = checkpoint_state['epoch'] + 1
             self.current_epoch = self.start_epoch
             self.end_epoch = self.start_epoch + 1
+            self.optimizer.load_state_dict(
+                checkpoint_state['optimizer'])
+            self.optimizer_scheduler.load_state_dict(
+                checkpoint_state['optimizer_scheduler'])
+            # Copy tensorboard state
+            prev_log_dir = checkpoint_state['model_kwargs']['log_dir']
+            curr_log_dir = self.model_kwargs['log_dir']
+            shutil.copytree(prev_log_dir, curr_log_dir)
 
     def save_checkpoint(self, epoch, checkpoint_path: str):
         kwargs = dict(self.model_kwargs)
         del kwargs['aux_labels']
         state = dict(
+            global_train_batch_idx=self.global_train_batch_idx,
+            global_val_batch_idx=self.global_val_batch_idx,
             model_kwargs=kwargs,
             epoch=epoch,
             state_dict=self.model.state_dict(),
+            optimizer=self.optimizer.state_dict(),
+            optimizer_scheduler=self.optimizer_scheduler.state_dict(),
         )
         os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
         torch.save(state, checkpoint_path)
@@ -199,23 +253,37 @@ class TrainingLoop():
             aux_gts += list(main_labels[:].cpu().numpy())
             batch_end = time.perf_counter()
             self.val_batch_time += (batch_end - batch_start)
+            self.global_val_batch_idx += 1
         # Compute F1 score
         if len(dataloader) > 0:
             loss_value /= (len(dataloader) + 1e-10)
-            main_prec, main_recall, _, _ = \
+            main_prec, main_recall, main_f1, _ = \
                 sklearn.metrics.precision_recall_fscore_support(
                     main_gts, main_preds)
-            aux_prec, aux_recall, _, _ = \
+            aux_prec, aux_recall, aux_f1, _ = \
                 sklearn.metrics.precision_recall_fscore_support(
-                    main_gts, main_preds)
+                    aux_gts, aux_preds)
         else:
             loss_value = 0
             main_prec = -1
             main_recall = -1
+            main_f1 = -1
             aux_prec = -1
             aux_recall = -1
-        logger.info(f'main: prec: {main_prec:.3f}, recall: {main_recall:.3f}')
-        logger.info(f'aux:  prec: {aux_prec:.3f}, recall: {aux_recall:.3f}')
+            aux_f1 = -1
+
+
+        summary_data = [
+            ('sum/loss', loss_value),
+            ('main_head/f1', main_f1),
+            ('main_head/prec', main_prec),
+            ('main_head/recall', main_recall),
+            ('aux_head/f1', aux_f1),
+            ('aux_head/prec', aux_prec),
+            ('aux_head/recall', aux_recall),
+        ]
+        for k, v in [(tag + '/epoch/val', v) for tag, v in summary_data]:
+            self.writer.add_scalar(k, v, self.current_epoch)
 
     def validate(self):
         self._validate(self.val_dataloader)
@@ -227,8 +295,12 @@ class TrainingLoop():
         self.train_epoch_loss = 0
         self.train_epoch_main_loss = 0
         self.train_epoch_aux_loss = 0
+        main_gts = []
+        aux_gts = []
+        main_preds = []
+        aux_preds = []
         for batch_idx, (images, main_labels, aux_labels) in enumerate(
-                self.train_dataloader):
+                self.train_loader):
             load_end = time.perf_counter()
             batch_start = time.perf_counter()
             self.train_batch_idx = batch_idx
@@ -248,8 +320,6 @@ class TrainingLoop():
             aux_loss_value = self.auxiliary_loss(
                 aux_logits[valid_aux_labels],
                 aux_labels[valid_aux_labels])
-            print('num main labels', torch.sum(main_labels != -1))
-            print('num aux labels', torch.sum(aux_labels != -1))
             loss_value = main_loss_value + self.aux_weight * aux_loss_value
             self.train_epoch_loss += loss_value.item()
             if torch.sum(valid_main_labels) > 0:
@@ -260,7 +330,14 @@ class TrainingLoop():
             self.optimizer.zero_grad()
             loss_value.backward()
             self.optimizer.step()
-            self.optimizer_scheduler.step()
+
+            main_pred = F.softmax(main_logits, dim=1)
+            aux_pred = F.softmax(aux_logits, dim=1)
+            main_preds += list(main_pred.argmax(dim=1)[:].cpu().numpy())
+            aux_preds += list(aux_pred.argmax(dim=1)[:].cpu().numpy())
+            main_gts += list(main_labels[:].cpu().numpy())
+            aux_gts += list(aux_labels[:].cpu().numpy())
+
             batch_end = time.perf_counter()
             total_batch_time = (batch_end - batch_start)
             total_load_time = (load_end - load_start)
@@ -271,14 +348,51 @@ class TrainingLoop():
                          f'batch epoch loss: {loss_value.item()}, '
                          f'main loss: {main_loss_value.item()}, '
                          f'aux loss: {aux_loss_value.item()}')
+            summary_data = [
+                ('sum/loss', loss_value.item()),
+                ('main_head/loss', main_loss_value.item()),
+                ('aux_head/loss', aux_loss_value.item()),
+                ('main_head/percentage', torch.sum(valid_main_labels).item()),
+            ]
+            for k, v in [(tag + '/batch/train', v) for tag, v in summary_data]:
+                self.writer.add_scalar(k, v, self.global_train_batch_idx)
+
             self._notify()
+            self.global_train_batch_idx += 1
             load_start = time.perf_counter()
+
+        model_lr = self.optimizer.param_groups[-1]['lr']
+        self.optimizer_scheduler.step()
         logger.debug(f'Train epoch loss: {self.train_epoch_loss}, '
                      f'main loss: {self.train_epoch_main_loss}, '
                      f'aux loss: {self.train_epoch_aux_loss}')
+        main_prec, main_recall, main_f1, _ = \
+            sklearn.metrics.precision_recall_fscore_support(
+                main_gts, main_preds, average='binary')
+        aux_prec, aux_recall, aux_f1, _ = \
+            sklearn.metrics.precision_recall_fscore_support(
+                aux_gts, aux_preds, average='binary')
+        logger.debug(f'Train epoch main: {main_prec}, {main_recall}, {main_f1}, '
+                     f'aux: {aux_prec}, {aux_recall}, {aux_f1}'
+                     f'main loss: {self.train_epoch_main_loss}, '
+                     f'aux loss: {self.train_epoch_aux_loss}')
+        summary_data = [
+            ('lr', model_lr),
+            ('sum/loss', self.train_epoch_loss),
+            ('main_head/loss', self.train_epoch_main_loss),
+            ('aux_head/loss', self.train_epoch_aux_loss),
+            ('main_head/f1', main_f1),
+            ('main_head/prec', main_prec),
+            ('main_head/recall', main_recall),
+            ('aux_head/f1', aux_f1),
+            ('aux_head/prec', aux_prec),
+            ('aux_head/recall', aux_recall)
+        ]
+        for k, v in [(tag + '/epoch/train', v) for tag, v in summary_data]:
+            self.writer.add_scalar(k, v, self.current_epoch)
 
     def run(self):
-        last_checkpoint_path = None
+        self.last_checkpoint_path = None
         for i in range(self.start_epoch, self.end_epoch):
             logger.info(f'Train: Epoch {i}')
             self.current_epoch = i
@@ -288,7 +402,7 @@ class TrainingLoop():
                 self.validate()
             if i % self.checkpoint_frequency == 0 or i == self.end_epoch - 1:
                 logger.info(f'Checkpoint: Epoch {i}')
-                last_checkpoint_path = os.path.join(
+                self.last_checkpoint_path = os.path.join(
                     self.model_dir, f'checkpoint_{i:03}.pth')
-                self.save_checkpoint(i, last_checkpoint_path)
-        return last_checkpoint_path
+                self.save_checkpoint(i, self.last_checkpoint_path)
+        return self.last_checkpoint_path

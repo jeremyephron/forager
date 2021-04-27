@@ -294,6 +294,22 @@ $semi-transparent-white: rgba(255, 255, 255, 0.92);
   cursor: not-allowed;
 }
 
+#dnn-controls-dropdown .form-group {
+    margin: 0 5px 0 5px;
+}
+
+#dnn-controls-dropdown .form-group label {
+    margin: 0 5px 0 5px;
+}
+
+#dnn-controls-dropdown .form-group label.custom-control-label:before {
+    top: 0px;
+}
+
+#dnn-controls-dropdown .form-group label.custom-control-label:after {
+    top: 0.25rem;
+}
+
 // .panel {
 //   width: 40%;
 //   background: $primary-alt-darker;

@@ -33,7 +33,7 @@ def resnet50(pretrained) -> ResNetBackbone:
 class Model(nn.Module):
     def __init__(self, num_main_classes, num_aux_classes):
         super(Model, self).__init__()
-        self.backbone = resnet50(pretrained=True)
+        self.backbone = resnet50(pretrained=False)
         backbone_feature_dim = self.backbone.fc.in_features
         self.main_head = nn.Linear(backbone_feature_dim, num_main_classes)
         self.auxiliary_head = None

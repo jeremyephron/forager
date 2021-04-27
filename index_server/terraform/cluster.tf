@@ -95,6 +95,21 @@ resource "google_container_cluster" "cluster" {
   dynamic "node_pool" {
     for_each = var.create_node_pools_separately ? [] : [1]
     content {
+      name       = var.bgsplit_trainer_tensorboard_node_pool_name
+      node_count = var.bgsplit_trainer_tensorboard_num_nodes
+
+      node_config {
+        preemptible  = true
+        machine_type = var.bgsplit_trainer_tensorboard_node_type
+        disk_size_gb = local.bgsplit_trainer_tensorboard_disk_size_gb
+        oauth_scopes = local.node_pool_oauth_scopes
+      }
+    }
+  }
+
+  dynamic "node_pool" {
+    for_each = var.create_node_pools_separately ? [] : [1]
+    content {
       name       = var.bgsplit_mapper_node_pool_name
       node_count = var.bgsplit_mapper_num_nodes
 

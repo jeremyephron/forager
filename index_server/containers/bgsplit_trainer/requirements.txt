@@ -6,4 +6,5 @@ PyYAML
 requests
 torch
 torchvision
+tensorboard
 sklearn
