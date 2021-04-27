@@ -1,4 +1,3 @@
-from django.contrib.postgres.fields import JSONField
 from django.db import models
 
 
@@ -39,4 +38,4 @@ class DNNModel(models.Model):
     checkpoint_path = models.TextField(null=True)
     output_directory = models.TextField(null=True)
     last_updated = models.DateTimeField(auto_now=True)
-    category_spec = JSONField(default=dict)
+    category_spec = models.JSONField(default=dict)
