@@ -9,6 +9,8 @@ import logging
 import time
 import math
 import shutil
+import scipy.special
+import copy
 from typing import Dict, List, Any, Callable
 from torch.utils.data import DataLoader
 from torchvision import transforms
@@ -70,7 +72,7 @@ class TrainingLoop():
         self.train_epoch_aux_loss = 0
 
     def _setup_model_kwargs(self, model_kwargs):
-        self.model_kwargs = model_kwargs
+        self.model_kwargs = copy.deepcopy(model_kwargs)
         self.num_workers = NUM_WORKERS
         self.val_frequency = model_kwargs.get('val_frequency', 1)
         self.checkpoint_frequency = model_kwargs.get('checkpoint_frequency', 1)
@@ -272,17 +274,16 @@ class TrainingLoop():
             aux_recall = -1
             aux_f1 = -1
 
-
         summary_data = [
-            ('sum/loss', loss_value),
-            ('main_head/f1', main_f1),
-            ('main_head/prec', main_prec),
-            ('main_head/recall', main_recall),
-            ('aux_head/f1', aux_f1),
-            ('aux_head/prec', aux_prec),
-            ('aux_head/recall', aux_recall),
+            ('loss', loss_value),
+            ('f1/main_head', main_f1),
+            ('prec/main_head', main_prec),
+            ('recall/main_head', main_recall),
+            ('f1/aux_head', aux_f1),
+            ('prec/aux_head', aux_prec),
+            ('recall/aux_head', aux_recall),
         ]
-        for k, v in [(tag + '/epoch/val', v) for tag, v in summary_data]:
+        for k, v in [('val/epoch/' + tag, v) for tag, v in summary_data]:
             self.writer.add_scalar(k, v, self.current_epoch)
 
     def validate(self):
@@ -297,6 +298,7 @@ class TrainingLoop():
         self.train_epoch_aux_loss = 0
         main_gts = []
         aux_gts = []
+        main_logits_all = []
         main_preds = []
         aux_preds = []
         for batch_idx, (images, main_labels, aux_labels) in enumerate(
@@ -333,6 +335,7 @@ class TrainingLoop():
 
             main_pred = F.softmax(main_logits, dim=1)
             aux_pred = F.softmax(aux_logits, dim=1)
+            main_logits_all += list(main_logits[:].detach().cpu().numpy())
             main_preds += list(main_pred.argmax(dim=1)[:].cpu().numpy())
             aux_preds += list(aux_pred.argmax(dim=1)[:].cpu().numpy())
             main_gts += list(main_labels[:].cpu().numpy())
@@ -349,12 +352,11 @@ class TrainingLoop():
                          f'main loss: {main_loss_value.item()}, '
                          f'aux loss: {aux_loss_value.item()}')
             summary_data = [
-                ('sum/loss', loss_value.item()),
-                ('main_head/loss', main_loss_value.item()),
-                ('aux_head/loss', aux_loss_value.item()),
-                ('main_head/percentage', torch.sum(valid_main_labels).item()),
+                ('loss', loss_value.item()),
+                ('loss/main_head', main_loss_value.item()),
+                ('loss/aux_head', aux_loss_value.item()),
             ]
-            for k, v in [(tag + '/batch/train', v) for tag, v in summary_data]:
+            for k, v in [('train/batch/' + tag, v) for tag, v in summary_data]:
                 self.writer.add_scalar(k, v, self.global_train_batch_idx)
 
             self._notify()
@@ -378,18 +380,22 @@ class TrainingLoop():
                      f'aux loss: {self.train_epoch_aux_loss}')
         summary_data = [
             ('lr', model_lr),
-            ('sum/loss', self.train_epoch_loss),
-            ('main_head/loss', self.train_epoch_main_loss),
-            ('aux_head/loss', self.train_epoch_aux_loss),
-            ('main_head/f1', main_f1),
-            ('main_head/prec', main_prec),
-            ('main_head/recall', main_recall),
-            ('aux_head/f1', aux_f1),
-            ('aux_head/prec', aux_prec),
-            ('aux_head/recall', aux_recall)
+            ('loss', self.train_epoch_loss),
+            ('loss/main_head', self.train_epoch_main_loss),
+            ('loss/aux_head', self.train_epoch_aux_loss),
+            ('f1/main_head', main_f1),
+            ('prec/main_head', main_prec),
+            ('recall/main_head', main_recall),
+            ('f1/aux_head', aux_f1),
+            ('prec/aux_head', aux_prec),
+            ('recall/aux_head', aux_recall)
         ]
-        for k, v in [(tag + '/epoch/train', v) for tag, v in summary_data]:
+        for k, v in [('train/epoch/' + tag , v) for tag, v in summary_data]:
             self.writer.add_scalar(k, v, self.current_epoch)
+
+        self.writer.add_histogram(
+            'train/epoch/softmax/main_head',
+            scipy.special.softmax(main_logits_all, axis=1)[:, 1])
 
     def run(self):
         self.last_checkpoint_path = None

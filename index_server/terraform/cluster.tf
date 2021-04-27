@@ -163,7 +163,6 @@ resource "kubectl_manifest" "gpu_installer" {
 }
 
 provider "kubernetes" {
-  load_config_file = false
   host  = "https://${google_container_cluster.cluster.endpoint}"
   token = data.google_client_config.provider.access_token
   cluster_ca_certificate = base64decode(
