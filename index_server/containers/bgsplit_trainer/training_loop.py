@@ -300,7 +300,7 @@ class TrainingLoop():
         main_preds = []
         aux_preds = []
         for batch_idx, (images, main_labels, aux_labels) in enumerate(
-                self.train_loader):
+                self.train_dataloader):
             load_end = time.perf_counter()
             batch_start = time.perf_counter()
             self.train_batch_idx = batch_idx
@@ -371,7 +371,7 @@ class TrainingLoop():
                 main_gts, main_preds, average='binary')
         aux_prec, aux_recall, aux_f1, _ = \
             sklearn.metrics.precision_recall_fscore_support(
-                aux_gts, aux_preds, average='binary')
+                aux_gts, aux_preds, average='micro')
         logger.debug(f'Train epoch main: {main_prec}, {main_recall}, {main_f1}, '
                      f'aux: {aux_prec}, {aux_recall}, {aux_f1}'
                      f'main loss: {self.train_epoch_main_loss}, '

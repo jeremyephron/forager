@@ -1044,19 +1044,11 @@ async def start_bgsplit_job(request):
         .difference(set(pos_identifiers))
         .difference(set(neg_identifiers))
     )
-    if augment_negs and num_extra_neg_vectors > 0:
-        extra_neg_identifiers = random.sample(
-            unused_identifiers, min(len(unused_identifiers), num_extra_neg_vectors)
-        )
-    extra_neg_paths = [
-        os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
-        for i in extra_neg_identifiers
-    ]
 
-    if len(neg_paths) + len(extra_neg_paths) == 0:
+    if len(neg_paths) == 0:
         return resp.json(
             {"reason":
-             "Can not train model with 0 negatives and 0 augmented negatives."},
+             "Can not train model with 0 negatives."},
             status=400)
 
     unlabeled_paths = [
@@ -1133,7 +1125,7 @@ async def start_bgsplit_job(request):
 
     training_job = BGSplitTrainingJob(
         pos_paths=pos_paths,
-        neg_paths=neg_paths + extra_neg_paths,
+        neg_paths=neg_paths,
         unlabeled_paths=unlabeled_paths,
         user_model_kwargs=model_kwargs,
         aux_labels_path=aux_labels_gcs_path,

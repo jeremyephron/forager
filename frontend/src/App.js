@@ -127,7 +127,7 @@ function MainHeader(props) {
   let setSubset = props.setSubset;
   let mode = props.mode;
   let setMode = props.setMode;
-  let labelModeCategories = props.labelModeCategories;
+  let labelModeCategory = props.labelModeCategory;
 
   return (<>
     <SignInModal
@@ -149,9 +149,9 @@ function MainHeader(props) {
       isReadOnly={!!!(username)}
     />
     <BulkTagModal
-      isOpen={bulkTagModalIsOpen}
-      toggle={toggleBulkTag}
-      resultSet={queryResultSet}
+      isOpen={props.bulkTagModalIsOpen}
+      toggle={props.toggleBulkTag}
+      resultSet={props.queryResultSet}
       categories={datasetInfo.categories}
       setCategories={setCategories}
       username={username}
@@ -248,469 +248,6 @@ function MainHeader(props) {
   </>);
 };
 
-function DNNTraining(p) {
-  const [modelStatus, setModelStatus] = useState({});
-
-  const [dnnType, setDnnType] = useState(dnns[0].id);
-  const [dnnAugmentNegs, setDnnAugmentNegs] = useState(true);
-  const [dnnPosTags, setDnnPosTags] = useState([]);
-  const [dnnNegTags, setDnnNegTags] = useState([]);
-  const [modelId, setModelId] = useState(null);
-  const [dnnIsTraining, setDnnIsTraining] = useState(false);
-  const [modelEpoch, setModelEpoch] = useState(1);
-
-  let datasetName = p.datasetName;
-  let datasetInfo = p.datasetInfo;
-  let setCategories = p.setCategories;
-  let clusterStatus = p.clusterStatus;
-  let clusterId = p.clusterId;
-  let dnnAdvancedIsOpen = p.dnnAdvancedIsOpen;
-  let setDnnAdvancedIsOpen = p.setDnnAdvancedIsOpen;
-  let requestDnnTraining = p.requestDnnTraining
-  let setRequestDnnTraining = p.setRequestDnnTraining
-  let modelInfo = p.modelInfo;
-  let dnnKwargs = p.dnnKwargs;
-  let setPrevModelId = p.setPrevModelId;
-  let username = p.username;
-
-  const genModelName = () => {
-    const date = dateFormat(new Date(), "mm-dd-yy_HH-MM");
-    if (!!!(username)) {
-      return `${date}`;
-    };
-    const name = username.slice(0, username.indexOf("@"));
-    return `${name}_${date}`;
-  };
-
-  const [modelName, setModelName] = useState(genModelName());
-
-  const autofillModelName = () => {
-    setModelName(genModelName());
-  };
-
-  const startTrainingNewDnn = () => {
-    setModelEpoch(0);
-    setModelId(null);
-    setDnnIsTraining(false);
-    setRequestDnnTraining(true);
-  };
-
-  const stopTrainingDnn = () => {
-    setRequestDnnTraining(false);
-    autofillModelName();
-  };
-
-  const trainDnnEpoch = async () => {
-    let _clusterId = clusterId;
-    // Start training DNN
-    const url = new URL(`${endpoints.trainModel}/${datasetName}`);
-    let body = {
-      model_name: modelName,
-      cluster_id: _clusterId,
-      bucket: "foragerml",
-      index_id: datasetInfo.index_id,
-      pos_tags: dnnPosTags.map(t => `${t.category}:${t.value}`).join(","),
-      neg_tags: dnnNegTags.map(t => `${t.category}:${t.value}`).join(","),
-      augment_negs: dnnAugmentNegs.toString(),
-      model_kwargs: dnnKwargs,
-    }
-    if (modelId) {
-      body.resume = modelId;
-    }
-    const _modelId = await fetch(url, {
-      method: "POST",
-      body: JSON.stringify(body),
-      headers: {
-        'Content-type': 'application/json; charset=UTF-8'
-      }
-    }).then(r => r.json()).then(r => r.model_id);
-    setModelId(_modelId);
-    setDnnIsTraining(true);
-  };
-
-  useEffect(() => {
-    if (requestDnnTraining && clusterStatus.ready && !dnnIsTraining) {
-      trainDnnEpoch();
-    }
-  }, [requestDnnTraining, clusterStatus, dnnIsTraining]);
-
-  const checkDnnStatus = async () => {
-      // Wait until DNN trains for 1 epoch
-    const modelStatusUrl = new URL(`${endpoints.modelStatus}/${modelId}`);
-    const _modelStatus = await fetch(modelStatusUrl, {
-      method: "GET",
-    }).then(r => r.json());
-    setModelStatus(_modelStatus);
-    if (_modelStatus.has_model) {
-      setDnnIsTraining(false);
-      setPrevModelId(modelId);
-      setModelEpoch(modelEpoch + 1);
-    }
-    if (_modelStatus.failed) {
-      setRequestDnnTraining(false);
-      setDnnIsTraining(false);
-    }
-  };
-  useInterval(checkDnnStatus, dnnIsTraining ? 3000 : null)
-
-  if (requestDnnTraining) {
-    return <>
-      <div className="d-flex flex-row align-items-center">
-        <Spinner color="dark" className="my-1 mr-2" />
-        {clusterStatus.ready ?
-         <span><b>Training</b> model <b>{modelName}</b> (Epoch {modelEpoch}), Time left: {modelStatus.training_time_left && modelStatus.training_time_left >= 0 ? new Date(Math.max(modelStatus.training_time_left, 0) * 1000).toISOString().substr(11, 8) : 'estimating...'} <a href={modelStatus.tensorboard_url}>Tensorboard dashboard</a> </span> :
-         <span><b>Starting cluster</b></span>
-        }
-      </div>
-      <Button
-        color="danger"
-        onClick={stopTrainingDnn}
-      >Stop training</Button>
-    </>;
-  } else {
-    return <>
-      <FontAwesomeIcon
-        icon={dnnAdvancedIsOpen ? faChevronUp : faCog}
-        style={{cursor: "pointer"}}
-        onClick={() => setDnnAdvancedIsOpen(!dnnAdvancedIsOpen)}
-      />
-      <FormGroup className="mb-0">
-        <select className="custom-select mx-2" value={dnnType}
-          onChange={e => p.setDnnType(e.target.value)}>
-          {dnns.map((d) => <option key={d.id} value={d.id}>{d.label}</option>)}
-        </select>
-        <ReactSVG className="icon" src="assets/arrow-caret.svg" />
-      </FormGroup>
-      <Input
-        className="mr-2"
-        placeholder="Model name"
-        value={modelName}
-        onChange={(e) => setModelName(e.target.value)}
-      />
-      <CategoryInput
-        id="dnn-pos-bar"
-        className="mr-2"
-        placeholder="Positive example tags"
-        disabled={requestDnnTraining}
-        categories={datasetInfo.categories}
-        setCategories={setCategories}
-        selected={dnnPosTags}
-        setSelected={setDnnPosTags}
-      />
-      <CategoryInput
-        id="dnn-neg-bar"
-        className="mr-2"
-        placeholder="Negative example tags"
-        disabled={requestDnnTraining}
-        categories={datasetInfo.categories}
-        setCategories={setCategories}
-        selected={dnnNegTags}
-        setSelected={setDnnNegTags}
-      />
-      <div className="my-2 custom-control custom-checkbox">
-        <input
-          type="checkbox"
-          className="custom-control-input"
-          id="dnn-augment-negs-checkbox"
-          disabled={requestDnnTraining}
-          checked={dnnAugmentNegs}
-          onChange={(e) => setDnnAugmentNegs(e.target.checked)}
-        />
-        <label className="custom-control-label text-nowrap mr-2" htmlFor="dnn-augment-negs-checkbox">
-          Auto-augment negative set
-        </label>
-      </div>
-      <Button
-        color="light"
-        onClick={startTrainingNewDnn}
-        disabled={!!!(username) || dnnPosTags.length === 0 ||
-                  (dnnNegTags.length === 0 && !dnnAugmentNegs) ||
-                  requestDnnTraining}
-      >Start training
-      </Button>
-    {modelStatus.failed ?
-     <div className="d-flex flex-row align-items-center justify-content-between">
-       <div className="my-12">{modelStatus.failure_reason}</div>
-     </div> : null }
-    </>;
-  }
-};
-
-function DNNInference(p) {
-  const [dnnInferenceModel, setDnnInferenceModel] = useState([]);
-  const [dnnIsInferring, setDnnIsInferring] = useState(false);
-  const [dnnInferenceJobId, setDnnInferenceJobId] = useState(null);
-  const [dnnInferenceStatus, setDnnInferenceStatus] = useState({});
-
-  let datasetName = p.datasetName;
-  let datasetInfo = p.datasetInfo;
-  let requestDnnInference = p.requestDnnInference;
-  let setRequestDnnInference = p.setRequestDnnInference;
-  let clusterStatus = p.clusterStatus;
-  let username = p.username;
-  let modelInfo = p.modelInfo;
-
-  const startDnnInference = () => {
-    setDnnIsInferring(false);
-    setRequestDnnInference(true);
-  };
-
-  const stopDnnInference = () => {
-    const stop = async () => {
-      const url = new URL(`${endpoints.stopModelInference}/${dnnInferenceJobId}`);
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: {
-          'Content-type': 'application/json; charset=UTF-8'
-        }
-      }).then(r => r.json());
-      setDnnIsInferring(false);
-    }
-    setRequestDnnInference(false);
-    stop();
-  };
-
-  const dnnInference = async () => {
-    let _clusterId = p.clusterId;
-    // Start training DNN
-    const url = new URL(`${endpoints.modelInference}/${datasetName}`);
-    let body = {
-      model_id: dnnInferenceModel[0].latest.model_id,
-      cluster_id: _clusterId,
-      bucket: "foragerml",
-      index_id: datasetInfo.index_id,
-    }
-    const _jobId = await fetch(url, {
-      method: "POST",
-      body: JSON.stringify(body),
-      headers: {
-        'Content-type': 'application/json; charset=UTF-8'
-      }
-    }).then(r => r.json()).then(r => r.job_id);
-    setDnnInferenceJobId(_jobId);
-    setDnnIsInferring(true);
-  };
-
-  useEffect(() => {
-    if (requestDnnInference && clusterStatus.ready && !dnnIsInferring) {
-      dnnInference();
-    }
-  }, [requestDnnInference, clusterStatus, dnnIsInferring, dnnInferenceModel]);
-
-  const checkDnnInferenceStatus = async () => {
-    const inferenceStatusUrl = new URL(`${endpoints.modelInferenceStatus}/${dnnInferenceJobId}`);
-    const _inferenceStatus = await fetch(inferenceStatusUrl, {
-      method: "GET",
-    }).then(r => r.json());
-    setDnnInferenceStatus(_inferenceStatus);
-    if (_inferenceStatus.has_output) {
-      setRequestDnnInference(false);
-      setDnnIsInferring(false);
-    }
-  };
-  useInterval(checkDnnInferenceStatus, dnnIsInferring ? 3000 : null)
-
-  if (requestDnnInference) {
-    return <>
-      <div className="d-flex flex-row align-items-center">
-        <Spinner color="dark" className="my-1 mr-2" />
-        {clusterStatus.ready ?
-         <span><b>Inferring</b> model <b>{dnnInferenceModel[0].latest.model_name}</b>, Time left: {dnnInferenceStatus.time_left && dnnInferenceStatus.time_left >= 0 ? new Date(Math.max(dnnInferenceStatus.time_left, 0) * 1000).toISOString().substr(11, 8) : 'estimating...'} </span> :
-         <span><b>Starting cluster</b></span>
-        }
-      </div>
-      <Button
-        color="danger"
-        onClick={stopDnnInference}
-      >Stop inference</Button>
-    </>;
-  } else {
-    return <>
-      <FeatureInput
-        id="dnn-inference-model-bar"
-        className="mr-2"
-        placeholder="Model to perform inference for"
-        features={modelInfo.filter(m => m.latest.has_checkpoint && !m.latest.has_output)}
-        selected={dnnInferenceModel}
-        setSelected={setDnnInferenceModel}
-      />
-      <Button
-        color="light"
-        onClick={startDnnInference}
-        disabled={!!!(username) || !!!(dnnInferenceModel[0]) ||
-                  requestDnnInference}
-      >Start inference</Button>
-    </>;
-  };
-};
-
-function TrainModeHeader(p) {
-
-  const [dnnAdvancedIsOpen, setDnnAdvancedIsOpen] = useState(false);
-  const [requestDnnTraining, setRequestDnnTraining] = useState(false);
-  const [requestDnnInference, setRequestDnnInference] = useState(false);
-  const [dnnKwargs, setDnnKwargs] = useState({
-    "initial_lr": 0.01,
-    "endlr": 0.0,
-    "max_epochs": 90,
-    "warmup_epochs": 0,
-    "batch_size": 512,
-    "momentum": 0.9,
-    "weight_decay": 0.0001,
-    "aux_weight": 0.1,
-    "aux_labels_type": "imagenet",
-    "restrict_aux_labels": true,
-    "freeze_backbone": true,
-  });
-  const [prevModelId, setPrevModelId] = useState(null);
-
-  const [clusterId, setClusterId] = useState(null);
-  const [clusterCreating, setClusterCreating] = useState(false);
-  const [clusterStatus, setClusterStatus] = useState({});
-
-  let datasetName = p.datasetName;
-  let modelInfo = p.modelInfo;
-  let setFetchModelInfo = p.setFetchModelInfo;
-
-  useEffect(async () => {
-    setFetchModelInfo(true);
-  }, [prevModelId, requestDnnInference]);
-
-  useEffect(async () => {
-    let _clusterId = clusterId;
-    if ((requestDnnTraining || requestDnnInference) && !_clusterId) {
-      // Start cluster
-      const startClusterUrl = new URL(`${endpoints.startCluster}`);
-      var clusterResponse = await fetch(startClusterUrl, {
-        method: "POST",
-      }).then(r => r.json());
-
-      _clusterId = clusterResponse.cluster_id;
-
-      setClusterId(_clusterId);
-      setClusterCreating(true);
-    }
-  }, [requestDnnTraining, requestDnnInference, clusterId]);
-
-  const checkClusterStatus = async () => {
-    // Wait until cluster is booted
-    const clusterStatusUrl = new URL(`${endpoints.clusterStatus}/${clusterId}`);
-    const _clusterStatus = await fetch(clusterStatusUrl, {
-      method: "GET",
-    }).then(r => r.json());
-    setClusterStatus(_clusterStatus);
-    if (_clusterStatus.ready) {
-      setClusterCreating(false);
-    }
-  }
-  useInterval(checkClusterStatus, clusterCreating ? 3000 : null);
-
-  const updateDnnKwargs = (param, value) => {
-    setDnnKwargs(state => {
-      console.log(state);
-      return {...state, [param]: value};
-    });
-  };
-
-  const handleDnnKwargsChange = (e) => {
-    var param = e.target.name;
-    if (e.target.type === "checkbox" ||
-        e.target.type === "switch") {
-      var value = e.target.checked;
-    } else {
-      var value = parseFloat(e.target.value);
-    }
-    updateDnnKwargs(param, value);
-  };
-
-  let optInputs = [
-    {type: "number", displayName: "Initial LR", param: "initial_lr"},
-    {type: "number", displayName: "End LR", param: "endlr"},
-    {type: "number", displayName: "Momentum", param: "momentum"},
-    {type: "number", displayName: "Weight decay", param: "weight_decay"},
-    {type: "number", displayName: "Warmup epochs", param: "warmup_epochs"},
-    {type: "number", displayName: "Max epochs", param: "max_epochs"},
-  ]
-  let otherInputs = [
-    {type: "number", displayName: "Batch size", param: "batch_size"},
-    {type: "number", displayName: "Aux loss weight", param: "aux_weight"},
-    {type: "switch", displayName: "Restrict aux labels", param: "restrict_aux_labels"},
-    {type: "switch", displayName: "Freeze backbone", param: "freeze_backbone"},
-  ]
-
-  let trainProps = {
-    datasetName: p.datasetName,
-    datasetInfo: p.datasetInfo,
-    setCategories: p.setCategories,
-    clusterStatus: clusterStatus,
-    clusterId: clusterId,
-    dnnAdvancedIsOpen: dnnAdvancedIsOpen,
-    setDnnAdvancedIsOpen: setDnnAdvancedIsOpen,
-    modelInfo: modelInfo,
-    requestDnnTraining: requestDnnTraining,
-    setRequestDnnTraining: setRequestDnnTraining,
-    dnnKwargs: dnnKwargs,
-    setPrevModelId: setPrevModelId,
-    username: p.username,
-  }
-
-  let infProps = {
-    datasetName: p.datasetName,
-    datasetInfo: p.datasetInfo,
-    clusterStatus: clusterStatus,
-    clusterId: clusterId,
-    modelInfo: modelInfo,
-    username: p.username,
-    requestDnnInference: requestDnnInference,
-    setRequestDnnInference: setRequestDnnInference,
-    prevModelId: prevModelId,
-  }
-  const formatOptions = (d, idx) => {
-    return (
-      <FormGroup>
-        <Label>{d.displayName}</Label>
-        {d.type === "switch" ?
-         <CustomInput
-           id={"formatInput" + d.param}
-           type={d.type}
-           name={d.param}
-           checked={d.type === "switch" ? dnnKwargs[d.param] : false}
-           value={d.type !== "switch" ? dnnKwargs[d.param] : "on"}
-           onChange={handleDnnKwargsChange}/> :
-         <Input
-           id={"formatInput" + d.param}
-           type={d.type}
-           name={d.param}
-           checked={d.type === "checkbox" ? dnnKwargs[d.param] : false}
-           value={d.type !== "checkbox" ? dnnKwargs[d.param] : "on"}
-           onChange={handleDnnKwargsChange}/>}
-      </FormGroup>);
-  };
-  if (!p.isVisible) {
-    return null;
-  }
-  return <>
-    <div className="d-flex flex-row align-items-center justify-content-between mb-2">
-      <DNNTraining {...trainProps}/>
-    </div>
-    <Collapse isOpen={dnnAdvancedIsOpen && !requestDnnTraining} timeout={200}
-      className="pb-2"
-      id="dnn-controls-dropdown">
-      <Form>
-        Optimizer parameters
-        <FormGroup row>
-          {optInputs.map(formatOptions)}
-        </FormGroup>
-        <FormGroup row>
-          {otherInputs.map(formatOptions)}
-        </FormGroup>
-      </Form>
-    </Collapse>
-    <div className="d-flex flex-row align-items-center justify-content-between mt-2 mb-1">
-      <DNNInference {...infProps}/>
-    </div>
-  </>;
-}
 
 function ClusteringControls(props) {
   let orderByClusterSize = props.orderByClusterSize;
@@ -718,6 +255,7 @@ function ClusteringControls(props) {
   let clusteringStrength = props.clusteringStrength;
   let setClusteringStrength = props.setClusteringStrength;
   let recluster = props.recluster;
+  let username = props.username;
   return (
     <div className="d-flex flex-row align-items-center">
       <div className="custom-switch custom-control mr-4">
@@ -742,7 +280,7 @@ function ClusteringControls(props) {
         color="primary"
         size="sm"
         className="ml-4"
-        onClick={toggleBulkTag}
+        onClick={props.toggleBulkTag}
         disabled={!!!(username)}
       >
         <FontAwesomeIcon
@@ -827,6 +365,8 @@ function QueryBar(p) {
             clusteringStrength={props.clusteringStrength}
             setClusteringStrength={props.setClusteringStrength}
             recluster={props.recluster}
+            toggleBulkTag={props.toggleBulkTag}
+            username={props.username}
           />
           {(queryResultData.type === "svm" || queryResultData.type === "ranking") && <div className="d-flex flex-row align-items-center">
             <label className="mb-0 mr-2 text-nowrap">Score range:</label>
@@ -1046,6 +586,7 @@ function ImageClusterViewer(props) {
   let setClusterIsOpen = props.setClusterIsOpen;
   let setPage = props.setPage;
   let page = props.page;
+  let queryResultSet = props.queryResultSet;
   return (<Container fluid>
     {(!!!(datasetInfo.isNotLoaded) && !isLoading && queryResultData.images.length == 0) &&
      <p className="text-center text-muted">No results match your query.</p>}
@@ -1445,6 +986,7 @@ const App = () => {
       setLabelModeCategories_([c]);
     }
   };
+  const [labelModeCategory, setLabelModeCategory] = useState(null);
 
 
   const [modelInfo, setModelInfo] = useState([]);
@@ -1460,6 +1002,12 @@ const App = () => {
       setModelInfo(res.models);
       setFetchModelInfo(false);
   }}, [fetchModelInfo]);
+
+   //
+   // BULK TAG MODAL
+   //
+   const [bulkTagModalIsOpen, setBulkTagModalIsOpen] = useState(false);
+   const toggleBulkTag = () => setBulkTagModalIsOpen(!bulkTagModalIsOpen);
 
   //
   // RENDERING
@@ -1483,6 +1031,10 @@ const App = () => {
     mode: mode,
     setMode: setMode,
     labelModeCategories: labelModeCategories,
+    labelModeCategory: labelModeCategory,
+    queryResultSet: queryResultSet,
+    bulkTagModalIsOpen: bulkTagModalIsOpen,
+    toggleBulkTag: toggleBulkTag,
   };
   let labelModeProps = {
     datasetInfo: datasetInfo,
@@ -1523,6 +1075,9 @@ const App = () => {
     clusteringStrength: clusteringStrength,
     setClusteringStrength: setClusteringStrength,
     recluster: recluster,
+    bulkTagModalIsOpen: bulkTagModalIsOpen,
+    toggleBulkTag: toggleBulkTag,
+    username: username,
   };
   let orderingModeProps = {
     datasetInfo: datasetInfo,
@@ -1600,6 +1155,7 @@ const App = () => {
           datasetInfo={datasetInfo}
           isLoading={isLoading}
           queryResultData={queryResultData}
+          queryResultSet={queryResultSet}
           clusters={clusters}
           clusteringStrength={clusteringStrength}
           setSelection={setSelection}
