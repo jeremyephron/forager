@@ -26,6 +26,7 @@ const dnns = [
 ];
 
 const endpoints = fromPairs(toPairs({
+  getModels: "get_models_v2",
   trainModel: "train_model_v2",
   modelStatus: "model_v2",
   modelInference: "model_inference_v2",
@@ -39,11 +40,11 @@ const TrainPanel = ({
   datasetName,
   datasetInfo,
   modelInfo,
+  setModelInfo,
   isVisible,
   username,
   disabled,
   categories,
-  updateModels,
 }) => {
   const [dnnAdvancedIsOpen, setDnnAdvancedIsOpen] = useState(false);
 
@@ -94,6 +95,7 @@ const TrainPanel = ({
   //
   const [requestDnnTraining, setRequestDnnTraining] = useState(false);
   const [trainingModelId, setTrainingModelId] = useState();
+  const [prevModelId, setPrevModelId] = useState();
   const [trainingEpoch, setTrainingEpoch] = useState();
   const [trainingTimeLeft, setTrainingTimeLeft] = useState();
   const [trainingTensorboardUrl, setTrainingTensorboardUrl] = useState();
@@ -121,13 +123,12 @@ const TrainPanel = ({
   let otherInputs = [
     {type: "number", displayName: "Batch size", param: "batch_size"},
     {type: "number", displayName: "Aux loss weight", param: "aux_weight"},
-    {type: "switch", displayName: "Restrict aux labels", param: "restrict_aux_labels"},
-    {type: "switch", displayName: "Freeze backbone", param: "freeze_backbone"},
+    {type: "checkbox", displayName: "Restrict aux labels", param: "restrict_aux_labels"},
+    {type: "checkbox", displayName: "Freeze backbone", param: "freeze_backbone"},
   ]
 
   const updateDnnKwargs = (param, value) => {
     setDnnKwargs(state => {
-      console.log(state);
       return {...state, [param]: value};
     });
   };
@@ -168,6 +169,8 @@ const TrainPanel = ({
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(body),
     }).then(r => r.json());
+
+    setPrevModelId(trainingModelId);
     setTrainingModelId(modelResponse.model_id);
   };
 
@@ -218,7 +221,7 @@ const TrainPanel = ({
   const inferOneEpoch = async () => {
     const url = new URL(`${endpoints.modelInference}/${datasetName}`);
     let body = {
-      model_id: trainingModelId,
+      model_id: prevModelId,
       cluster_id: clusterId,
       bucket: "foragerml",
       index_id: datasetInfo.index_id,
@@ -229,7 +232,7 @@ const TrainPanel = ({
       body: JSON.stringify(body),
     }).then(r => r.json());
 
-    setInferenceEpoch(trainingEpoch);
+    setInferenceEpoch(trainingEpoch - 1);
     setInferenceJobId(inferenceResponse.job_id);
   };
 
@@ -247,7 +250,7 @@ const TrainPanel = ({
       method: "GET",
     }).then(r => r.json());
     if (inferenceStatus.has_output) {
-      inferOneEpoch();
+      setInferenceJobId(null);
     }
     setInferenceTimeLeft(inferenceStatus.time_left);
   };
@@ -262,18 +265,17 @@ const TrainPanel = ({
   }, [inferenceJobId]);
 
   useEffect(() => {
-    if (trainingEpoch === 1) inferOneEpoch();
-  }, [trainingEpoch]);
+    if (prevModelId && !inferenceJobId && trainingEpoch > inferenceEpoch + 1) inferOneEpoch();
+  }, [prevModelId, inferenceJobId, trainingEpoch, inferenceEpoch]);
 
   useEffect(() => {
     if (!requestDnnTraining && inferenceJobId) stopInference();
   }, [inferenceJobId, requestDnnTraining]);
 
   //
-  // RESET + REFRESHLOGIC
+  // RESET LOGIC
+  // On stop training & once at initialization time
   //
-
-  // Stop training & once at initialization time
   useEffect(() => {
     if (!requestDnnTraining && !disabled) reset();
   }, [requestDnnTraining, disabled]);
@@ -281,11 +283,12 @@ const TrainPanel = ({
   const reset = () => {
     // Training status
     setTrainingModelId(null);
+    setPrevModelId(null);
     setTrainingEpoch(0);
     setTrainingTimeLeft(undefined);
 
     // Inference status
-    setInferenceEpoch(0);
+    setInferenceEpoch(-1);
     setInferenceTimeLeft(undefined);
 
     // Autofill model name
@@ -301,29 +304,48 @@ const TrainPanel = ({
     setDnnCheckpointModel(null);
   };
 
-  // Refresh model status every epoch
-  useEffect(updateModels, [trainingModelId, inferenceJobId]);
+  //
+  // MODEL INFO REFRESH
+  //
 
-  const timeLeftToString = (t) => (t && t >= 0) ? new Date(t * 1000).toISOString().substr(11, 8) : "estimating...";
+  const updateModels = async () => {
+    const url = new URL(`${endpoints.getModels}/${datasetName}`);
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {"Content-Type": "application/json"},
+    }).then(res => res.json());
+    console.log(res.models);
+    setModelInfo(res.models);
+  }
+
+  // On training finish
+  useEffect(() => {
+    if (trainingEpoch > 0) updateModels();
+  }, [trainingEpoch]);
+
+  // On inference finish & once at initialization time
+  useEffect(() => {
+    if (inferenceJobId === null) updateModels();
+  }, [inferenceJobId])
+
+  const timeLeftToString = (t) => (t && t > 0) ? new Date(Math.max(t, 0) * 1000).toISOString().substr(11, 8) : "estimating...";
 
   const formatOptions = (d, idx) => {
     return (
       <FormGroup className="mr-2 mb-0">
-        <Label className="mb-0">{d.displayName}</Label>
-        {d.type === "switch" ?
+        <Label className="mb-0" htmlFor={"formatInput" + d.param}>{d.displayName}</Label>
+        {(d.type === "switch" || d.type === "checkbox") ?
          <CustomInput
            id={"formatInput" + d.param}
            type={d.type}
            name={d.param}
-           checked={d.type === "switch" ? dnnKwargs[d.param] : false}
-           value={d.type !== "switch" ? dnnKwargs[d.param] : "on"}
+           checked={dnnKwargs[d.param]}
            onChange={handleDnnKwargsChange}/> :
          <Input
            id={"formatInput" + d.param}
            type={d.type}
            name={d.param}
-           checked={d.type === "checkbox" ? dnnKwargs[d.param] : false}
-           value={d.type !== "checkbox" ? dnnKwargs[d.param] : "on"}
+           value={dnnKwargs[d.param]}
            onChange={handleDnnKwargsChange}/>}
       </FormGroup>);
   };
@@ -336,11 +358,14 @@ const TrainPanel = ({
           <div className="d-flex flex-row align-items-center">
             <Spinner color="dark" className="my-1 mr-2" />
             {clusterReady ?
-              <span>
+              <div>
                 Training model <b>{modelName} </b> &mdash;{" "}
-                time left for training epoch {trainingEpoch}: {timeLeftToString(trainingTimeLeft)} <a href={trainingTensorboardUrl}>Tensorboard dashboard</a>
-                {inferenceJobId && <span> , time left for inference epoch {inferenceEpoch}: {timeLeftToString(inferenceTimeLeft)}</span>}
-              </span> :
+                time left for training epoch {trainingEpoch}: {timeLeftToString(trainingTimeLeft)}
+                {inferenceJobId && <span>, time left for inference epoch {inferenceEpoch}: {timeLeftToString(inferenceTimeLeft)}</span>}
+                <br />
+                TensorBoard:{" "}
+                {trainingTensorboardUrl ? <a href={trainingTensorboardUrl} target="_blank">link</a> : "loading..."}
+              </div> :
               <b>Starting cluster</b>
             }
           </div>
@@ -401,9 +426,36 @@ const TrainPanel = ({
           </Button>
         </>}
       </div>
+      {!requestDnnTraining && <div className="d-flex flex-row align-items-center mb-2">
+        <FeatureInput
+          id="checkpoint-model-bar"
+          placeholder="Checkpoint to train from (optional)"
+          features={modelInfo.filter(m => m.latest.has_checkpoint)}
+          selected={dnnCheckpointModel}
+          setSelected={setDnnCheckpointModel}
+        />
+        {dnnAugmentNegs && <>
+          <CategoryInput
+            id="dnn-augment-negs-include-bar"
+            className="ml-2"
+            placeholder="Tags to include in auto-negative pool"
+            categories={categories}
+            selected={dnnAugmentIncludeTags}
+            setSelected={setDnnAugmentIncludeTags}
+          />
+          <CategoryInput
+            id="dnn-augment-negs-exclude-bar"
+            className="ml-2"
+            placeholder="Tags to exclude from auto-negative pool"
+            categories={categories}
+            selected={dnnAugmentExcludeTags}
+            setSelected={setDnnAugmentExcludeTags}
+          />
+        </>}
+      </div>}
       {!requestDnnTraining && <a
         href="#"
-        className="text-small text-muted mb-1"
+        className="text-small text-muted"
         onClick={e => {
           setDnnAdvancedIsOpen(!dnnAdvancedIsOpen);
           e.preventDefault();
@@ -412,35 +464,8 @@ const TrainPanel = ({
         {dnnAdvancedIsOpen ? "Hide" : "Show"} advanced training options
       </a>}
       <Collapse isOpen={dnnAdvancedIsOpen && !requestDnnTraining} timeout={200}>
-        <div className="d-flex flex-row align-items-center my-1">
-          <FeatureInput
-            id="checkpoint-model-bar"
-            placeholder="Checkpoint to train from (optional)"
-            features={modelInfo.filter(m => m.latest.has_checkpoint)}
-            selected={dnnCheckpointModel}
-            setSelected={setDnnCheckpointModel}
-          />
-          {dnnAugmentNegs && <>
-            <CategoryInput
-              id="dnn-augment-negs-include-bar"
-              className="ml-2"
-              placeholder="Tags to include in auto-negative pool"
-              categories={categories}
-              selected={dnnAugmentIncludeTags}
-              setSelected={setDnnAugmentIncludeTags}
-            />
-            <CategoryInput
-              id="dnn-augment-negs-exclude-bar"
-              className="ml-2"
-              placeholder="Tags to exclude from auto-negative pool"
-              categories={categories}
-              selected={dnnAugmentExcludeTags}
-              setSelected={setDnnAugmentExcludeTags}
-            />
-          </>}
-        </div>
         <div>
-          <div className="d-flex flex-row my-1">
+          <div className="d-flex flex-row">
             {optInputs.map(formatOptions)}
           </div>
           <div className="d-flex flex-row my-1">

@@ -80,7 +80,6 @@ const modes = [
 const endpoints = fromPairs(toPairs({
   getDatasetInfo: "get_dataset_info_v2",
   getResults: "get_results_v2",
-  getModels: "get_models_v2",
   trainSvm: "train_svm_v2",
   queryImages: "query_images_v2",
   querySvm: "query_svm_v2",
@@ -690,20 +689,7 @@ const App = () => {
     setIsLoading(true);
   }
 
-  const updateModels = async () => {
-    const url = new URL(`${endpoints.getModels}/${datasetName}`);
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {"Content-Type": "application/json"},
-    }).then(res => res.json());
-    console.log(res.models);
-    setModelInfo(res.models);
-  }
-
-  useEffect(() => {
-    getDatasetInfo();
-    updateModels();
-  }, [datasetName]);
+  useEffect(getDatasetInfo, [datasetName]);
 
   const setCategories = (categories) => setDatasetInfo({...datasetInfo, categories});
 
@@ -951,45 +937,13 @@ const App = () => {
   // MODE
   //
   const [mode, setMode_] = useState("explore");
-  const [labelModeCategories, setLabelModeCategories_] = useState([]);
-
   const setMode = (mode) => {
     setMode_(mode);
     if (svmPopoverRepositionFunc.current) svmPopoverRepositionFunc.current();
   };
 
-
-  const setLabelModeCategories = (selection) => {
-    if (selection.length === 0) {
-      setLabelModeCategories_([]);
-    } else {
-      let c = selection[selection.length - 1];
-      if (c.customOption) {  // new
-        c = c.label;
-
-        let newCategories = {...datasetInfo.categories};
-        newCategories[c] = [];  // no custom values to start
-        setCategories(newCategories);
-      }
-      setLabelModeCategories_([c]);
-    }
-  };
-  const [labelModeCategory, setLabelModeCategory] = useState(null);
-
-
-  const [modelInfo, setModelInfo] = useState([]);
-  const [fetchModelInfo, setFetchModelInfo] = useState(true);
-
-  useEffect(async () => {
-    if (fetchModelInfo) {
-      const getModelsUrl = new URL(`${endpoints.getModels}/${datasetName}`);
-      const res = await fetch(getModelsUrl, {
-        method: "GET",
-        headers: {"Content-Type": "application/json"},
-      }).then(res => res.json());
-      setModelInfo(res.models);
-      setFetchModelInfo(false);
-  }}, [fetchModelInfo]);
+  const [labelModeCategory, setLabelModeCategory] = useState(null);  // label mode
+  const [modelInfo, setModelInfo] = useState([]);  // train mode
 
    //
    // BULK TAG MODAL
@@ -1018,25 +972,10 @@ const App = () => {
     setSubset: setSubset,
     mode: mode,
     setMode: setMode,
-    labelModeCategories: labelModeCategories,
     labelModeCategory: labelModeCategory,
     queryResultSet: queryResultSet,
     bulkTagModalIsOpen: bulkTagModalIsOpen,
     toggleBulkTag: toggleBulkTag,
-  };
-  let labelModeProps = {
-    datasetInfo: datasetInfo,
-    labelModeCategories: labelModeCategories,
-    setlabelModeCategories: setLabelModeCategories,
-    setCategories: setCategories,
-  };
-  let trainModeProps = {
-    datasetName: datasetName,
-    datasetInfo: datasetInfo,
-    modelInfo: modelInfo,
-    setFetchModelInfo: setFetchModelInfo,
-    setCategories: setCategories,
-    username: username,
   };
   let queryBarProps = {
     datasetInfo: datasetInfo,
@@ -1124,11 +1063,11 @@ const App = () => {
             datasetName={datasetName}
             datasetInfo={datasetInfo}
             modelInfo={modelInfo}
+            setModelInfo={setModelInfo}
             isVisible={mode === "train"}
             username={username}
             disabled={!!!(username)}
             categories={datasetInfo.categories}
-            updateModels={updateModels}
           />
           <ValidatePanel
             modelInfo={modelInfo}
