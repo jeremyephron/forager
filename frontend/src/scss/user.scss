@@ -290,6 +290,10 @@ $semi-transparent-white: rgba(255, 255, 255, 0.92);
   }
 }
 
+.page-item.disabled {
+  cursor: not-allowed;
+}
+
 // .panel {
 //   width: 40%;
 //   background: $primary-alt-darker;

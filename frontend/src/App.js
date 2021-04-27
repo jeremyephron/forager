@@ -19,7 +19,6 @@ import {
   Spinner,
   Collapse,
 } from "reactstrap";
-import { Typeahead } from "react-bootstrap-typeahead";
 import { ReactSVG } from "react-svg";
 import Slider, { Range } from "rc-slider";
 import Emoji from "react-emoji-render";
@@ -32,7 +31,6 @@ import ReactPaginate from "react-paginate";
 import fromPairs from "lodash/fromPairs";
 import size from "lodash/size";
 import some from "lodash/some";
-import sortBy from "lodash/sortBy";
 import toPairs from "lodash/toPairs";
 
 import "react-bootstrap-typeahead/css/Typeahead.css";
@@ -51,20 +49,14 @@ import {
   ModelRankingPopover,
   CaptionSearchPopover,
   BulkTagModal,
+  ValidatePanel,
+  LabelPanel
 } from "./components";
 
 var disjointSet = require("disjoint-set");
 var dateFormat = require("dateformat");
 
 const PAGE_SIZE = 1000;
-
-// TODO(mihirg): Combine with this same constant in other places
-const LABEL_VALUES = [
-  ["POSITIVE", "Positive"],
-  ["NEGATIVE", "Negative"],
-  ["HARD_NEGATIVE", "Hard Negative"],
-  ["UNSURE", "Unsure"],
-];
 
 const orderingModes = [
   {id: "random", label: "Random order"},
@@ -283,6 +275,8 @@ const App = () => {
   const [svmAugmentIncludeTags, setSvmAugmentIncludeTags] = useState([]);
   const [svmAugmentExcludeTags, setSvmAugmentExcludeTags] = useState([]);
   const [svmModel, setSvmModel] = useState(null);
+  const [svmIsTraining, setSvmIsTraining] = useState(false);
+  const [trainedSvmData, setTrainedSvmData] = useState(null);
 
   const [rankingModel, setRankingModel] = useState(null);
 
@@ -300,8 +294,6 @@ const App = () => {
     images: [],
     clustering: [],
   });
-  const [svmIsTraining, setSvmIsTraining] = useState(false);
-  const [trainedSvmData, setTrainedSvmData] = useState(null);
 
   const trainSvm = async () => {
     const url = new URL(`${endpoints.trainSvm}/${datasetName}`);
@@ -456,23 +448,7 @@ const App = () => {
   const [mode, setMode_] = useState(modes[0].id);
 
   // Label mode
-  const [labelModeCategories, setLabelModeCategories_] = useState([]);
-
-  const setLabelModeCategories = (selection) => {
-    if (selection.length === 0) {
-      setLabelModeCategories_([]);
-    } else {
-      let c = selection[selection.length - 1];
-      if (c.customOption) {  // new
-        c = c.label;
-
-        let newCategories = {...datasetInfo.categories};
-        newCategories[c] = [];  // no custom values to start
-        setCategories(newCategories);
-      }
-      setLabelModeCategories_([c]);
-    }
-  };
+  const [labelModeCategory, setLabelModeCategory] = useState(null);
 
   // Train mode
   // -> UI state
@@ -678,9 +654,6 @@ const App = () => {
   };
   useInterval(checkDnnInferenceStatus, dnnIsInferring ? 3000 : null)
 
-  // Validate mode
-  const [validateModel, setValidateModel] = useState(null);
-
   //
   // RENDERING
   //
@@ -738,7 +711,7 @@ const App = () => {
         username={username}
         setSubset={setSubset}
         mode={mode}
-        labelCategory={labelModeCategories[0]}
+        labelCategory={labelModeCategory}
       />
       <Navbar color="primary" className="text-light justify-content-between" dark expand="sm">
         <Container fluid>
@@ -792,37 +765,12 @@ const App = () => {
       </Popover>
       {mode !== "explore" && <div className="border-bottom py-2 mode-container">
         <Container fluid>
-          {mode === "label" && <div className="d-flex flex-row align-items-center justify-content-between">
-            <Typeahead
-              multiple
-              id="label-mode-bar"
-              className="typeahead-bar mr-2"
-              options={sortBy(Object.keys(datasetInfo.categories), c => c.toLowerCase())}
-              placeholder="Category to label"
-              selected={labelModeCategories}
-              onChange={setLabelModeCategories}
-              newSelectionPrefix="New category: "
-              allowNew={true}
-            />
-            <div className="text-nowrap">
-              {LABEL_VALUES.map(([value, name], i) =>
-                <>
-                  <kbd>{(i + 1) % 10}</kbd> <span className={`rbt-token ${value}`}>{name.toLowerCase()}</span>&nbsp;
-                </>)}
-              {labelModeCategories.length > 0 &&
-                (datasetInfo.categories[labelModeCategories[0]] || []).map((name, i) =>
-                <>
-                  <kbd>{(LABEL_VALUES.length + i + 1) % 10}</kbd> <span className="rbt-token CUSTOM">{name}</span>&nbsp;
-                </>)}
-              {labelModeCategories.length > 0 &&
-                <NewModeInput
-                  category={labelModeCategories[0]}
-                  categories={datasetInfo.categories}
-                  setCategories={setCategories}
-                />
-              }
-            </div>
-          </div>}
+          {mode === "label" && <LabelPanel
+            categories={datasetInfo.categories}
+            setCategories={setCategories}
+            category={labelModeCategory}
+            setCategory={setLabelModeCategory}
+          />}
           {mode === "train" && <>
             <div className="d-flex flex-row align-items-center justify-content-between">
               {requestDnnTraining ? <>
@@ -903,7 +851,43 @@ const App = () => {
               {dnnAdvancedIsOpen ? "Hide" : "Show"} advanced training options
             </a>}
             <Collapse isOpen={dnnAdvancedIsOpen && !requestDnnTraining} timeout={200}>
-              @FAIT ADD ADVANCED SETTINGS HERE
+              <div className="d-flex flex-row align-items-center justify-content-between my-1">
+                <FeatureInput
+                  id="checkpoint-model-bar"
+                  placeholder="Checkpoint to train from (optional)"
+                  features={modelInfo.filter(m => m.latest.has_checkpoint)}
+                  // selected={validateModel}
+                  // setSelected={setValidateModel}
+                />
+                {dnnAugmentNegs && <>
+                  <CategoryInput
+                    id="svm-augment-negs-include-bar"
+                    className="ml-2"
+                    placeholder="Tags to include in auto-negative pool"
+                    categories={datasetInfo.categories}
+                    setCategories={setCategories}
+                    selected={svmAugmentIncludeTags}
+                    disabled={svmIsTraining}
+                    setSelected={selected => {
+                      setSvmAugmentIncludeTags(selected);
+                      setTrainedSvmData(null);
+                    }}
+                  />
+                  <CategoryInput
+                    id="svm-augment-negs-exclude-bar"
+                    className="ml-2"
+                    placeholder="Tags to exclude from auto-negative pool"
+                    categories={datasetInfo.categories}
+                    setCategories={setCategories}
+                    selected={svmAugmentExcludeTags}
+                    disabled={svmIsTraining}
+                    setSelected={selected => {
+                      setSvmAugmentExcludeTags(selected);
+                      setTrainedSvmData(null);
+                    }}
+                  />
+                </>}
+              </div>
             </Collapse>
             {modelStatus.failed && <div className="d-flex flex-row align-items-center justify-content-between">
               <div className="my-12">
@@ -911,21 +895,9 @@ const App = () => {
               </div>
             </div>}
           </>}
-          {mode === "validate" && <div className="d-flex flex-row align-items-center justify-content-between">
-            <FeatureInput
-              id="validate-model-bar"
-              className="mr-2"
-              placeholder="Model to validate"
-              features={modelInfo.filter(m => m.with_output)}
-              selected={validateModel}
-              setSelected={setValidateModel}
-            />
-            <Button
-              color="light"
-              // onClick={startDnnInference}
-              disabled={!!!(validateModel)}
-            >Start validation</Button>
-          </div>}
+          {mode === "validate" && <ValidatePanel
+            modelInfo={modelInfo}
+          />}
         </Container>
       </div>}
       <div className="app">
@@ -1193,6 +1165,7 @@ const App = () => {
                 breakLinkClassName="page-link"
                 forcePage={page}
                 onPageChange={({ selected }) => setPage(selected)}
+                disabledClassName="disabled"
               />
             </div>
           }

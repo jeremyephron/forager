@@ -11,3 +11,5 @@ export { default as KnnPopover } from "./KnnPopover.js";
 export { default as CaptionSearchPopover } from "./CaptionSearchPopover.js";
 export { default as ModelRankingPopover } from "./ModelRankingPopover.js";
 export { default as BulkTagModal } from "./BulkTagModal.js";
+export { default as ValidatePanel } from "./ValidatePanel.js";
+export { default as LabelPanel } from "./LabelPanel.js";
