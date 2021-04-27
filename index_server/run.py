@@ -13,7 +13,6 @@ import operator
 import os
 import pickle
 from pathlib import Path
-import random
 import re
 import shutil
 import time
@@ -188,6 +187,7 @@ class LabeledIndex:
         sorted_results = []
         lowest_dist = np.min(dists)
         highest_dist = np.max(dists)
+        print(lowest_dist, highest_dist)
 
         for i, d in enumerate(dists):
             d = float(d)
@@ -1030,9 +1030,8 @@ async def start_bgsplit_job(request):
     ]
     if len(pos_paths) == 0:
         return resp.json(
-            {"reason":
-             "Can not train model with 0 positives."},
-            status=400)
+            {"reason": "Can not train model with 0 positives."}, status=400
+        )
 
     neg_paths = [
         os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
@@ -1047,9 +1046,8 @@ async def start_bgsplit_job(request):
 
     if len(neg_paths) == 0:
         return resp.json(
-            {"reason":
-             "Can not train model with 0 negatives."},
-            status=400)
+            {"reason": "Can not train model with 0 negatives."}, status=400
+        )
 
     unlabeled_paths = [
         os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
