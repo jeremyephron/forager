@@ -80,7 +80,7 @@ logger.addHandler(log_ch)
 
 
 class LabeledIndex:
-    LABELS_FILENAME = "labels.json"
+    LABELS_FILENAME = "labels_old.json"
     TRAIN_IDENTIFIERS_FILENAME = "identifiers.json"
     VAL_IDENTIFIERS_FILENAME = "val_identifiers.json"
 
@@ -464,7 +464,7 @@ class LabeledIndex:
         np.random.shuffle(inds)
         self.labels = [paths[i] for i in inds]
         self.train_identifiers = {identifiers[i]: new_i for new_i, i in enumerate(inds)}
-        self.val_identifiers = {}  # TODO(mihirg): fix this to properly take val paths
+        self.val_identifiers = {}  # TODO(mihirg): fix this to include val set
         iterable = (
             {"id": i, "image": path, "augmentations": {}}
             for i, path in enumerate(self.labels)
