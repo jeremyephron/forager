@@ -342,7 +342,9 @@ class LabeledIndex:
         local_flat_index = self.get_local_flat_index(model)
         assert self.train_identifiers and self.val_identifiers
         inds = [
-            self.train_identifiers.get(id) or self.val_identifiers[id]
+            self.train_identifiers[id]
+            if id in self.train_identifiers
+            else self.val_identifiers[id]
             for id in identifiers
         ]
         return local_flat_index.index[inds]
@@ -352,7 +354,9 @@ class LabeledIndex:
     ) -> List[List[float]]:
         assert self.train_identifiers and self.val_identifiers
         inds = [
-            self.train_identifiers.get(id) or self.val_identifiers[id]
+            self.train_identifiers[id]
+            if id in self.train_identifiers
+            else self.val_identifiers[id]
             for id in identifiers
         ]
         return self._cluster(inds, model)
