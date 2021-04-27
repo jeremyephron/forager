@@ -345,7 +345,14 @@ def create_model(request, dataset_name, dataset=None):
     m = DNNModel(
         dataset=dataset,
         name=model_name,
-        model_id=response_data['model_id'])
+        model_id=response_data["model_id"],
+        category_spec={
+            "pos_tags": payload["pos_tags"],
+            "neg_tags": payload["neg_tags"],
+            "augment_negs_include": payload.get("include", []),
+            "augment_negs_exclude": payload.get("exclude", []),
+        }
+    )
     m.save()
 
     return JsonResponse({
@@ -1291,6 +1298,10 @@ def tag_sets_to_category_list_v2(*tagsets):
     return list(categories)
 
 
+def serialize_tag_set_for_client_v2(ts):
+    return [{"category": t.category, "value": t.value} for t in sorted(list(ts))]
+
+
 def get_tags_from_annotations_v2(annotations):
     # [image][category][#]
     anns = filter_most_recent_anns(nest_anns(annotations, nest_lf=False))
@@ -1474,7 +1485,6 @@ def generate_text_embedding_v2(request):
 def query_knn_v2(request, dataset_name):
     payload = json.loads(request.body)
     index_id = payload["index_id"]
-    num_results = int(payload.get("num", 1000))
     embeddings = payload["embeddings"]
     use_full_image = bool(payload.get("use_full_image", True))
     use_dot_product = bool(payload.get("use_dot_product", False))
@@ -1574,7 +1584,6 @@ def query_svm_v2(request, dataset_name):
     svm_vector = payload["svm_vector"]
     score_min = float(payload.get("score_min", 0.0))
     score_max = float(payload.get("score_max", 1.0))
-    num_results = int(payload.get("num", 1000))
     model = payload.get("model", "imagenet")
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
@@ -1610,7 +1619,6 @@ def query_ranking_v2(request, dataset_name):
     index_id = payload["index_id"]
     score_min = float(payload.get("score_min", 0.0))
     score_max = float(payload.get("score_max", 1.0))
-    num_results = int(payload.get("num", 1000))
     model = payload.get("model", "imagenet")
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
@@ -1723,11 +1731,18 @@ def get_models_v2(request, dataset_name):
 
 
 def model_info(model):
+    pos_tags = serialize_tag_set_for_client_v2(model.category_spec.get("pos_tags", []))
+    neg_tags = serialize_tag_set_for_client_v2(model.category_spec.get("neg_tags", []))
+    augment_negs_include = serialize_tag_set_for_client_v2(
+        model.category_spec.get("augment_negs_include", [])
+    )
     return {
         "model_id": model.model_id,
         "timestamp": model.last_updated,
         "has_checkpoint": model.checkpoint_path is not None,
         "has_output": model.output_directory is not None,
+        "pos_tags": pos_tags,
+        "neg_tags": neg_tags + augment_negs_include,
     } if model is not None else None
 
 
@@ -1747,7 +1762,7 @@ def get_annotations_v2(request):
     # ).distinct("dataset_item", "label_category")
     tags_by_pk = get_tags_from_annotations_v2(annotations)
     annotations_by_pk = {
-        pk: [{"category": t.category, "value": t.value} for t in sorted(tags)]
+        pk: serialize_tag_set_for_client_v2(tags)
         for pk, tags in tags_by_pk.items()
     }
     return JsonResponse(annotations_by_pk)
