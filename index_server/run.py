@@ -19,7 +19,6 @@ import time
 import uuid
 
 import aiohttp
-from bidict import bidict
 from dataclasses_json import dataclass_json
 import fastcluster
 from gcloud.aio.storage import Storage
@@ -82,7 +81,8 @@ logger.addHandler(log_ch)
 
 class LabeledIndex:
     LABELS_FILENAME = "labels.json"
-    IDENTIFIERS_FILENAME = "identifiers.json"
+    TRAIN_IDENTIFIERS_FILENAME = "identifiers.json"
+    VAL_IDENTIFIERS_FILENAME = "val_identifiers.json"
 
     @dataclass_json
     @dataclass
@@ -108,10 +108,10 @@ class LabeledIndex:
         self.ready = asyncio.Event()
 
         # Will be filled by each individual constructor
-        # TODO(mihirg): Deprecate self.identifiers in favor of self.labels
-        # TODO(mihirg): Consider using primary key for thumbnail filenames
+        # TODO(mihirg): Use primary key instead of identifiers or labels
         self.labels: List[str] = []
-        self.identifiers: Optional[bidict[str, int]] = None
+        self.train_identifiers: Optional[Dict[str, int]] = None
+        self.val_identifiers: Optional[Dict[str, int]] = None
         self.indexes: Dict[IndexType, InteractiveIndex] = {}
         self.local_flat_indexes: Dict[str, LocalFlatIndex] = {}
 
@@ -332,23 +332,29 @@ class LabeledIndex:
             result.label = self.labels[result.id]
         return results
 
-    def get_identifier_set(self) -> Set[str]:
-        assert self.identifiers
-        return set(self.identifiers.keys())
+    def get_train_identifier_set(self) -> Set[str]:
+        assert self.train_identifiers
+        return set(self.train_identifiers.keys())
 
     def get_embeddings(
         self, identifiers: List[str], model: str = config.DEFAULT_QUERY_MODEL
     ) -> np.ndarray:
         local_flat_index = self.get_local_flat_index(model)
-        assert self.identifiers
-        inds = [self.identifiers[id] for id in identifiers]
+        assert self.train_identifiers and self.val_identifiers
+        inds = [
+            self.train_identifiers.get(id) or self.val_identifiers[id]
+            for id in identifiers
+        ]
         return local_flat_index.index[inds]
 
     def cluster_identifiers(
         self, identifiers: List[str], model: str = config.DEFAULT_QUERY_MODEL
     ) -> List[List[float]]:
-        assert self.identifiers
-        inds = [self.identifiers[id] for id in identifiers]
+        assert self.train_identifiers and self.val_identifiers
+        inds = [
+            self.train_identifiers.get(id) or self.val_identifiers[id]
+            for id in identifiers
+        ]
         return self._cluster(inds, model)
 
     def cluster_results(
@@ -434,6 +440,9 @@ class LabeledIndex:
             shutil.rmtree(self.index_dir)
 
     # INDEX CREATION
+    # Note(mihirg): This is very broken, since we have not been keeping it up to date
+    # with changes to the data model. Don't run this without fixing, and probably
+    # talking to me.
 
     @classmethod
     async def start_building(
@@ -454,9 +463,7 @@ class LabeledIndex:
         inds = np.arange(len(paths))
         np.random.shuffle(inds)
         self.labels = [paths[i] for i in inds]
-        self.identifiers = bidict(
-            {identifiers[i]: new_i for new_i, i in enumerate(inds)}
-        )
+        self.train_identifiers = {identifiers[i]: new_i for new_i, i in enumerate(inds)}
         iterable = (
             {"id": i, "image": path, "augmentations": {}}
             for i, path in enumerate(self.labels)
@@ -679,7 +686,7 @@ class LabeledIndex:
         assert self.cluster  # just to silence type warnings
         iterable = (
             {"image": label, "identifier": identifier}
-            for label, identifier in zip(self.labels, self.identifiers.keys())
+            for label, identifier in zip(self.labels, self.train_identifiers.keys())
         )
         nproc = self.cluster.output["resizer_nproc"]
         n_mappers = int(
@@ -760,8 +767,8 @@ class LabeledIndex:
         # Dump labels, identifiers, full-image embeddings, and distance matrix
         json.dump(self.labels, (self.index_dir / self.LABELS_FILENAME).open("w"))
         json.dump(
-            dict(self.identifiers),
-            (self.index_dir / self.IDENTIFIERS_FILENAME).open("w"),
+            dict(self.train_identifiers),
+            (self.index_dir / self.TRAIN_IDENTIFIERS_FILENAME).open("w"),
         )
         self.local_flat_index.save(self.index_dir)
 
@@ -822,8 +829,11 @@ class LabeledIndex:
         # Initialize indexes
         self.labels = json.load((self.index_dir / self.LABELS_FILENAME).open())
         try:
-            self.identifiers = bidict(
-                json.load((self.index_dir / self.IDENTIFIERS_FILENAME).open())
+            self.train_identifiers = json.load(
+                (self.index_dir / self.TRAIN_IDENTIFIERS_FILENAME).open()
+            )
+            self.val_identifiers = json.load(
+                (self.index_dir / self.VAL_IDENTIFIERS_FILENAME).open()
             )
             for model, dim in config.EMBEDDING_DIMS_BY_MODEL.items():
                 self.local_flat_indexes[model] = LocalFlatIndex.load(
@@ -1024,7 +1034,7 @@ async def start_bgsplit_job(request):
     # Get image paths from index
     gcs_root_path = os.path.join(config.GCS_PUBLIC_ROOT_URL, bucket)
     pos_paths = [
-        os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
+        os.path.join(gcs_root_path, index.labels[index.train_identifiers[i]])
         for i in pos_identifiers
     ]
     if len(pos_paths) == 0:
@@ -1033,12 +1043,12 @@ async def start_bgsplit_job(request):
         )
 
     neg_paths = [
-        os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
+        os.path.join(gcs_root_path, index.labels[index.train_identifiers[i]])
         for i in neg_identifiers
     ]
 
     unused_identifiers = (
-        index.get_identifier_set()
+        index.get_train_identifier_set()
         .difference(set(pos_identifiers))
         .difference(set(neg_identifiers))
     )
@@ -1049,7 +1059,7 @@ async def start_bgsplit_job(request):
         )
 
     unlabeled_paths = [
-        os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
+        os.path.join(gcs_root_path, index.labels[index.train_identifiers[i]])
         for i in list(unused_identifiers)
     ]
 
@@ -1064,9 +1074,7 @@ async def start_bgsplit_job(request):
         assert alt == "imagenet"
 
     if not os.path.exists(aux_labels_local_path):
-        all_paths = [
-            index.labels[index.identifiers[i]] for i in index.get_identifier_set()
-        ]
+        all_paths = index.labels
         nproc = cluster.output["mapper_nproc"]
         n_mappers = int(
             cluster.output["num_mappers"] * config.MAPPER_REQUEST_MULTIPLE(nproc)
@@ -1192,7 +1200,7 @@ async def start_bgsplit_inference_job(request):
 
     # Get image paths from index
     gcs_root_path = os.path.join(config.GCS_PUBLIC_ROOT_URL, bucket)
-    all_paths = [index.labels[index.identifiers[i]] for i in index.get_identifier_set()]
+    all_paths = index.labels
 
     http_session = utils.create_unlimited_aiohttp_session()
     job_id = str(uuid.uuid4())
