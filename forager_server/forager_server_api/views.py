@@ -1694,8 +1694,8 @@ def get_dataset_info_v2(request, dataset_name):
         {
             "categories": categories_and_custom_values,
             "index_id": dataset.index_id,
-            "num_images": dataset.datasetitem_set.filter(google=False).count(),
-            "num_google": dataset.datasetitem_set.filter(google=True).count(),
+            "num_train": dataset.datasetitem_set.filter(google=False, is_val=False).count(),
+            "num_val": dataset.datasetitem_set.filter(google=False, is_val=True).count(),
         }
     )
 

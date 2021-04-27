@@ -228,7 +228,8 @@ function MainHeader(props) {
       fade={false}
     >
       <PopoverBody>
-        <div><b>Dataset size:</b> {datasetInfo.num_images} image{datasetInfo.num_images === 1 ? "" : "s"}</div>
+        <div><b>Training set:</b> {datasetInfo.num_train} image{datasetInfo.num_train === 1 ? "" : "s"}</div>
+        <div><b>Validation set:</b> {datasetInfo.num_val} image{datasetInfo.num_val === 1 ? "" : "s"}</div>
         <div><b>Index status:</b> {datasetInfo.index_id ? "Created" : "Not created"}</div>
       </PopoverBody>
     </Popover>
@@ -676,8 +677,8 @@ const App = () => {
     isNotLoaded: true,
     categories: [],
     index_id: null,
-    num_images: 0,
-    num_google: 0,
+    num_train: 0,
+    num_val: 0,
   });
 
   const getDatasetInfo = async () => {
