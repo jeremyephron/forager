@@ -671,7 +671,7 @@ const App = () => {
   const [clusterIsOpen, setClusterIsOpen] = useState(false);
 
   // Load dataset info on initial page load
-  const [datasetName, setDatasetName] = useState("waymo_train_central");
+  const [datasetName, setDatasetName] = useState("waymo");
   const [datasetInfo, setDatasetInfo] = useState({
     isNotLoaded: true,
     categories: [],
