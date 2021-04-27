@@ -1,9 +1,11 @@
+from django.contrib.postgres.fields import JSONField
 from django.db import models
 
 
 class Dataset(models.Model):
     name = models.SlugField(unique=True)
     directory = models.CharField(max_length=600)
+    val_directory = models.CharField(max_length=600, blank=True)
     index_id = models.CharField(max_length=300, blank=True)
 
 
@@ -12,6 +14,7 @@ class DatasetItem(models.Model):
     identifier = models.CharField(max_length=300)
     path = models.CharField(max_length=600)
     google = models.BooleanField(default=False)
+    is_val = models.BooleanField(default=False)
 
 
 class Annotation(models.Model):
@@ -36,3 +39,4 @@ class DNNModel(models.Model):
     checkpoint_path = models.TextField(null=True)
     output_directory = models.TextField(null=True)
     last_updated = models.DateTimeField(auto_now=True)
+    category_spec = JSONField(default=dict)
