@@ -150,9 +150,6 @@ class LabeledIndex:
         ranking = np.argsort(local_flat_index.scores)[::-1]
         lowest_score = np.min(local_flat_index.scores)
         highest_score = np.max(local_flat_index.scores)
-        print(lowest_score, highest_score)
-        print(local_flat_index.scores)
-        print(local_flat_index.index)
 
         sorted_results = []
         for i in ranking:
