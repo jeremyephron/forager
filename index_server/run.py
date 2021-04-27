@@ -1034,6 +1034,11 @@ async def start_bgsplit_job(request):
     ]
     assert len(neg_paths) > 0
 
+    unused_identifiers = (
+        index.get_identifier_set()
+        .difference(set(pos_identifiers))
+        .difference(set(neg_identifiers))
+    )
     unlabeled_paths = [
         os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
         for i in list(unused_identifiers)
