@@ -2,19 +2,16 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from enum import IntEnum
 import numpy as np
 import os
 from pathlib import Path
 import time
-import uuid
 import logging
 import aiohttp
-import json
 
-from typing import Any, Callable, Dict, List, Optional, Set
-from interactive_index.config import auto_config
+from typing import Any, Callable, Dict, List, Optional
 from knn import utils
+from knn.clusters import TerraformModule
 from knn.utils import JSONType
 from knn.jobs import MapReduceJob, MapperSpec
 from knn.reducers import Reducer
@@ -213,7 +210,7 @@ class BGSplitInferenceJob:
         bucket: str,
         model_id: str,
         model_checkpoint_path: str,
-        cluster: Cluster,
+        cluster: TerraformModule,
         session: aiohttp.ClientSession,
     ):
         self.paths = paths
@@ -240,7 +237,7 @@ class BGSplitInferenceJob:
         self._task: Optional[asyncio.Task] = None
         self._time_left: Optional[float] = None
         self.result: Optional[BGSplitInferenceReducer.Result] = None
-        self.mapper_job: Optiona[MapperJob] = None
+        self.mapper_job: Optional[MapReduceJob] = None
 
     def configure_args(self):
         self.job_args = dict(

@@ -293,6 +293,20 @@ def create_model(request, dataset_name, dataset=None):
         elif any(t in neg_tags for t in tags):
             neg_dataset_item_pks.append(pk)
 
+    # Augment with randomly sampled negatives if requested
+    num_extra_negs = settings.BGSPLIT_NUM_NEGS_MULTIPLIER * len(
+        pos_dataset_item_pks
+    ) - len(neg_dataset_item_pks)
+    if augment_negs and num_extra_negs > 0:
+        # Uses "include" and "exclude" category sets from request
+        all_eligible_pks = filtered_images_v2(
+            request, dataset, exclude_pks=pos_dataset_item_pks + neg_dataset_item_pks
+        )
+        sampled_pks = random.sample(
+            all_eligible_pks, min(len(all_eligible_pks), num_extra_negs)
+        )
+        neg_dataset_item_pks.extend(sampled_pks)
+
     pos_dataset_item_internal_identifiers = list(
         DatasetItem.objects.filter(pk__in=pos_dataset_item_pks).values_list(
             "identifier", flat=True

@@ -109,7 +109,7 @@ class LabeledIndex:
         self.ready = asyncio.Event()
 
         # Will be filled by each individual constructor
-        # TODO(mihirg): Deprecate self.identifiers in favor of self.lables
+        # TODO(mihirg): Deprecate self.identifiers in favor of self.labels
         # TODO(mihirg): Consider using primary key for thumbnail filenames
         self.labels: List[str] = []
         self.identifiers: Optional[bidict[str, int]] = None
@@ -1005,7 +1005,6 @@ async def start_bgsplit_job(request):
     # just filtering out for now.
     pos_identifiers = list(filter(bool, request.json["pos_identifiers"]))
     neg_identifiers = list(filter(bool, request.json["neg_identifiers"]))
-    augment_negs = bool(request.json["augment_negs"])
     bucket = request.json["bucket"]
     model_name = request.json["model_name"]
     cluster_id = request.json["cluster_id"]
@@ -1034,26 +1033,6 @@ async def start_bgsplit_job(request):
         for i in neg_identifiers
     ]
     assert len(neg_paths) > 0
-
-    # Augment with randomly sampled negatives if requested
-    extra_neg_identifiers = []
-    num_extra_neg_vectors = config.BGSPLIT_NUM_NEGS_MULTIPLIER * len(pos_paths) - len(
-        neg_paths
-    )
-    unused_identifiers = (
-        index.get_identifier_set()
-        .difference(pos_identifiers)
-        .difference(neg_identifiers)
-    )
-    if augment_negs and num_extra_neg_vectors > 0:
-        extra_neg_identifiers = random.sample(
-            unused_identifiers, min(len(unused_identifiers), num_extra_neg_vectors)
-        )
-    extra_neg_paths = [
-        os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
-        for i in extra_neg_identifiers
-    ]
-    assert len(neg_paths) + len(extra_neg_paths) > 0
 
     unlabeled_paths = [
         os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
@@ -1107,7 +1086,7 @@ async def start_bgsplit_job(request):
                 break
             await asyncio.sleep(5)
         _, predictions = mapper_job.result
-        with open(aux_labels_path, "wb") as f:
+        with open(aux_labels_local_path, "wb") as f:
             pickle.dump(predictions, f)
 
     aux_labels_gcs_path = config.AUX_GCS_TMPL.format(index_id, alt)
@@ -1129,7 +1108,7 @@ async def start_bgsplit_job(request):
 
     training_job = BGSplitTrainingJob(
         pos_paths=pos_paths,
-        neg_paths=neg_paths + extra_neg_paths,
+        neg_paths=neg_paths,
         unlabeled_paths=unlabeled_paths,
         aux_labels_path=aux_labels_gcs_path,
         model_name=model_name,
@@ -1143,8 +1122,7 @@ async def start_bgsplit_job(request):
     training_job.start()
     logger.info(
         f"Train ({training_job.model_name}): started with "
-        f"{len(pos_paths)} positives, {len(neg_paths)} negatives, "
-        f"{len(extra_neg_paths)} auto negatives, and "
+        f"{len(pos_paths)} positives, {len(neg_paths)} negatives, and "
         f"{len(unlabeled_paths)} unlabeled examples."
     )
 
