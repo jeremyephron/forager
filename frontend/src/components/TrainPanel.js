@@ -53,6 +53,8 @@ const TrainPanel = ({
   const [dnnAugmentNegs, setDnnAugmentNegs] = useState();
   const [dnnPosTags, setDnnPosTags] = useState([]);
   const [dnnNegTags, setDnnNegTags] = useState([]);
+  const [dnnValPosTags, setDnnValPosTags] = useState([]);
+  const [dnnValNegTags, setDnnValNegTags] = useState([]);
 
   const [dnnCheckpointModel, setDnnCheckpointModel] = useState();
   const [dnnAugmentIncludeTags, setDnnAugmentIncludeTags] = useState([]);
@@ -155,12 +157,14 @@ const TrainPanel = ({
       index_id: datasetInfo.index_id,
       pos_tags: dnnPosTags.map(t => `${t.category}:${t.value}`),
       neg_tags: dnnNegTags.map(t => `${t.category}:${t.value}`),
+      val_pos_tags: dnnValPosTags.map(t => `${t.category}:${t.value}`),
+      val_neg_tags: dnnValNegTags.map(t => `${t.category}:${t.value}`),
       augment_negs: dnnAugmentNegs,
       include: dnnAugmentIncludeTags.map(t => `${t.category}:${t.value}`),
       exclude: dnnAugmentExcludeTags.map(t => `${t.category}:${t.value}`),
       model_kwargs: dnnKwargs,
     }
-    if (trainingModelId) {
+    if (prevModelId) {
       body.resume = prevModelId;
     } else if (dnnCheckpointModel) {
       body.resume = dnnCheckpointModel.latest.model_id;
@@ -182,9 +186,13 @@ const TrainPanel = ({
     }).then(r => r.json());
     if (modelStatus.has_model && dnnIsTraining) {
       // Start next epoch
-      setTrainingEpoch(trainingEpoch + 1);
       setPrevModelId(trainingModelId);
       setTrainingModelId(null);
+      if (trainingEpoch + 1 >= dnnKwargs["max_epochs"]) {
+        setRequestDnnTraining(false);
+      } else {
+        setTrainingEpoch(trainingEpoch + 1);
+      }
       setDnnIsTraining(false);
     } else if (modelStatus.failed) {
       console.error("Model training failed", modelStatus.failure_reason);
@@ -311,6 +319,8 @@ const TrainPanel = ({
     setDnnAugmentNegs(true);
     setDnnPosTags([]);
     setDnnNegTags([]);
+    setDnnValPosTags([]);
+    setDnnValNegTags([]);
     setDnnCheckpointModel(null);
   };
 
@@ -473,8 +483,27 @@ const TrainPanel = ({
       >
         {dnnAdvancedIsOpen ? "Hide" : "Show"} advanced training options
       </a>}
+      {!requestDnnTraining &&
       <Collapse isOpen={dnnAdvancedIsOpen && !requestDnnTraining} timeout={200}>
         <div>
+          <CategoryInput
+            id="dnn-val-pos-bar"
+            className="mr-2"
+            placeholder="Validation positive example tags"
+            disabled={requestDnnTraining}
+            categories={categories}
+            selected={dnnValPosTags}
+            setSelected={setDnnValPosTags}
+          />
+          <CategoryInput
+            id="dnn-val-neg-bar"
+            className="mr-2"
+            placeholder="Validation negative example tags"
+            disabled={requestDnnTraining}
+            categories={categories}
+            selected={dnnValNegTags}
+            setSelected={setDnnValNegTags}
+          />
           <div className="d-flex flex-row">
             {optInputs.map(formatOptions)}
           </div>
@@ -482,7 +511,7 @@ const TrainPanel = ({
             {otherInputs.map(formatOptions)}
           </div>
         </div>
-      </Collapse>
+      </Collapse>}
     </>
   );
 };

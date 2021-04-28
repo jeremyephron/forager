@@ -252,7 +252,7 @@ class TrainingLoop():
             main_preds += list(main_pred.argmax(dim=1)[:].cpu().numpy())
             aux_preds += list(aux_pred.argmax(dim=1)[:].cpu().numpy())
             main_gts += list(main_labels[:].cpu().numpy())
-            aux_gts += list(main_labels[:].cpu().numpy())
+            aux_gts += list(aux_labels[:].cpu().numpy())
             batch_end = time.perf_counter()
             self.val_batch_time += (batch_end - batch_start)
             self.global_val_batch_idx += 1
@@ -261,10 +261,10 @@ class TrainingLoop():
             loss_value /= (len(dataloader) + 1e-10)
             main_prec, main_recall, main_f1, _ = \
                 sklearn.metrics.precision_recall_fscore_support(
-                    main_gts, main_preds)
+                    main_gts, main_preds, average='binary')
             aux_prec, aux_recall, aux_f1, _ = \
                 sklearn.metrics.precision_recall_fscore_support(
-                    aux_gts, aux_preds)
+                    aux_gts, aux_preds, average='micro')
         else:
             loss_value = 0
             main_prec = -1

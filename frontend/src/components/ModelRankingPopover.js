@@ -12,7 +12,7 @@ const ModelRankingPopover = ({ canBeOpen, features, rankingModel, setRankingMode
   return (
     <Popover
       placement="bottom"
-      isOpen={true}
+      isOpen={isOpen}
       target="ordering-mode"
       trigger="hover"
       toggle={() => setIsOpen(!isOpen)}

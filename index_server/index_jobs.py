@@ -9,6 +9,7 @@ from pathlib import Path
 import time
 import uuid
 import logging
+import hashlib
 
 from typing import Any, Callable, Dict, List, Optional, Set
 
@@ -139,6 +140,9 @@ class IndexType(IntEnum):
 class Trainer:
     def __init__(self, url: str):
         self.url = url
+        hash_object = hashlib.sha256(url.encode('utf-8'))
+        hex_dig = hash_object.hexdigest()
+        self.trainer_id = str(hex_dig)
         self.lock = asyncio.Lock()
 
     async def __aenter__(self) -> str:  # returns endpoint
@@ -147,6 +151,9 @@ class Trainer:
 
     async def __aexit__(self, type, value, traceback):
         self.lock.release()
+
+    def locked(self) -> bool:
+        return self.lock.locked()
 
 
 class TrainingJob:

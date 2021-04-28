@@ -157,6 +157,7 @@ class LabeledIndex:
             i = int(i)
             s = float(local_flat_index.scores[i])
             s = (s - lowest_score) / (highest_score - lowest_score)  # normalize
+            s = 1.0 - s # invert, so that it's a distance
             if min_s <= s <= max_s:
                 sorted_results.append(LabeledIndex.QueryResult(i, s))
 
@@ -240,6 +241,8 @@ class LabeledIndex:
             for i, d in zip(ids[0], dists[0]):
                 i, d = int(i), float(d)  # cast numpy types
                 d = (d - lowest_dist) / (highest_dist - lowest_dist)  # normalize
+                if svm:
+                    d = 1.0 - d # invert
                 if i >= 0 and min_d <= d <= max_d:
                     sorted_results.append(LabeledIndex.QueryResult(i, d))
         else:
@@ -937,7 +940,8 @@ current_clusters: CleanupDict[str, TerraformModule] = CleanupDict(
 @app.route("/start_cluster", methods=["POST"])
 async def start_cluster(request):
     cluster = TerraformModule(
-        config.CLUSTER_TERRAFORM_MODULE_PATH, copy=not config.CLUSTER_REUSE_EXISTING
+        config.CLUSTER_TERRAFORM_MODULE_PATH,
+        copy=not config.CLUSTER_REUSE_EXISTING
     )
     app.add_task(_start_cluster(cluster))
     cluster_id = cluster.id
@@ -1037,6 +1041,8 @@ async def start_bgsplit_job(request):
     # just filtering out for now.
     pos_identifiers = list(filter(bool, request.json["pos_identifiers"]))
     neg_identifiers = list(filter(bool, request.json["neg_identifiers"]))
+    val_pos_identifiers = list(filter(bool, request.json["val_pos_identifiers"]))
+    val_neg_identifiers = list(filter(bool, request.json["val_neg_identifiers"]))
     bucket = request.json["bucket"]
     model_name = request.json["model_name"]
     cluster_id = request.json["cluster_id"]
@@ -1044,6 +1050,7 @@ async def start_bgsplit_job(request):
     model_kwargs = request.json["model_kwargs"]
     aux_labels_type = model_kwargs["aux_labels_type"]
     resume_from = request.json["resume_from"]
+    pref_worker_id = request.json.get("preferred_worker_id", None)
 
     # Get cluster
     cluster = current_clusters[cluster_id]
@@ -1070,10 +1077,22 @@ async def start_bgsplit_job(request):
         for i in neg_identifiers
     ]
 
+    val_pos_paths = [
+        os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
+        for i in val_pos_identifiers
+    ]
+
+    val_neg_paths = [
+        os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
+        for i in val_neg_identifiers
+    ]
+
     unused_identifiers = (
         set(index.get_train_identifiers())
         .difference(set(pos_identifiers))
         .difference(set(neg_identifiers))
+        .difference(set(val_pos_identifiers))
+        .difference(set(val_neg_identifiers))
     )
 
     if len(neg_paths) == 0:
@@ -1116,16 +1135,26 @@ async def start_bgsplit_job(request):
     trainers = [Trainer(url) for url in cluster.output["bgsplit_trainer_urls"]]
     model_id = str(uuid.uuid4())
 
+    preferred_trainer = None
+    if pref_worker_id:
+        for trainer in trainers:
+            if trainer.trainer_id == pref_worker_id:
+                preferred_trainer = trainer
+                break
+
     training_job = BGSplitTrainingJob(
         pos_paths=pos_paths,
         neg_paths=neg_paths,
+        val_pos_paths=val_pos_paths,
+        val_neg_paths=val_neg_paths,
         unlabeled_paths=unlabeled_paths,
         user_model_kwargs=model_kwargs,
         aux_labels_path=aux_labels_gcs_path,
         model_name=model_name,
         model_id=model_id,
         resume_from=resume_from,
-        trainer=trainers[0],
+        trainers=trainers,
+        preferred_trainer=preferred_trainer,
         cluster=cluster,
         session=http_session,
     )
@@ -1582,8 +1611,11 @@ async def query_svm(request):
 async def perform_clustering(request):
     identifiers = request.json["identifiers"]
     index_id = request.json["index_id"]
+    args = dict(identifiers=identifiers)
+    if "model" in request.json:
+        args["model"] = request.json["model"]
     index = await get_index(index_id)
-    clustering = index.cluster_identifiers(identifiers)
+    clustering = index.cluster_identifiers(**args)
     return resp.json({"clustering": clustering})
 
 
