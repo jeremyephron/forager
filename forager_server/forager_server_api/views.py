@@ -1774,7 +1774,9 @@ def query_active_validation_v2(request, dataset_name):
     payload = json.loads(request.body)
     model_id = payload["model"]
     index_id = payload["index_id"]
-    current_f1 = payload.get("current_f1", 0.5)
+    current_f1 = payload.get("current_f1")
+    if current_f1 is None:
+        current_f1 = 0.5
 
     pos_dataset_item_pks, neg_dataset_item_pks = get_val_examples_v2(dataset, model_id)
 
@@ -1825,37 +1827,21 @@ def query_active_validation_v2(request, dataset_name):
 @api_view(["POST"])
 def add_val_annotations_v2(request):
     payload = json.loads(request.body)
-    image_pks = payload["identifiers"]
+    annotations = payload["annotations"]
     user = payload["user"]
     model = payload["model"]
 
-    is_other_negative_list = payload.get("is_other_negative", [False] * len(image_pks))
-    value_strs = [
-        "NEGATIVE" if is_other_negative else value
-        for is_other_negative, value in zip(is_other_negative_list, payload["values"])
-    ]
-    categories = [
-        model if is_other_negative else category
-        for is_other_negative, category in zip(is_other_negative_list, payload["categories"])
-    ]
-    values = []
-    custom_values = []
-    for value_str in value_strs:
+    anns = []
+    for ann_payload in annotations:
+        image_pk = ann_payload["identifier"]
+        is_other_negative = ann_payload.get("is_other_negative", False)
+        value_str = "NEGATIVE" if is_other_negative else ann_payload["value"]
+        category = model if is_other_negative else ann_payload["category"]
         try:
             value, custom_value = int(LabelValue[value_str]), None
         except KeyError:
             value, custom_value = LabelValue.CUSTOM, value_str
-        values.append(value)
-        custom_values.append(custom_values)
 
-    anns = []
-    for value, custom_value, image_pk, category, is_other_negative in zip(
-        values,
-        custom_values,
-        image_pks,
-        categories,
-        is_other_negative_list,
-    ):
         annotation_data = {
             "type": 0,  # full-frame
             "value": value,
@@ -1864,19 +1850,18 @@ def add_val_annotations_v2(request):
         }
         if custom_value:
             annotation_data["custom_value"] = custom_value
-        annotation = json.dumps(annotation_data)
+            annotation = json.dumps(annotation_data)
 
         di = DatasetItem.objects.get(pk=image_pk)
         assert not di.google and di.is_val
-        anns.append(
-            Annotation(
-                dataset_item=di,
-                label_function=user,
-                label_category=category,
-                label_type=VAL_NEGATIVE_TYPE if is_other_negative else "klabel_frame",
-                label_data=annotation,
-            )
+        ann = Annotation(
+            dataset_item=di,
+            label_function=user,
+            label_category=category,
+            label_type=VAL_NEGATIVE_TYPE if is_other_negative else "klabel_frame",
+            label_data=annotation,
         )
+        anns.append(ann)
 
     Annotation.objects.bulk_create(anns)
     return JsonResponse({"created": len(anns)})
