@@ -400,6 +400,6 @@ class LocalFlatIndex:
             np.subtract(M[:i], M[i], out=buffer[:i])  # broadcasted substraction
             np.square(buffer[:i], out=buffer[:i])
             np.sum(buffer[:i], axis=1, out=a[:i])
-            np.sqrt(a[i], out=a[:i])
+            np.sqrt(np.max(a[i], 0), out=a[:i])
             out[:i, i] = a[:i]
             out[i, :i] = a[:i]
