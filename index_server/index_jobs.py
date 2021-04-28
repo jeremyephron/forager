@@ -388,6 +388,7 @@ class LocalFlatIndex:
         self.index.flush()
         self.distance_matrix.flush()
 
+    # TODO(mihirg): Does this even work? Probably should verify... or just use Scipy
     @staticmethod
     def _pdist(M, out):
         # TODO(mihirg): Consider using cosine similarity instead
