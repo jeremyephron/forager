@@ -9,7 +9,7 @@ from PIL import Image
 from tqdm import tqdm
 
 BATCH_SIZE = 256
-IMAGE_DIR = Path("/home/mihir/waymo/train")
+IMAGE_DIR = Path("/home/mihir/waymo/val")
 EMBEDDING_DIM = 512
 
 IMAGE_LIST_OUTPUT_FILENAME = "images.json"
