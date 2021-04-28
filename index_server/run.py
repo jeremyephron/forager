@@ -29,7 +29,7 @@ from scipy.spatial.distance import squareform, cdist
 from sklearn import svm
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 
-from typing import Callable, DefaultDict, Dict, List, Optional, Set, Tuple
+from typing import Callable, DefaultDict, Dict, List, Optional, Set, Tuple, Iterable
 
 from interactive_index import InteractiveIndex
 from interactive_index.utils import sample_farthest_vectors
@@ -40,6 +40,7 @@ from knn.jobs import MapReduceJob, MapperSpec
 from knn.reducers import Reducer, ListReducer, IsFinishedReducer, VectorReducer
 from knn.utils import JSONType
 
+import ais
 import config
 from index_jobs import (
     AdderReducer,
@@ -331,14 +332,15 @@ class LabeledIndex:
             result.label = self.labels[result.id]
         return results
 
-    def get_train_identifier_set(self) -> Set[str]:
+    def get_train_identifiers(self) -> List[str]:
         assert self.train_identifiers
-        return set(self.train_identifiers.keys())
+        return list(self.train_identifiers.keys())
 
-    def get_embeddings(
-        self, identifiers: List[str], model: str = config.DEFAULT_QUERY_MODEL
-    ) -> np.ndarray:
-        local_flat_index = self.get_local_flat_index(model)
+    def get_val_identifiers(self) -> List[str]:
+        assert self.val_identifiers
+        return list(self.val_identifiers.keys())
+
+    def identifiers_to_inds(self, identifiers: Iterable[str]) -> List[int]:
         assert self.train_identifiers and self.val_identifiers
         inds = [
             self.train_identifiers[id]
@@ -346,18 +348,19 @@ class LabeledIndex:
             else self.val_identifiers[id]
             for id in identifiers
         ]
+        return inds
+
+    def get_embeddings(
+        self, identifiers: Iterable[str], model: str = config.DEFAULT_QUERY_MODEL
+    ) -> np.ndarray:
+        local_flat_index = self.get_local_flat_index(model)
+        inds = self.identifiers_to_inds(identifiers)
         return local_flat_index.index[inds]
 
     def cluster_identifiers(
-        self, identifiers: List[str], model: str = config.DEFAULT_QUERY_MODEL
+        self, identifiers: Iterable[str], model: str = config.DEFAULT_QUERY_MODEL
     ) -> List[List[float]]:
-        assert self.train_identifiers and self.val_identifiers
-        inds = [
-            self.train_identifiers[id]
-            if id in self.train_identifiers
-            else self.val_identifiers[id]
-            for id in identifiers
-        ]
+        inds = self.identifiers_to_inds(identifiers)
         return self._cluster(inds, model)
 
     def cluster_results(
@@ -390,6 +393,17 @@ class LabeledIndex:
             simplified.append([clusters[a], clusters[b], dist / max_dist])
             clusters.append(clusters[a])
         return simplified
+
+    def get_model_scores(
+        self, model: str, identifiers: Optional[Iterable[str]] = None
+    ) -> np.ndarray:
+        local_flat_index = self.get_local_flat_index(model)
+        assert local_flat_index.scores is not None
+        if identifiers is None:
+            return local_flat_index.scores
+
+        inds = self.identifiers_to_inds(identifiers)
+        return local_flat_index.scores[inds]
 
     # CLEANUP
 
@@ -1056,7 +1070,7 @@ async def start_bgsplit_job(request):
     ]
 
     unused_identifiers = (
-        index.get_train_identifier_set()
+        set(index.get_train_identifiers())
         .difference(set(pos_identifiers))
         .difference(set(neg_identifiers))
     )
@@ -1720,6 +1734,120 @@ async def query_ranking_v2(request):
     # Run query and return results
     query_results = index.rank_brute_force(model, score_min, score_max)
     return resp.json({"results": [r.to_dict() for r in query_results]})
+
+
+@app.route("/query_metrics", methods=["POST"])
+async def query_metrics(request):
+    index_id = request.json["index_id"]
+    model = request.json["model"]
+    identifiers = request.json["identifiers"]  # type: List[str]
+    labels = request.json["labels"]  # type: List[bool]
+    identifier_to_weight = request.json["weights"]  # type: Dict[str, float]
+
+    assert len(identifiers) == len(labels)
+
+    index = await get_index(index_id)
+
+    prob_pos = index.get_model_scores(model, identifiers)
+    y_pred = prob_pos > config.DNN_SCORE_CLASSIFICATION_THRESHOLD
+    y_test = np.array(labels)
+    rows = np.arange(len(identifiers))
+    weights = np.array([identifier_to_weight[id] for id in identifiers])
+
+    precision, precision_std = ais.get_fscore(y_pred, y_test, rows, weights * y_pred)
+    recall, recall_std = ais.get_fscore(y_pred, y_test, rows, weights * y_test)
+    f1, f1_std = ais.get_fscore(
+        y_pred, y_test, rows, weights * (0.5 * y_pred + 0.5 * y_test)
+    )
+
+    false_positives = []
+    false_negatives = []
+    for identifier, label, score in zip(identifiers, labels, prob_pos):
+        result = LabeledIndex.QueryResult(index.val_identifiers[identifier], score)
+        if score > config.DNN_SCORE_CLASSIFICATION_THRESHOLD and not label:
+            false_positives.append(result)
+        elif score <= config.DNN_SCORE_CLASSIFICATION_THRESHOLD and label:
+            false_negatives.append(result)
+
+    false_positives.sort(key=operator.attrgetter("dist"), reverse=True)  # descending
+    false_negatives.sort(key=operator.attrgetter("dist"))  # ascending
+
+    for result in itertools.chain(false_positives, false_negatives):
+        result.label = index.labels[result.id]
+
+    return resp.json(
+        {
+            "precision": precision,
+            "precision_std": precision_std,
+            "recall": recall,
+            "recall_std": recall_std,
+            "f1": f1,
+            "f1_std": f1_std,
+            "false_positives": [r.to_dict() for r in false_positives],
+            "false_negatives": [r.to_dict() for r in false_negatives],
+        }
+    )
+
+
+@app.route("/query_active_validation", methods=["POST"])
+async def query_active_validation(request):
+    index_id = request.json["index_id"]
+    model = request.json["model"]
+    identifiers = request.json["identifiers"]  # type: List[str]
+    labels = request.json["labels"]  # type: List[bool]
+    current_f1 = float(request.json["current_f1"])
+
+    assert len(identifiers) == len(labels)
+
+    index = await get_index(index_id)
+
+    all_val_identifiers = index.get_val_identifiers()
+    prob_pos = index.get_model_scores(model, all_val_identifiers)
+    y_pred = prob_pos > config.DNN_SCORE_CLASSIFICATION_THRESHOLD
+    y_test = np.array(labels)
+    sample_budget = 2 * len(labels)
+    g = current_f1
+    alpha = 0.5
+
+    identifiers = set(identifiers)
+    known_rows = [id in identifiers for id in all_val_identifiers]
+
+    # Restrict sampling domain in early iterations when there aren't many
+    # labeled positives
+    i = np.log2(sample_budget / 10)  # inverse of sample_budget = 10 * (2 ** i)
+    poses = y_pred.sum()
+    t = int(3 * (i + 1) * poses)
+    if t < len(y_pred):
+        filter_rows = np.argpartition(prob_pos, -t)[-t:]
+    else:
+        filter_rows = np.arange(len(y_pred))
+
+    # Use AIS algorithm to sample rows to label
+    rows, weights = ais.ais_singleiter(
+        y_pred=y_pred,
+        y_test=y_test[known_rows],
+        prob_pos=prob_pos,
+        sample_budget=sample_budget,
+        g=g,
+        alpha=alpha,
+        known_rows=known_rows,
+        filter_rows=filter_rows,
+    )
+    rows = filter_rows[rows]
+    weights *= len(rows) / len(y_pred)
+
+    new_identifiers = []
+    identifier_to_weight = {}  # type: Dict[str, float]
+    for index, weight in zip(rows, weights):
+        id = all_val_identifiers[index]
+        identifier_to_weight[id] = weight
+        if id not in identifiers:
+            new_identifiers.append(id)
+
+    return {
+        "new_identifiers": new_identifiers,
+        "weights": identifier_to_weight,
+    }
 
 
 # CLEANUP
