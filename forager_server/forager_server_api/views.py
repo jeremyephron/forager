@@ -1937,7 +1937,7 @@ def model_info(model):
         "has_checkpoint": model.checkpoint_path is not None,
         "has_output": model.output_directory is not None,
         "pos_tags": serialize_tag_set_for_client_v2(pos_tags),
-        "neg_tags": serialize_tag_set_for_client_v2(neg_tags + augment_negs_include),
+        "neg_tags": serialize_tag_set_for_client_v2(neg_tags.union(augment_negs_include)),
         "augment_negs": model.category_spec.get("augment_negs", False)
     }
 
