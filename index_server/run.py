@@ -1848,10 +1848,12 @@ async def query_active_validation(request):
         if id not in identifiers:
             new_identifiers.append(id)
 
-    return {
-        "identifiers": new_identifiers,
-        "weights": identifiers_to_weights,
-    }
+    return resp.json(
+        {
+            "identifiers": new_identifiers,
+            "weights": identifiers_to_weights,
+        }
+    )
 
 
 # CLEANUP
