@@ -1815,6 +1815,11 @@ def query_active_validation_v2(request, dataset_name):
             google=False,
         ).values_list("pk", "path")
     )
+
+    bucket_name = dataset.val_directory[len("gs://") :].split("/")[0]
+    path_template = "https://storage.googleapis.com/{:s}/".format(bucket_name) + "{:s}"
+    paths = [path_template.format(p) for p in paths]
+
     return JsonResponse({
         "paths": paths,
         "identifiers": pks,
