@@ -297,7 +297,7 @@ function QueryBar(p) {
   let knnImages = props.knnImages;
   let rankingModel = props.rankingModel;
   let captionQueryEmbedding = props.captionQueryEmbedding;
-  let queryResultData = props.queryResultData;
+  let queryResultSet = props.queryResultSet;
   let scoreRange = props.scoreRange;
   let setScoreRange = props.setScoreRange;
   let subset = props.subset;
@@ -999,7 +999,7 @@ const App = () => {
     knnImages: knnImages,
     rankingModel: rankingModel,
     captionQueryEmbedding: captionQueryEmbedding,
-    queryResultData: queryResultData,
+    queryResultSet: queryResultSet,
     scoreRange: scoreRange,
     setScoreRange: setScoreRange,
     subset: subset,
