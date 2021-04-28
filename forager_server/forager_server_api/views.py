@@ -348,10 +348,11 @@ def create_model(request, dataset_name, dataset=None):
         name=model_name,
         model_id=response_data["model_id"],
         category_spec={
+            "augment_negs": augment_negs,
             "pos_tags": payload["pos_tags"],
             "neg_tags": payload["neg_tags"],
-            "augment_negs_include": payload.get("include", []),
-            "augment_negs_exclude": payload.get("exclude", []),
+            "augment_negs_include": payload.get("include", []) if augment_negs else [],
+            "augment_negs_exclude": payload.get("exclude", []) if augment_negs else [],
         }
     )
     m.save()
@@ -1675,8 +1676,12 @@ VAL_NEGATIVE_TYPE = "model_val_negative"
 def get_val_examples_v2(dataset, model_id):
     # Get positive and negative categories
     model = get_object_or_404(DNNModel, model_id=model_id)
-    pos_tags = parse_tag_set_from_query_v2(model.category_spec.get("pos_tags", []))
-    neg_tags = parse_tag_set_from_query_v2(model.category_spec.get("neg_tags", []))
+
+    pos_tags = parse_tag_set_from_query_v2(model.category_spec["pos_tags"])
+    neg_tags = parse_tag_set_from_query_v2(model.category_spec["neg_tags"])
+    augment_negs = parse_tag_set_from_query_v2(model.category_spec.get(
+        "augment_negs", False
+    )
     augment_negs_include = parse_tag_set_from_query_v2(
         model.category_spec.get("augment_negs_include", [])
     )
@@ -1707,12 +1712,13 @@ def get_val_examples_v2(dataset, model_id):
             neg_dataset_item_pks.append(pk)
 
     # Get extra negatives
-    annotations = Annotation.objects.filter(
-        dataset_item__in=eligible_dataset_items,
-        label_category=model_id,
-        label_type=VAL_NEGATIVE_TYPE,
-    )
-    neg_dataset_item_pks.extend(ann.dataset_item for ann in annotations)
+    if augment_negs:
+        annotations = Annotation.objects.filter(
+            dataset_item__in=eligible_dataset_items,
+            label_category=model_id,
+            label_type=VAL_NEGATIVE_TYPE,
+        )
+        neg_dataset_item_pks.extend(ann.dataset_item for ann in annotations)
 
     return pos_dataset_item_pks, neg_dataset_item_pks
 
@@ -1932,6 +1938,7 @@ def model_info(model):
         "has_output": model.output_directory is not None,
         "pos_tags": serialize_tag_set_for_client_v2(pos_tags),
         "neg_tags": serialize_tag_set_for_client_v2(neg_tags + augment_negs_include),
+        "augment_negs": model.category_spec.get("augment_negs", False)
     }
 
 
