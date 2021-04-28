@@ -1808,13 +1808,13 @@ async def query_active_validation(request):
     all_val_identifiers = index.get_val_identifiers()
     prob_pos = index.get_model_scores(model, all_val_identifiers)
     y_pred = prob_pos > config.DNN_SCORE_CLASSIFICATION_THRESHOLD
-    y_test = np.array(labels)
     sample_budget = max(2 * len(labels), config.ACTIVE_VAL_STARTING_BUDGET)
     g = current_f1
     alpha = 0.5
 
     identifiers = set(identifiers)
     known_rows = [id in identifiers for id in all_val_identifiers]
+    y_test = np.array(labels)[known_rows] if labels else None
 
     # Restrict sampling domain in early iterations when there aren't many
     # labeled positives
@@ -1829,7 +1829,7 @@ async def query_active_validation(request):
     # Use AIS algorithm to sample rows to label
     rows, weights = ais.ais_singleiter(
         y_pred=y_pred,
-        y_test=y_test[known_rows],
+        y_test=y_test,
         prob_pos=prob_pos,
         sample_budget=sample_budget,
         g=g,
