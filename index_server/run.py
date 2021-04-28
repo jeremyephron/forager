@@ -9,6 +9,7 @@ import itertools
 from io import BytesIO
 import json
 import logging
+import math
 import operator
 import os
 from pathlib import Path
@@ -1775,18 +1776,21 @@ async def query_metrics(request):
     for result in itertools.chain(false_positives, false_negatives):
         result.label = index.labels[result.id]
 
-    return resp.json(
-        {
-            "precision": precision,
-            "precision_std": precision_std,
-            "recall": recall,
-            "recall_std": recall_std,
-            "f1": f1,
-            "f1_std": f1_std,
-            "false_positives": [r.to_dict() for r in false_positives],
-            "false_negatives": [r.to_dict() for r in false_negatives],
-        }
-    )
+    results = {
+        "precision": precision,
+        "precision_std": precision_std,
+        "recall": recall,
+        "recall_std": recall_std,
+        "f1": f1,
+        "f1_std": f1_std,
+        "false_positives": [r.to_dict() for r in false_positives],
+        "false_negatives": [r.to_dict() for r in false_negatives],
+    }
+    for metric in ("precision", "recall", "f1"):
+        for k in (metric, f"{metric}_std"):
+            if math.isnan(results[k]):
+                results[k] = None
+    return resp.json(results)
 
 
 @app.route("/query_active_validation", methods=["POST"])
