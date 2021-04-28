@@ -30,7 +30,7 @@ additional_embeddings = np.memmap(
 )
 
 new_embeddings = np.memmap(
-    ADDITIONAL_EMBEDDINGS_FILENAME,
+    NEW_EMBEDDINGS_FILENAME,
     dtype="float32",
     mode="w+",
     shape=(num_existing + num_additional, EMBEDDING_DIM),
