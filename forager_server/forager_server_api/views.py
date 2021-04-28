@@ -1679,9 +1679,7 @@ def get_val_examples_v2(dataset, model_id):
 
     pos_tags = parse_tag_set_from_query_v2(model.category_spec["pos_tags"])
     neg_tags = parse_tag_set_from_query_v2(model.category_spec["neg_tags"])
-    augment_negs = parse_tag_set_from_query_v2(model.category_spec.get(
-        "augment_negs", False
-    )
+    augment_negs = model.category_spec.get("augment_negs", False)
     augment_negs_include = parse_tag_set_from_query_v2(
         model.category_spec.get("augment_negs_include", [])
     )
