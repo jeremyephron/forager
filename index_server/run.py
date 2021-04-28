@@ -1813,7 +1813,7 @@ async def query_active_validation(request):
     alpha = 0.5
 
     identifiers = set(identifiers)
-    known_rows = [id in identifiers for id in all_val_identifiers]
+    known_rows = np.array([id in identifiers for id in all_val_identifiers])
     y_test = np.array(labels)[known_rows] if labels else None
 
     # Restrict sampling domain in early iterations when there aren't many
@@ -1825,7 +1825,6 @@ async def query_active_validation(request):
         filter_rows = np.argpartition(prob_pos, -t)[-t:]
     else:
         filter_rows = np.arange(len(y_pred))
-    print(filter_rows)
 
     # Use AIS algorithm to sample rows to label
     rows, weights = ais.ais_singleiter(
