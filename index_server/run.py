@@ -1755,9 +1755,9 @@ async def query_metrics(request):
     rows = np.arange(len(identifiers))
     weights = np.array(weights)
 
-    precision, precision_std = ais.get_fscore(y_pred, y_test, rows, weights * y_pred)
-    recall, recall_std = ais.get_fscore(y_pred, y_test, rows, weights * y_test)
-    f1, f1_std = ais.get_fscore(
+    precision, precision_std, _ = ais.get_fscore(y_pred, y_test, rows, weights * y_pred)
+    recall, recall_std, _ = ais.get_fscore(y_pred, y_test, rows, weights * y_test)
+    f1, f1_std, _ = ais.get_fscore(
         y_pred, y_test, rows, weights * (0.5 * y_pred + 0.5 * y_test)
     )
 
