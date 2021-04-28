@@ -1742,9 +1742,9 @@ async def query_metrics(request):
     model = request.json["model"]
     identifiers = request.json["identifiers"]  # type: List[str]
     labels = request.json["labels"]  # type: List[bool]
-    identifier_to_weight = request.json["weights"]  # type: Dict[str, float]
+    weights = request.json["weights"]  # type: List[float]
 
-    assert len(identifiers) == len(labels)
+    assert len(identifiers) == len(labels) == len(weights)
 
     index = await get_index(index_id)
 
@@ -1752,7 +1752,7 @@ async def query_metrics(request):
     y_pred = prob_pos > config.DNN_SCORE_CLASSIFICATION_THRESHOLD
     y_test = np.array(labels)
     rows = np.arange(len(identifiers))
-    weights = np.array([identifier_to_weight[id] for id in identifiers])
+    weights = np.array(weights)
 
     precision, precision_std = ais.get_fscore(y_pred, y_test, rows, weights * y_pred)
     recall, recall_std = ais.get_fscore(y_pred, y_test, rows, weights * y_test)
@@ -1837,16 +1837,16 @@ async def query_active_validation(request):
     weights *= len(rows) / len(y_pred)
 
     new_identifiers = []
-    identifier_to_weight = {}  # type: Dict[str, float]
+    identifiers_to_weights = {}  # type: Dict[str, float]
     for index, weight in zip(rows, weights):
         id = all_val_identifiers[index]
-        identifier_to_weight[id] = weight
+        identifiers_to_weights[id] = weight
         if id not in identifiers:
             new_identifiers.append(id)
 
     return {
-        "new_identifiers": new_identifiers,
-        "weights": identifier_to_weight,
+        "identifiers": new_identifiers,
+        "weights": identifiers_to_weights,
     }
 
 

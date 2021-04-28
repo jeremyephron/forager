@@ -1,6 +1,7 @@
 from collections import defaultdict, namedtuple
 import distutils.util
 from enum import IntEnum
+import itertools
 import json
 import math
 import os
@@ -1663,6 +1664,189 @@ def query_images_v2(request, dataset_name):
     return JsonResponse(create_result_set_v2(result_pks, "query"))
 
 
+#
+# ACTIVE VALIDATION
+#
+
+
+VAL_NEGATIVE_TYPE = "model_val_negative"
+
+
+def get_val_examples_v2(dataset, model_id):
+    # Get positive and negative categories
+    model = get_object_or_404(DNNModel, model_id=model_id)
+    pos_tags = parse_tag_set_from_query_v2(model.category_spec.get("pos_tags", []))
+    neg_tags = parse_tag_set_from_query_v2(model.category_spec.get("neg_tags", []))
+    augment_negs_include = parse_tag_set_from_query_v2(
+        model.category_spec.get("augment_negs_include", [])
+    )
+
+    # Limit to validation set
+    eligible_dataset_items = DatasetItem.objects.filter(
+        dataset=dataset,
+        google=False,
+        is_val=True,
+    )
+
+    # Get positives and negatives matching these categories
+    annotations = Annotation.objects.filter(
+        dataset_item__in=eligible_dataset_items,
+        label_category__in=tag_sets_to_category_list_v2(
+            pos_tags, neg_tags, augment_negs_include
+        ),
+        label_type="klabel_frame",
+    )
+    tags_by_pk = get_tags_from_annotations_v2(annotations)
+
+    pos_dataset_item_pks = []
+    neg_dataset_item_pks = []
+    for pk, tags in tags_by_pk.items():
+        if any(t in pos_tags for t in tags):
+            pos_dataset_item_pks.append(pk)
+        elif any(t in neg_tags or t in augment_negs_include for t in tags):
+            neg_dataset_item_pks.append(pk)
+
+    # Get extra negatives
+    annotations = Annotation.objects.filter(
+        dataset_item__in=eligible_dataset_items,
+        label_category=model_id,
+        label_type=VAL_NEGATIVE_TYPE,
+    )
+    neg_dataset_item_pks.extend(ann.dataset_item for ann in annotations)
+
+    return pos_dataset_item_pks, neg_dataset_item_pks
+
+
+@api_view(["POST"])
+def query_metrics_v2(request, dataset_name):
+    dataset = get_object_or_404(Dataset, name=dataset_name)
+    payload = json.loads(request.body)
+    model_id = payload["model"]
+    index_id = payload["index_id"]
+    internal_identifiers_to_weights = payload["weights"]  # type: Dict[str, int]
+
+    pos_dataset_item_pks, neg_dataset_item_pks = get_val_examples_v2(dataset, model_id)
+
+    # Construct identifiers, labels, and weights
+    dataset_items_by_pk = DatasetItem.objects.in_bulk(
+        pos_dataset_item_pks + neg_dataset_item_pks
+    )
+    identifiers = []
+    labels = []
+    weights = []
+    for pk, label in itertools.chain(
+        ((pk, True) for pk in pos_dataset_item_pks),
+        ((pk, False) for pk in neg_dataset_item_pks)
+    ):
+        di = dataset_items_by_pk[pk]
+        identifier = di.identifier
+        weight = internal_identifiers_to_weights.get(identifier)
+        if weight is None:
+            continue
+
+        identifiers.append(identifier)
+        labels.append(label)
+        weights.append(weight)
+
+    # TODO(mihirg): Parse false positives and false negatives
+    params = {
+        "index_id": index_id,
+        "model": model_id,
+        "identifiers": identifiers,
+        "labels": labels,
+        "weights": weights,
+    }
+    r = requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/query_metrics",
+        json=params,
+    )
+    response_data = r.json()
+    return JsonResponse(response_data)
+
+
+@api_view(["POST"])
+def query_active_validation_v2(request, dataset_name):
+    dataset = get_object_or_404(Dataset, name=dataset_name)
+    payload = json.loads(request.body)
+    model_id = payload["model"]
+    index_id = payload["index_id"]
+    current_f1 = payload.get("current_f1", 0.5)
+
+    pos_dataset_item_pks, neg_dataset_item_pks = get_val_examples_v2(dataset, model_id)
+
+    # Construct paths, identifiers, and labels
+    dataset_items_by_pk = DatasetItem.objects.in_bulk(
+        pos_dataset_item_pks + neg_dataset_item_pks
+    )
+    paths = []
+    identifiers = []
+    labels = []
+    for pk, label in itertools.chain(
+        ((pk, True) for pk in pos_dataset_item_pks),
+        ((pk, False) for pk in neg_dataset_item_pks)
+    ):
+        di = dataset_items_by_pk[pk]
+        paths.append(di.path)
+        identifiers.append(di.identifier)
+        labels.append(label)
+
+    params = {
+        "index_id": index_id,
+        "model": model_id,
+        "identifiers": identifiers,
+        "labels": labels,
+        "current_f1": current_f1,
+    }
+    r = requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/query_active_validation",
+        json=params,
+    )
+    response_data = r.json()
+    response_data["paths"] = paths
+    return JsonResponse(response_data)
+
+
+@api_view(["POST"])
+def add_val_annotation_v2(request):
+    payload = json.loads(request.body)
+    image_pk = payload["identifier"]
+    user = payload["user"]
+    model = payload["model"]
+    is_other_negative = payload.get("is_other_negative", False)
+    value_str = "NEGATIVE" if is_other_negative else payload["value"]
+    category = model if is_other_negative else payload["category"]
+    try:
+        value, custom_value = int(LabelValue[value_str]), None
+    except KeyError:
+        value, custom_value = LabelValue.CUSTOM, value_str
+
+    annotation_data = {
+        "type": 0,  # full-frame
+        "value": value,
+        "mode": "val",
+        "version": ANN_VERSION,
+    }
+    if custom_value:
+        annotation_data["custom_value"] = custom_value
+    annotation = json.dumps(annotation_data)
+
+    di = DatasetItem.objects.get(pk=image_pk)
+    assert not di.google and di.is_val
+    ann = Annotation(
+        dataset_item=di,
+        label_function=user,
+        label_category=category,
+        label_type=VAL_NEGATIVE_TYPE if is_other_negative else "klabel_frame",
+        label_data=annotation,
+    )
+    ann.save()
+
+    return JsonResponse({"created": True})
+
+
+# DATASET INFO
+
+
 @api_view(["GET"])
 @csrf_exempt
 def get_dataset_info_v2(request, dataset_name):
@@ -1670,7 +1854,7 @@ def get_dataset_info_v2(request, dataset_name):
 
     annotations = Annotation.objects.filter(
         dataset_item__in=dataset.datasetitem_set.filter(),
-        label_type__exact="klabel_frame",  # TODO: change in the future
+        label_type__exact="klabel_frame",  # deliberately exclude VAL_NEGATIVE_TYPE
     ).order_by(
         "dataset_item", "label_category", "-created"
     ).distinct("dataset_item", "label_category")
@@ -1760,7 +1944,7 @@ def get_annotations_v2(request):
 
     annotations = Annotation.objects.filter(
         dataset_item__in=DatasetItem.objects.filter(pk__in=image_identifiers),
-        label_type="klabel_frame",
+        label_type__in=("klabel_frame", VAL_NEGATIVE_TYPE),
     )
     # ).order_by(
     #     "dataset_item", "label_category", "-created"
