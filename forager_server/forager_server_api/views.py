@@ -1806,8 +1806,20 @@ def query_active_validation_v2(request, dataset_name):
         json=params,
     )
     response_data = r.json()
-    response_data["paths"] = paths
-    return JsonResponse(response_data)
+
+    pks = list(
+        DatasetItem.objects.filter(
+            dataset=dataset,
+            identifier__in=response_data["identifiers"],
+            is_val=True,
+            google=False,
+        ).values_list("pk", flat=True)
+    )
+    return JsonResponse({
+        "paths": paths,
+        "identifiers": pks,
+        "weights": response_data["weights"],
+    })
 
 
 @api_view(["POST"])
