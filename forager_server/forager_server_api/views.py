@@ -1784,7 +1784,6 @@ def query_active_validation_v2(request, dataset_name):
     dataset_items_by_pk = DatasetItem.objects.in_bulk(
         pos_dataset_item_pks + neg_dataset_item_pks
     )
-    paths = []
     identifiers = []
     labels = []
     for pk, label in itertools.chain(
@@ -1792,7 +1791,6 @@ def query_active_validation_v2(request, dataset_name):
         ((pk, False) for pk in neg_dataset_item_pks)
     ):
         di = dataset_items_by_pk[pk]
-        paths.append(di.path)
         identifiers.append(di.identifier)
         labels.append(label)
 
@@ -1809,13 +1807,13 @@ def query_active_validation_v2(request, dataset_name):
     )
     response_data = r.json()
 
-    pks = list(
-        DatasetItem.objects.filter(
+    pks, paths = zip(
+        *DatasetItem.objects.filter(
             dataset=dataset,
             identifier__in=response_data["identifiers"],
             is_val=True,
             google=False,
-        ).values_list("pk", flat=True)
+        ).values_list("pk", "path")
     )
     return JsonResponse({
         "paths": paths,
