@@ -33,13 +33,16 @@ embeddings = np.memmap(
     mode="r",
     shape=(len(image_paths), EMBEDDING_DIM),
 )
+
+embeddings_in_memory = np.copy(embeddings)
+distances_in_memory = np.zeros((len(image_paths), len(image_paths)), dtype=np.float32)
+pdist(embeddings_in_memory, distances_in_memory)
+
 distances = np.memmap(
     DISTANCE_MATRIX_FILENAME,
-    dtype=np.float32,
+    dtype=distances_in_memory.dtype,
     mode="w+",
-    shape=(len(image_paths), len(image_paths)),
+    shape=distances_in_memory.shape,
 )
-
-pdist(embeddings, distances)
-
+distances[:] = distances_in_memory[:]
 distances.flush()
