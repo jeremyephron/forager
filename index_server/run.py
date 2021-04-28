@@ -11,7 +11,6 @@ import json
 import logging
 import operator
 import os
-import pickle
 from pathlib import Path
 import re
 import shutil
@@ -80,7 +79,7 @@ logger.addHandler(log_ch)
 
 
 class LabeledIndex:
-    LABELS_FILENAME = "labels_old.json"
+    LABELS_FILENAME = "labels.json"
     TRAIN_IDENTIFIERS_FILENAME = "identifiers.json"
     VAL_IDENTIFIERS_FILENAME = "val_identifiers.json"
 
