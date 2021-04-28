@@ -11,6 +11,7 @@ EMBEDDING_DIM = 512
 image_paths = json.load(Path(ORIGINAL_IMAGE_PATH_LIST_FILENAME).open())
 image_identifiers = [p[p.rfind("/") + 1 : p.rfind(".")] for p in image_paths]
 identifiers_to_indices = json.load(Path(FINAL_IMAGE_IDENTIFIERS_LIST_FILENAME).open())
+min_index = min(identifiers_to_indices.values())
 
 embeddings = np.memmap(
     EMBEDDINGS_FILENAME,
@@ -22,6 +23,6 @@ embeddings = np.memmap(
 copy = np.copy(embeddings)
 
 for i, identifier in enumerate(image_identifiers):
-    embeddings[identifiers_to_indices[identifier]] = copy[i]
+    embeddings[identifiers_to_indices[identifier] - min_index] = copy[i]
 
 embeddings.flush()
