@@ -1809,7 +1809,7 @@ async def query_active_validation(request):
     prob_pos = index.get_model_scores(model, all_val_identifiers)
     y_pred = prob_pos > config.DNN_SCORE_CLASSIFICATION_THRESHOLD
     y_test = np.array(labels)
-    sample_budget = min(2 * len(labels), config.ACTIVE_VAL_STARTING_BUDGET)
+    sample_budget = max(2 * len(labels), config.ACTIVE_VAL_STARTING_BUDGET)
     g = current_f1
     alpha = 0.5
 
