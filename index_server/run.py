@@ -1825,6 +1825,7 @@ async def query_active_validation(request):
         filter_rows = np.argpartition(prob_pos, -t)[-t:]
     else:
         filter_rows = np.arange(len(y_pred))
+    print(filter_rows)
 
     # Use AIS algorithm to sample rows to label
     rows, weights = ais.ais_singleiter(
