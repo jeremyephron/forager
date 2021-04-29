@@ -1821,8 +1821,8 @@ async def query_metrics(request):
     }
     for metric in ("precision", "recall", "f1"):
         for k in (metric, f"{metric}_std"):
-            if math.isnan(results[k]):
-                results[k] = None
+            v = float(result[k])
+            results[k] = None if math.isnan(v) else v
     return resp.json(results)
 
 
