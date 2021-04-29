@@ -1804,8 +1804,8 @@ async def query_metrics(request):
         elif score <= config.DNN_SCORE_CLASSIFICATION_THRESHOLD and label:
             false_negatives.append(result)
 
-    # false_positives.sort(key=operator.attrgetter("dist"), reverse=True)  # descending
-    # false_negatives.sort(key=operator.attrgetter("dist"))  # ascending
+    false_positives.sort(key=operator.attrgetter("dist"), reverse=True)  # descending
+    false_negatives.sort(key=operator.attrgetter("dist"))  # ascending
 
     for result in itertools.chain(false_positives, false_negatives):
         result.label = index.labels[result.id]
