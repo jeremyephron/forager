@@ -1807,8 +1807,11 @@ async def query_metrics(request):
     # false_positives.sort(key=operator.attrgetter("dist"), reverse=True)  # descending
     # false_negatives.sort(key=operator.attrgetter("dist"))  # ascending
 
-    # for result in itertools.chain(false_positives, false_negatives):
-    #     result.label = index.labels[result.id]
+    for result in itertools.chain(false_positives, false_negatives):
+        result.label = index.labels[result.id]
+
+    print("FP", false_positives)
+    print("FN", false_negatives)
 
     results = {
         "precision": precision,

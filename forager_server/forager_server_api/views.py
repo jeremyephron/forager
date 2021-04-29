@@ -1741,7 +1741,7 @@ def get_val_examples_v2(dataset, model_id):
     augment_negs = model.category_spec.get("augment_negs", False)
     augment_negs_include = parse_tag_set_from_query_v2(
         model.category_spec.get("augment_negs_include", [])
-    )
+    ) if augment_negs else set()
 
     # Limit to validation set
     eligible_dataset_items = DatasetItem.objects.filter(
