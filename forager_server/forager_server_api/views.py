@@ -10,7 +10,7 @@ import requests
 import urllib.request
 import uuid
 
-from typing import List, Dict, NamedTuple
+from typing import List, Dict, NamedTuple, Optional
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.db.models import Q
@@ -23,6 +23,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from pycocotools.coco import COCO
 from expiringdict import ExpiringDict
+from dataclasses import dataclass
 
 from .models import Dataset, DatasetItem, Annotation, DNNModel
 
@@ -274,6 +275,8 @@ def create_model(request, dataset_name, dataset=None):
     index_id = payload['index_id']
     pos_tags = parse_tag_set_from_query_v2(payload['pos_tags'])
     neg_tags = parse_tag_set_from_query_v2(payload['neg_tags'])
+    val_pos_tags = parse_tag_set_from_query_v2(payload['val_pos_tags'])
+    val_neg_tags = parse_tag_set_from_query_v2(payload['val_neg_tags'])
     augment_negs = bool(payload['augment_negs'])
     model_kwargs = payload['model_kwargs']
     resume_model_id = payload.get('resume', None)
@@ -281,18 +284,25 @@ def create_model(request, dataset_name, dataset=None):
     dataset = get_object_or_404(Dataset, name=dataset_name)
     annotations = Annotation.objects.filter(
         dataset_item__in=dataset.datasetitem_set.filter(),
-        label_category__in=tag_sets_to_category_list_v2(pos_tags, neg_tags),
+        label_category__in=tag_sets_to_category_list_v2(
+            pos_tags, neg_tags, val_pos_tags, val_neg_tags),
         label_type="klabel_frame",
     )
     tags_by_pk = get_tags_from_annotations_v2(annotations)
 
     pos_dataset_item_pks = []
     neg_dataset_item_pks = []
+    val_pos_dataset_item_pks = []
+    val_neg_dataset_item_pks = []
     for pk, tags in tags_by_pk.items():
         if any(t in pos_tags for t in tags):
             pos_dataset_item_pks.append(pk)
         elif any(t in neg_tags for t in tags):
             neg_dataset_item_pks.append(pk)
+        elif any(t in val_pos_tags for t in tags):
+            val_pos_dataset_item_pks.append(pk)
+        elif any(t in val_neg_tags for t in tags):
+            val_neg_dataset_item_pks.append(pk)
 
     # Augment with randomly sampled negatives if requested
     num_extra_negs = settings.BGSPLIT_NUM_NEGS_MULTIPLIER * len(
@@ -318,6 +328,16 @@ def create_model(request, dataset_name, dataset=None):
             "identifier", flat=True
         )
     )
+    val_pos_dataset_item_internal_identifiers = list(
+        DatasetItem.objects.filter(pk__in=val_pos_dataset_item_pks).values_list(
+            "identifier", flat=True
+        )
+    )
+    val_neg_dataset_item_internal_identifiers = list(
+        DatasetItem.objects.filter(pk__in=val_neg_dataset_item_pks).values_list(
+            "identifier", flat=True
+        )
+    )
 
     if resume_model_id:
         resume_model_path = (
@@ -329,6 +349,8 @@ def create_model(request, dataset_name, dataset=None):
     params = {
         "pos_identifiers": pos_dataset_item_internal_identifiers,
         "neg_identifiers": neg_dataset_item_internal_identifiers,
+        "val_pos_identifiers": val_pos_dataset_item_internal_identifiers,
+        "val_neg_identifiers": val_neg_dataset_item_internal_identifiers,
         "augment_negs": augment_negs,
         "model_kwargs": model_kwargs,
         "model_name": model_name,
@@ -1270,10 +1292,19 @@ def active_batch(request, dataset_name):
 Tag = namedtuple("Tag", "category value")  # type: NamedTuple[str, str]
 PkType = int
 
+@dataclass
+class ResultSet:
+    type: str
+    ranking: List[PkType]
+    distances: List[float]
+    model: Optional[str]
+
+# TODO(fpoms): this needs to be wrapped in a lock so that
+# updates are atomic across concurrent requests
 current_result_sets = ExpiringDict(
     max_age_seconds=30 * 60,
     max_len=50,
-)  # type: Dict[str, List[PkType]]
+)  # type: Dict[str, ResultSet]
 
 
 def parse_tag_set_from_query_v2(s):
@@ -1398,16 +1429,28 @@ def process_image_query_results_v2(request, dataset, query_response):
     dataset_items = DatasetItem.objects.filter(pk__in=filtered_pks)
     dataset_items_by_path = {di.path: di for di in dataset_items}
 
+    distances = []
     ordered_pks = []
     for r in query_response["results"]:
         if r["label"] in dataset_items_by_path:
             ordered_pks.append(dataset_items_by_path[r["label"]].pk)
-    return ordered_pks
+            distances.append(r["dist"])
+    return dict(
+        pks=ordered_pks,
+        distances=distances,
+    )
 
 
-def create_result_set_v2(pks, type):
+def create_result_set_v2(results, type, model=None):
+    pks = results['pks']
+    distances = results['distances']
     result_set_id = str(uuid.uuid4())
-    current_result_sets[result_set_id] = pks
+    current_result_sets[result_set_id] = ResultSet(
+        type=type,
+        ranking=pks,
+        distances=distances,
+        model=model
+    )
     return {
         "id": result_set_id,
         "num_results": len(pks),
@@ -1426,7 +1469,8 @@ def get_results_v2(request, dataset_name):
     num_to_return = int(request.GET.get("num", 1000))
 
     result_set = current_result_sets[result_set_id]
-    pks = result_set[offset_to_return: offset_to_return + num_to_return]
+    pks = result_set.ranking[offset_to_return: offset_to_return + num_to_return]
+    distances = result_set.distances[offset_to_return: offset_to_return + num_to_return]
 
     dataset_items_by_pk = DatasetItem.objects.in_bulk(pks)
     dataset_items = [dataset_items_by_pk[pk] for pk in pks]  # preserve order
@@ -1439,6 +1483,9 @@ def get_results_v2(request, dataset_name):
         "index_id": index_id,
         "identifiers": internal_identifiers,
     }
+    if False and result_set.model:
+        params["model"] = result_set.model
+
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/perform_clustering",
         json=params,
@@ -1454,6 +1501,7 @@ def get_results_v2(request, dataset_name):
     return JsonResponse({
         "paths": dataset_item_paths,
         "identifiers": dataset_item_identifiers,
+        "distances": distances,
         "clustering": clustering_data["clustering"],
     })
 
@@ -1514,7 +1562,7 @@ def query_knn_v2(request, dataset_name):
         dataset,
         response_data,
     )
-    return JsonResponse(create_result_set_v2(results, "knn"))
+    return JsonResponse(create_result_set_v2(results, "knn", model=model))
 
 
 @api_view(["GET"])
@@ -1647,7 +1695,7 @@ def query_ranking_v2(request, dataset_name):
         dataset,
         response_data,
     )
-    return JsonResponse(create_result_set_v2(results, "ranking"))
+    return JsonResponse(create_result_set_v2(results, "ranking", model=model))
 
 
 @api_view(["POST"])
@@ -1662,7 +1710,8 @@ def query_images_v2(request, dataset_name):
         random.shuffle(result_pks)
     elif order == "id":
         result_pks.sort()
-    return JsonResponse(create_result_set_v2(result_pks, "query"))
+    results = {'pks': result_pks, 'distances': [-1 for _ in result_pks]}
+    return JsonResponse(create_result_set_v2(results, "query"))
 
 
 #
@@ -1957,7 +2006,7 @@ def model_info(model):
         "has_checkpoint": model.checkpoint_path is not None,
         "has_output": model.output_directory is not None,
         "pos_tags": serialize_tag_set_for_client_v2(pos_tags),
-        "neg_tags": serialize_tag_set_for_client_v2(neg_tags.union(augment_negs_include)),
+        "neg_tags": serialize_tag_set_for_client_v2(neg_tags | augment_negs_include),
         "augment_negs": model.category_spec.get("augment_negs", False)
     }
 
@@ -2007,10 +2056,11 @@ def add_annotations_to_result_set_v2(request):
     upper_bound = float(payload["to"])
 
     result_set = current_result_sets[result_set_id]
+    result_ranking = result_set.ranking
     # e.g., lower_bound=0.0, upper_bound=0.5 -> second half of the result set
-    start_index = math.ceil(len(result_set) * (1.0 - upper_bound))
-    end_index = math.floor(len(result_set) * (1.0 - lower_bound))
-    image_identifiers = result_set[start_index:end_index]
+    start_index = math.ceil(len(result_ranking) * (1.0 - upper_bound))
+    end_index = math.floor(len(result_ranking) * (1.0 - lower_bound))
+    image_identifiers = result_ranking[start_index:end_index]
 
     num_created = bulk_add_annotations_v2(payload, image_identifiers)
     return JsonResponse({"created": num_created})

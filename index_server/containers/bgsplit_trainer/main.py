@@ -12,6 +12,7 @@ import sys
 import types
 import numpy as np
 from flask import Flask, request, abort
+from werkzeug.exceptions import HTTPException
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Any, Optional
 
@@ -55,6 +56,7 @@ class TrainingJob:
 
     last_checkpoint_path: Optional[str] = None
     training_loop: Optional[TrainingLoop] = None
+    model_suffix: Optional[str] = None
 
     def update_model_id_and_paths(self, payload):
         # NOTE(fpoms): We don't currently allow changing the model_kwargs
@@ -78,6 +80,7 @@ class TrainingJob:
         data={
             "model_id": self.model_id,
             "model_name": self.model_name,
+            "model_suffix": self.model_suffix,
             "success": success,
             "failed": failed,
             **kwargs,
@@ -123,14 +126,19 @@ class TrainingJob:
                 auxiliary_labels = pickle.loads(data)
                 for p, v in auxiliary_labels.items():
                     aux_labels[os.path.basename(p)] = v
+                self.model_kwargs['aux_labels'] = aux_labels
+
                 model_dir = config.MODEL_DIR_TMPL.format(
                     self.model_name, self.model_id
-                   )
-                self.model_kwargs['aux_labels'] = aux_labels
+                )
                 self.model_kwargs['model_dir'] = model_dir
+
+                self.model_suffix = config.MODEL_SUFFIX.format(
+                    self.model_name, self.model_id)
+
                 log_dir = config.LOG_DIR_TMPL.format(
                     self.model_name, self.model_id
-                   )
+                )
                 self.model_kwargs['log_dir'] = log_dir
 
                 end_time = time.perf_counter()
@@ -148,6 +156,9 @@ class TrainingJob:
                     notify_callback=self.notify_status
                    )
             logger.info('Running training')
+            # Notify to send the model suffix so we can show the tensorboard url
+            # asap
+            self.notify_status()
             self.last_checkpoint_path = self.training_loop.run()
             end_time = time.perf_counter()
         except Exception as e:
@@ -175,6 +186,22 @@ working_lock = threading.Lock()
 app = Flask(__name__)
 
 last_job: Optional[TrainingJob] = None
+
+
+@app.errorhandler(HTTPException)
+def handle_exception(e):
+    """Return JSON instead of HTML for HTTP errors."""
+    # start with the correct headers and status code from the error
+    response = e.get_response()
+    # replace the body with JSON
+    response.data = json.dumps({
+        "code": e.code,
+        "name": e.name,
+        "description": e.description,
+    })
+    response.content_type = "application/json"
+    return response
+
 
 @app.route("/", methods=["POST"])
 def start():

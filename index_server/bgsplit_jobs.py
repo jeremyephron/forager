@@ -10,6 +10,7 @@ import logging
 import aiohttp
 import json
 import urllib.parse
+import random
 
 from typing import Any, Callable, Dict, List, Optional
 from knn import utils
@@ -30,33 +31,33 @@ class BGSplitTrainingJob:
         self,
         pos_paths: List[str],
         neg_paths: List[str],
+        val_pos_paths: List[str],
+        val_neg_paths: List[str],
         unlabeled_paths: List[str],
         user_model_kwargs: Dict[str, Any],
         aux_labels_path: str,
         model_name: str,
         model_id: str,
         resume_from: Optional[str],
-        trainer: Trainer,
+        trainers: List[Trainer],
+        preferred_trainer: Optional[Trainer],
         cluster: Cluster,
         session: aiohttp.ClientSession,
     ):
         self.model_name = model_name
         self.pos_paths = pos_paths
         self.neg_paths = neg_paths
+        self.val_pos_paths = val_pos_paths
+        self.val_neg_paths = val_neg_paths
         self.unlabeled_paths = unlabeled_paths
         self.user_model_kwargs = user_model_kwargs
         self.aux_labels_path = aux_labels_path
         self.model_id = model_id
         self.resume_from = resume_from
-        self.trainer = trainer
+        self.trainers = trainers
+        self.preferred_trainer = preferred_trainer
         self.cluster = cluster
         self.cluster_mount_parent_dir = cluster.mount_parent_dir
-        self.tensorboard_url = os.path.join(
-            cluster.output["bgsplit_trainer_tensorboard_urls"][0],
-            f'#scalars&regexInput=' +
-            urllib.parse.quote_plus(
-                f'{model_name}/{model_id}'
-            ))
         self.session = session
 
         self.started = False
@@ -66,6 +67,7 @@ class BGSplitTrainingJob:
         self.model_dir: Optional[str] = None
         self.profiling: Dict[str, float] = {}
         self.model_checkpoint: Optional[str] = None
+        self.tensorboard_url: Optional[str] = None
 
         self._failed_or_finished = asyncio.Condition()
 
@@ -103,53 +105,85 @@ class BGSplitTrainingJob:
         self.started = True
         self._task = self.run_in_background()
 
+    def _select_trainer(self):
+        idxs = list(range(0, len(self.trainers)))
+        random.shuffle(idxs)
+        trainer = None
+        for i in idxs:
+            trainer = self.trainers[i]
+            if not trainer.locked():
+                break
+        return trainer
+
     @utils.unasync_as_task
     async def run_in_background(self):
         self.configure_model()
+        self._start_time = time.time()
 
-        async with self.trainer as trainer_url:
-            self._start_time = time.time()
+        current_trainer = self.preferred_trainer or self._select_trainer()
+        # TODO(mihirg): Add exponential backoff/better error handling
+        try:
+            request = self._construct_request()
 
-            # TODO(mihirg): Add exponential backoff/better error handling
-            try:
-                request = self._construct_request()
+            while not self.finished.is_set():
+                async with current_trainer as trainer_url, \
+                           self._failed_or_finished:
+                    self.selected_trainer = current_trainer
+                    async with self.session.post(
+                            trainer_url, json=request) as response:
+                        if response.status == 503:
+                            await asyncio.sleep(5)
+                            # Try another trainer
+                            current_trainer = self._select_trainer()
+                            continue
 
-                while not self.finished.is_set():
-                    async with self._failed_or_finished:
-                        async with self.session.post(
-                            trainer_url, json=request
-                        ) as response:
-                            if response.status != 200:
-                                await asyncio.sleep(5)
-                                continue
-                        await self._failed_or_finished.wait()
-            except asyncio.CancelledError:
-                pass
-            finally:
-                self._end_time = time.time()
+                        if response.status != 200:
+                            await self._failed(
+                                response.json.get('description', None))
+                            break
+
+                    await self._failed_or_finished.wait()
+        except asyncio.CancelledError:
+            pass
+        finally:
+            self.selected_trainer = None
+            self._end_time = time.time()
 
     async def stop(self):
         if self._task is not None and not self._task.done():
             self._task.cancel()
             await self._task
 
+    async def _failed(self, reason: Optional[str]):
+        self.failure_reason = reason
+        self.failed.set()
+        self.finished.set()
+        async with self._failed_or_finished:
+            self._failed_or_finished.notify()
+
     async def handle_result(self, result: JSONType):
         logger.debug(f"Train ({self.model_name}): recieved status update {result}")
+        if self.tensorboard_url is None and result.get("model_suffix"):
+            self.tensorboard_url = os.path.join(
+                self.cluster.output['bgsplit_trainer_tensorboard_urls'][0],
+                f'#scalars&regexInput=' +
+                urllib.parse.quote_plus(
+                    result["model_suffix"]
+                ))
+
         if result.get("success"):
             self.model_dir = result["model_dir"]
             self.model_checkpoint = result["model_checkpoint"]
             self.profiling = result["profiling"]
             self.finished.set()
+            async with self._failed_or_finished:
+                self._failed_or_finished.notify()
 
         if result.get("failed"):
-            self.failure_reason = result["reason"] if "reason" in result else None
-            self.failed.set()
-            self.finished.set()
+            await self._failed(result["reason"] if "reason" in result else None)
 
         self._training_time_left = result.get("training_time_left", None)
 
-        async with self._failed_or_finished:
-            self._failed_or_finished.notify()
 
     @property
     def mounted_index_dir(self) -> Path:
@@ -161,8 +195,8 @@ class BGSplitTrainingJob:
             "train_positive_paths": self.pos_paths,
             "train_negative_paths": self.neg_paths,
             "train_unlabeled_paths": self.unlabeled_paths,
-            "val_positive_paths": [],
-            "val_negative_paths": [],
+            "val_positive_paths": self.val_pos_paths,
+            "val_negative_paths": self.val_neg_paths,
             "val_unlabeled_paths": [],
             "model_kwargs": self.model_kwargs,
             "model_id": self.model_id,
