@@ -1839,13 +1839,18 @@ async def query_active_validation(request):
     all_val_identifiers = index.get_val_identifiers()
     prob_pos = index.get_model_scores(model, all_val_identifiers)
     y_pred = prob_pos > config.DNN_SCORE_CLASSIFICATION_THRESHOLD
-    y_test = np.array(labels)
     sample_budget = max(2 * len(labels), config.ACTIVE_VAL_STARTING_BUDGET)
     g = current_f1
     alpha = 0.5
 
     val_identifiers_to_inds = {id: i for i, id in enumerate(all_val_identifiers)}
-    known_rows = np.array([val_identifiers_to_inds[id] for id in identifiers])
+    known_rows_inds = [val_identifiers_to_inds[id] for id in identifiers]
+
+    known_rows = np.zeros(len(y_pred), dtype=bool)
+    known_rows[known_rows_inds] = True
+
+    y_test = np.zeros(len(y_pred), dtype=bool)
+    y_test[known_rows_inds] = labels
 
     # Restrict sampling domain in early iterations when there aren't many
     # labeled positives
@@ -1860,7 +1865,7 @@ async def query_active_validation(request):
     # Use AIS algorithm to sample rows to label
     rows, weights = ais.ais_singleiter(
         y_pred=y_pred,
-        y_test=y_test,
+        y_test=y_test[known_rows],
         prob_pos=prob_pos,
         sample_budget=sample_budget,
         g=g,
@@ -1871,12 +1876,13 @@ async def query_active_validation(request):
     rows = filter_rows[rows]
     weights *= len(rows) / len(y_pred)
 
+    old_identifiers = set(identifiers)
     new_identifiers = []
     identifiers_to_weights = {}  # type: Dict[str, float]
     for index, weight in zip(rows, weights):
         id = all_val_identifiers[index]
         identifiers_to_weights[id] = weight
-        if id not in identifiers:
+        if id not in old_identifiers:
             new_identifiers.append(id)
 
     return resp.json(
