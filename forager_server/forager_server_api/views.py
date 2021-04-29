@@ -282,8 +282,11 @@ def create_model(request, dataset_name, dataset=None):
     resume_model_id = payload.get('resume', None)
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
+    eligible_images = DatasetItem.objects.filter(
+        dataset=dataset, google=False, is_val=False
+    )
     annotations = Annotation.objects.filter(
-        dataset_item__in=dataset.datasetitem_set.filter(),
+        dataset_item__in=eligible_images,
         label_category__in=tag_sets_to_category_list_v2(
             pos_tags, neg_tags, val_pos_tags, val_neg_tags),
         label_type="klabel_frame",
@@ -1366,18 +1369,22 @@ def filtered_images_v2(
         include_tags = parse_tag_set_from_query_v2(payload.get("include"))
         exclude_tags = parse_tag_set_from_query_v2(payload.get("exclude"))
         pks = [i for i in payload.get("subset", []) if i]
+        split = payload.get("split", "train")
     else:
         include_tags = parse_tag_set_from_query_v2(request.GET.get("include"))
         exclude_tags = parse_tag_set_from_query_v2(request.GET.get("exclude"))
         pks = [i for i in request.GET.get("subset", "").split(",") if i]
+        split = request.GET("split", "train")
 
     dataset_items = None
+    is_val = split == "val"
+
     if pks and exclude_pks:
         exclude_pks = set(exclude_pks)
         pks = [pk for pk in pks if pk not in exclude_pks]
     elif not pks:
         dataset_items = DatasetItem.objects.filter(
-            dataset=dataset, google=False, is_val=False
+            dataset=dataset, google=False, is_val=is_val
         )
         if exclude_pks:
             dataset_items = dataset_items.exclude(pk__in=exclude_pks)
@@ -1576,8 +1583,11 @@ def train_svm_v2(request, dataset_name):
     )
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
+    eligible_images = DatasetItem.objects.filter(
+        dataset=dataset, google=False, is_val=False
+    )
     annotations = Annotation.objects.filter(
-        dataset_item__in=dataset.datasetitem_set.filter(),
+        dataset_item__in=eligible_images,
         label_category__in=tag_sets_to_category_list_v2(pos_tags, neg_tags),
         label_type="klabel_frame",
     )
