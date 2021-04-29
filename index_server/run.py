@@ -1803,11 +1803,11 @@ async def query_metrics(request):
         elif score <= config.DNN_SCORE_CLASSIFICATION_THRESHOLD and label:
             false_negatives.append(result)
 
-    false_positives.sort(key=operator.attrgetter("dist"), reverse=True)  # descending
-    false_negatives.sort(key=operator.attrgetter("dist"))  # ascending
+    # false_positives.sort(key=operator.attrgetter("dist"), reverse=True)  # descending
+    # false_negatives.sort(key=operator.attrgetter("dist"))  # ascending
 
-    for result in itertools.chain(false_positives, false_negatives):
-        result.label = index.labels[result.id]
+    # for result in itertools.chain(false_positives, false_negatives):
+    #     result.label = index.labels[result.id]
 
     results = {
         "precision": precision,
@@ -1816,8 +1816,10 @@ async def query_metrics(request):
         "recall_std": recall_std,
         "f1": f1,
         "f1_std": f1_std,
-        "false_positives": [r.to_dict() for r in false_positives],
-        "false_negatives": [r.to_dict() for r in false_negatives],
+        # "false_positives": [r.to_dict() for r in false_positives],
+        # "false_negatives": [r.to_dict() for r in false_negatives],
+        "num_false_positives": len(false_positives),
+        "num_false_negatives": len(false_negatives),
     }
     for metric in ("precision", "recall", "f1"):
         for k in (metric, f"{metric}_std"):
