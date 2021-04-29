@@ -1,14 +1,17 @@
 import React from "react";
 import times from "lodash/times";
 
-const ImageStack = ({ id, onClick, images, showLabel }) => {
+const ImageStack = ({ id, onClick, images, showLabel, labelText }) => {
+  const shouldShowLabel = showLabel || !!(labelText);
   return (
-    <a className={`stack ${showLabel ? "" : "nolabel"}`} onClick={onClick}>
+    <a className={`stack ${shouldShowLabel ? "" : "nolabel"}`} onClick={onClick}>
       {times(Math.min(4, images.length), (i) =>
         <img key={`stack-${i}`} className="thumb" src={images[i].thumb}></img>
       )}
-      {showLabel && <div className="label">
-        <b>Cluster {id + 1}</b> ({images.length} image{images.length !== 1 && "s"})
+      {shouldShowLabel && <div className="label">
+        {labelText || <>
+          <b>Cluster {id + 1}</b> ({images.length} image{images.length !== 1 && "s"})
+        </>}
       </div>}
     </a>
   );

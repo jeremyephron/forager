@@ -40,7 +40,7 @@ html, body, #root, .main {
   margin-right: auto;
 }
 
-.cluster-modal {
+.cluster-modal, .active-val-modal {
   a.selectable-image, img.main {
     display: block;
     max-width: 65%;
@@ -292,6 +292,10 @@ $semi-transparent-white: rgba(255, 255, 255, 0.92);
 
   &.CUSTOM {
     color: #007bff;
+    &.rbt-token-active {
+      background-color: #007bff;
+      color: white;
+    }
   }
 }
 

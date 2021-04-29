@@ -61,6 +61,11 @@ var disjointSet = require("disjoint-set");
 
 const PAGE_SIZE = 1000;
 
+const splits = [
+  {id: "train", label: "Training set"},
+  {id: "val", label: "Validation set"},
+];
+
 const orderingModes = [
   {id: "random", label: "Random order"},
   {id: "id", label: "Dataset order"},
@@ -265,7 +270,7 @@ function ClusteringControls(props) {
         onAfterChange={recluster}
       />
       <Button
-        color="primary"
+        color="light"
         size="sm"
         className="ml-4"
         onClick={props.toggleBulkTag}
@@ -285,6 +290,8 @@ function QueryBar(p) {
   let props = p;
   let datasetInfo = props.datasetInfo;
   let setCategories = props.setCategories;
+  let split = props.split;
+  let setSplit = props.setSplit;
   let datasetIncludeTags = props.datasetIncludeTags;
   let setDatasetIncludeTags = props.setDatasetIncludeTags;
   let datasetExcludeTags = props.datasetExcludeTags;
@@ -312,6 +319,12 @@ function QueryBar(p) {
     <div className="query-container sticky">
       <Container fluid>
         <div className="d-flex flex-row align-items-center">
+          <FormGroup className="mb-0">
+            <select className="custom-select mr-2" id="split" value={split} onChange={e => setSplit(e.target.value)}>
+              {splits.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+            <ReactSVG className="icon" src="assets/arrow-caret.svg" />
+          </FormGroup>
           <CategoryInput
             id="dataset-include-bar"
             className="mr-2"
@@ -336,7 +349,7 @@ function QueryBar(p) {
             <ReactSVG className="icon" src="assets/arrow-caret.svg" />
           </FormGroup>
           <Button
-            color="light"
+            color="primary"
             onClick={() => setIsLoading(true)}
             disabled={
             (orderingMode === "svm" && !!!(trainedSvmData)) ||
@@ -750,6 +763,7 @@ const App = () => {
   const [knnUseSpatial, setKnnUseSpatial] = useState(false);
 
   // Run queries after dataset info has loaded and whenever user clicks "query" button
+  const [split, setSplit] = useState(splits[0].id);
   const [datasetIncludeTags, setDatasetIncludeTags] = useState([]);
   const [datasetExcludeTags, setDatasetExcludeTags] = useState([]);
   const [googleQuery, setGoogleQuery] = useState("");
@@ -813,6 +827,7 @@ const App = () => {
 
     let url;
     let body = {
+      split: split,
       index_id: datasetInfo.index_id,
       include: datasetIncludeTags.map(t => `${t.category}:${t.value}`),
       exclude: datasetExcludeTags.map(t => `${t.category}:${t.value}`),
@@ -987,6 +1002,8 @@ const App = () => {
   let queryBarProps = {
     datasetInfo: datasetInfo,
     setCategories: setCategories,
+    split: split,
+    setSplit: setSplit,
     datasetIncludeTags: datasetIncludeTags,
     setDatasetIncludeTags: setDatasetIncludeTags,
     datasetExcludeTags: datasetExcludeTags,
@@ -1079,7 +1096,10 @@ const App = () => {
             categories={datasetInfo.categories}
           />
           <ValidatePanel
+            datasetName={datasetName}
             modelInfo={modelInfo}
+            datasetInfo={datasetInfo}
+            username={username}
             isVisible={mode === "validate"}
           />
         </Container>

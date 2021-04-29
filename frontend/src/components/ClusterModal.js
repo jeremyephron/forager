@@ -190,7 +190,6 @@ const ClusterModal = ({
   //
 
   const handleKeyDown = useCallback((e) => {
-    if (!isOpen) return;
     const { key } = e;
     const keyAsNumber = parseInt(key);
 
@@ -268,7 +267,7 @@ const ClusterModal = ({
       typeaheadRef.current.blur();
       typeaheadRef.current.hideMenu();
     }
-  }, [isOpen, isClusterView, isImageView, clusters, selection, setSelection, typeaheadRef, excludedImageIndexes, selectedTags, annotations]);
+  }, [isClusterView, isImageView, clusters, selection, setSelection, typeaheadRef, excludedImageIndexes, selectedTags, annotations]);
 
   const handleTypeaheadKeyDown = (e) => {
     const { key } = e;
@@ -276,11 +275,12 @@ const ClusterModal = ({
   }
 
   useEffect(() => {
+    if (!isOpen) return;
     document.addEventListener("keydown", handleKeyDown)
     return () => {
       document.removeEventListener("keydown", handleKeyDown)
     }
-  }, [handleKeyDown]);
+  }, [isOpen, handleKeyDown]);
 
   //
   // RENDERING
@@ -331,11 +331,11 @@ const ClusterModal = ({
             <b>Label mode:</b> &nbsp;
             {LABEL_VALUES.map(([value], i) =>
               <>
-                <kbd>{i + 1}</kbd> <span className={`rbt-token ${value}`}>{labelCategory}</span>&nbsp;
+                <kbd>{i + 1}</kbd> <span className={`rbt-token ${value}`}>{labelCategory}</span>{" "}
               </>)}
             {(tags[labelCategory] || []).map((name, i) =>
               <>
-                <kbd>{(LABEL_VALUES.length + i + 1) % 10}</kbd> <span className="rbt-token CUSTOM">{labelCategory} ({name})</span>&nbsp;
+                <kbd>{(LABEL_VALUES.length + i + 1) % 10}</kbd> <span className="rbt-token CUSTOM">{labelCategory} ({name})</span>{" "}
               </>)}
             <NewModeInput
               category={labelCategory}
