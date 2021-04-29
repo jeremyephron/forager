@@ -1765,7 +1765,7 @@ def get_val_examples_v2(dataset, model_id):
             label_category=model_id,
             label_type=VAL_NEGATIVE_TYPE,
         )
-        neg_dataset_item_pks.extend(ann.dataset_item for ann in annotations)
+        neg_dataset_item_pks.extend(ann.dataset_item.pk for ann in annotations)
 
     return pos_dataset_item_pks, neg_dataset_item_pks
 
