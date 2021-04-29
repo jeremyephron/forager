@@ -1770,8 +1770,6 @@ async def query_ranking_v2(request):
 
 @app.route("/query_metrics", methods=["POST"])
 async def query_metrics(request):
-    print(request.json)
-
     index_id = request.json["index_id"]
     model = request.json["model"]
     identifiers = request.json["identifiers"]  # type: List[str]
@@ -1797,7 +1795,9 @@ async def query_metrics(request):
     false_positives = []
     false_negatives = []
     for identifier, label, score in zip(identifiers, labels, prob_pos):
-        result = LabeledIndex.QueryResult(index.val_identifiers[identifier], score)
+        result = LabeledIndex.QueryResult(
+            index.val_identifiers[identifier], float(score)
+        )
         if score > config.DNN_SCORE_CLASSIFICATION_THRESHOLD and not label:
             false_positives.append(result)
         elif score <= config.DNN_SCORE_CLASSIFICATION_THRESHOLD and label:
@@ -1821,8 +1821,8 @@ async def query_metrics(request):
     }
     for metric in ("precision", "recall", "f1"):
         for k in (metric, f"{metric}_std"):
-            v = float(result[k])
-            results[k] = None if math.isnan(v) else v
+            if math.isnan(results[k]):
+                results[k] = None
     return resp.json(results)
 
 
