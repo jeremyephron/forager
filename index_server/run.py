@@ -157,7 +157,6 @@ class LabeledIndex:
             i = int(i)
             s = float(local_flat_index.scores[i])
             s = (s - lowest_score) / (highest_score - lowest_score)  # normalize
-            s = 1.0 - s  # invert, so that it's a distance
             if min_s <= s <= max_s:
                 sorted_results.append(LabeledIndex.QueryResult(i, s))
 

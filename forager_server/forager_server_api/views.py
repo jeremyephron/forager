@@ -1681,7 +1681,7 @@ def query_ranking_v2(request, dataset_name):
     index_id = payload["index_id"]
     score_min = float(payload.get("score_min", 0.0))
     score_max = float(payload.get("score_max", 1.0))
-    model = payload.get("model", "imagenet")
+    model = payload["model"]
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
