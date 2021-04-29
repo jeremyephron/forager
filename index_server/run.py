@@ -1770,6 +1770,8 @@ async def query_ranking_v2(request):
 
 @app.route("/query_metrics", methods=["POST"])
 async def query_metrics(request):
+    print(request.json)
+
     index_id = request.json["index_id"]
     model = request.json["model"]
     identifiers = request.json["identifiers"]  # type: List[str]
