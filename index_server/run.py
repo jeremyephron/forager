@@ -1777,13 +1777,14 @@ async def query_metrics(request):
     weights = request.json["weights"]  # type: List[float]
 
     assert len(identifiers) == len(labels) == len(weights)
+    num_labeled = len(identifiers)
 
     index = await get_index(index_id)
 
     prob_pos = index.get_model_scores(model, identifiers)
     y_pred = prob_pos > config.DNN_SCORE_CLASSIFICATION_THRESHOLD
     y_test = np.array(labels)
-    rows = np.arange(len(identifiers))
+    rows = np.arange(num_labeled)
     weights = np.array(weights)
 
     precision, precision_std, _ = ais.get_fscore(y_pred, y_test, rows, weights * y_pred)
@@ -1820,6 +1821,7 @@ async def query_metrics(request):
         # "false_negatives": [r.to_dict() for r in false_negatives],
         "num_false_positives": len(false_positives),
         "num_false_negatives": len(false_negatives),
+        "num_labeled": num_labeled,
     }
     for metric in ("precision", "recall", "f1"):
         for k in (metric, f"{metric}_std"):
