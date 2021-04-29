@@ -1853,7 +1853,7 @@ def add_val_annotations_v2(request):
         }
         if custom_value:
             annotation_data["custom_value"] = custom_value
-            annotation = json.dumps(annotation_data)
+        annotation = json.dumps(annotation_data)
 
         di = DatasetItem.objects.get(pk=image_pk)
         assert not di.google and di.is_val
