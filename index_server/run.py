@@ -157,7 +157,7 @@ class LabeledIndex:
             i = int(i)
             s = float(local_flat_index.scores[i])
             s = (s - lowest_score) / (highest_score - lowest_score)  # normalize
-            s = 1.0 - s # invert, so that it's a distance
+            s = 1.0 - s  # invert, so that it's a distance
             if min_s <= s <= max_s:
                 sorted_results.append(LabeledIndex.QueryResult(i, s))
 
@@ -242,7 +242,7 @@ class LabeledIndex:
                 i, d = int(i), float(d)  # cast numpy types
                 d = (d - lowest_dist) / (highest_dist - lowest_dist)  # normalize
                 if svm:
-                    d = 1.0 - d # invert
+                    d = 1.0 - d  # invert
                 if i >= 0 and min_d <= d <= max_d:
                     sorted_results.append(LabeledIndex.QueryResult(i, d))
         else:
@@ -940,8 +940,7 @@ current_clusters: CleanupDict[str, TerraformModule] = CleanupDict(
 @app.route("/start_cluster", methods=["POST"])
 async def start_cluster(request):
     cluster = TerraformModule(
-        config.CLUSTER_TERRAFORM_MODULE_PATH,
-        copy=not config.CLUSTER_REUSE_EXISTING
+        config.CLUSTER_TERRAFORM_MODULE_PATH, copy=not config.CLUSTER_REUSE_EXISTING
     )
     app.add_task(_start_cluster(cluster))
     cluster_id = cluster.id
@@ -1840,13 +1839,13 @@ async def query_active_validation(request):
     all_val_identifiers = index.get_val_identifiers()
     prob_pos = index.get_model_scores(model, all_val_identifiers)
     y_pred = prob_pos > config.DNN_SCORE_CLASSIFICATION_THRESHOLD
+    y_test = np.array(labels)
     sample_budget = max(2 * len(labels), config.ACTIVE_VAL_STARTING_BUDGET)
     g = current_f1
     alpha = 0.5
 
-    identifiers = set(identifiers)
-    known_rows = np.array([id in identifiers for id in all_val_identifiers])
-    y_test = np.array(labels)[known_rows] if labels else None
+    val_identifiers_to_inds = {id: i for i, id in enumerate(all_val_identifiers)}
+    known_rows = np.array([val_identifiers_to_inds[id] for id in identifiers])
 
     # Restrict sampling domain in early iterations when there aren't many
     # labeled positives
