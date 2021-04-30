@@ -1374,7 +1374,7 @@ def filtered_images_v2(
         include_tags = parse_tag_set_from_query_v2(request.GET.get("include"))
         exclude_tags = parse_tag_set_from_query_v2(request.GET.get("exclude"))
         pks = [i for i in request.GET.get("subset", "").split(",") if i]
-        split = request.GET("split", "train")
+        split = request.GET.get("split", "train")
 
     dataset_items = None
     is_val = split == "val"
