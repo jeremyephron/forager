@@ -1822,9 +1822,6 @@ async def query_metrics(request):
     for result in itertools.chain(false_positives, false_negatives):
         result.label = index.labels[result.id]
 
-    print("FP", false_positives)
-    print("FN", false_negatives)
-
     results = {
         "precision": precision,
         "precision_std": precision_std,
