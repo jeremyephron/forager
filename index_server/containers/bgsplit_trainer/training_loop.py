@@ -35,8 +35,10 @@ class TrainingLoop():
             val_positive_paths,
             val_negative_paths,
             val_unlabeled_paths,
+            data_cache_dir: str,
             notify_callback: Callable[[Dict[str, Any]], None]=lambda x: None):
         '''The training loop for background splitting models.'''
+        self.data_cache_dir = data_cache_dir
         self.notify_callback = notify_callback
 
         self._setup_model_kwargs(model_kwargs)
@@ -90,20 +92,24 @@ class TrainingLoop():
             val_positive_paths, val_negative_paths, val_unlabeled_paths):
         assert self.model_kwargs
         aux_labels = self.model_kwargs['aux_labels']
-        batch_size = int(self.model_kwargs.get('batch_size', 512))
+        image_input_size = self.model_kwargs.get('input_size', 224)
+        batch_size = int(self.model_kwargs.get('batch_size', 64))
         num_workers = self.num_workers
         restrict_aux_labels = bool(self.model_kwargs.get('restrict_aux_labels', True))
+        cache_images_on_disk = self.model_kwargs.get('cache_images_on_disk', False)
 
         train_transform = transforms.Compose([
-            transforms.RandomResizedCrop(224),
+            transforms.RandomResizedCrop(image_input_size),
             transforms.RandomHorizontalFlip(),
             transforms.ConvertImageDtype(torch.float32),
             transforms.Normalize([0.485, 0.456, 0.406],
                                  [0.229, 0.224, 0.225])
         ])
+        resize_size = int(image_input_size * 1.15)
+        resize_size += int(resize_size % 2)
         val_transform = transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
+            transforms.Resize(resize_size),
+            transforms.CenterCrop(image_input_size),
             transforms.ConvertImageDtype(torch.float32),
             transforms.Normalize([0.485, 0.456, 0.406],
                                  [0.229, 0.224, 0.225])
@@ -115,6 +121,8 @@ class TrainingLoop():
                 unlabeled_paths=train_unlabeled_paths,
                 auxiliary_labels=aux_labels,
                 restrict_aux_labels=restrict_aux_labels,
+                cache_images_on_disk=cache_images_on_disk,
+                data_cache_dir=self.data_cache_dir,
                 transform=train_transform),
             batch_size=batch_size,
             shuffle=True,
@@ -126,6 +134,8 @@ class TrainingLoop():
                 unlabeled_paths=val_unlabeled_paths,
                 auxiliary_labels=aux_labels,
                 restrict_aux_labels=restrict_aux_labels,
+                cache_images_on_disk=cache_images_on_disk,
+                data_cache_dir=self.data_cache_dir,
                 transform=val_transform),
             batch_size=batch_size,
             shuffle=False,
@@ -134,23 +144,27 @@ class TrainingLoop():
     def _setup_model(self):
         num_classes = 2
         num_aux_classes = self.train_dataloader.dataset.num_auxiliary_classes
-        freeze_backbone = self.model_kwargs
+        freeze_backbone = self.model_kwargs.get('freeze_backbone', False)
         self.model_kwargs['num_aux_classes'] = num_aux_classes
         self.model = Model(num_main_classes=num_classes,
                            num_aux_classes=num_aux_classes,
                            freeze_backbone=freeze_backbone)
+        if self.model_kwargs.get('aux_labels_type', None) == "imagenet":
+            # Initialize auxiliary head to imagenet fc
+            self.model.auxiliary_head.weight = self.model.backbone.fc.weight
+            self.model.auxiliary_head.bias = self.model.backbone.fc.bias
         if self.use_cuda:
             self.model = self.model.cuda()
         self.model = nn.DataParallel(self.model)
         self.main_loss = nn.CrossEntropyLoss()
         self.auxiliary_loss = nn.CrossEntropyLoss()
         self.start_epoch = 0
-        self.end_epoch = 1
+        self.end_epoch = self.model_kwargs.get('epochs_to_run', 1)
         self.current_epoch = 0
         self.global_train_batch_idx = 0
         self.global_val_batch_idx = 0
 
-        lr = float(self.model_kwargs.get('lr', 0.1))
+        lr = float(self.model_kwargs.get('initial_lr', 0.01))
         endlr = float(self.model_kwargs.get('endlr', 0.0))
         optim_params = dict(
             lr=lr,
@@ -191,9 +205,9 @@ class TrainingLoop():
     ):
         self._setup_dataset(train_positive_paths, train_negative_paths, train_unlabeled_paths,
                            val_positive_paths, val_negative_paths, val_unlabeled_paths)
-        self.start_epoch += 1
+        self.start_epoch = self.end_epoch
         self.current_epoch = self.start_epoch
-        self.end_epoch = self.start_epoch + 1
+        self.end_epoch = self.start_epoch + self.model_kwargs.get('epochs_to_run', 1)
 
     def load_checkpoint(self, path: str, resume_training: bool=False):
         checkpoint_state = torch.load(path)
@@ -203,7 +217,8 @@ class TrainingLoop():
             self.global_val_batch_idx = checkpoint_state['global_val_batch_idx']
             self.start_epoch = checkpoint_state['epoch'] + 1
             self.current_epoch = self.start_epoch
-            self.end_epoch = self.start_epoch + 1
+            self.end_epoch = (
+                self.start_epoch + self.model_kwargs.get('epochs_to_run', 1))
             self.optimizer.load_state_dict(
                 checkpoint_state['optimizer'])
             self.optimizer_scheduler.load_state_dict(
@@ -244,8 +259,14 @@ class TrainingLoop():
                 main_labels = main_labels.cuda()
                 aux_labels = aux_labels.cuda()
             main_logits, aux_logits = self.model(images)
-            main_loss_value = self.main_loss(main_logits, main_labels)
-            aux_loss_value = self.auxiliary_loss(aux_logits, aux_labels)
+            valid_main_labels = main_labels != -1
+            valid_aux_labels = aux_labels != -1
+            main_loss_value = self.main_loss(
+                main_logits[valid_main_labels],
+                main_labels[valid_main_labels])
+            aux_loss_value = self.aux_weight * self.auxiliary_loss(
+                aux_logits[valid_aux_labels],
+                aux_labels[valid_aux_labels])
             loss_value += (main_loss_value + aux_loss_value).item()
             main_pred = F.softmax(main_logits)
             aux_pred = F.softmax(main_logits)
@@ -319,10 +340,10 @@ class TrainingLoop():
             main_loss_value = self.main_loss(
                 main_logits[valid_main_labels],
                 main_labels[valid_main_labels])
-            aux_loss_value = self.auxiliary_loss(
+            aux_loss_value = self.aux_weight * self.auxiliary_loss(
                 aux_logits[valid_aux_labels],
                 aux_labels[valid_aux_labels])
-            loss_value = main_loss_value + self.aux_weight * aux_loss_value
+            loss_value = main_loss_value + aux_loss_value
             self.train_epoch_loss += loss_value.item()
             if torch.sum(valid_main_labels) > 0:
                 self.train_epoch_main_loss += main_loss_value.item()

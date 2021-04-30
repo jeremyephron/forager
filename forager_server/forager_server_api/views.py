@@ -368,6 +368,12 @@ def create_model(request, dataset_name, dataset=None):
     )
     response_data = r.json()
 
+    if r.status_code != 200:
+        return JsonResponse({
+            "status": "failure",
+            "reason": response_data.get("reason", "")
+        }, status=r.status_code)
+
     m = DNNModel(
         dataset=dataset,
         name=model_name,

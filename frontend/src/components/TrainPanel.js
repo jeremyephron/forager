@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import useInterval from 'react-useinterval';
 import {
   Button,
   Input,
@@ -83,14 +84,14 @@ const TrainPanel = ({
     setClusterReady(clusterStatus.ready);
   };
 
-  useEffect(() => {
-    if (clusterId && !clusterReady) {
-      const interval = setInterval(() => {
-        getClusterStatus();
-      }, STATUS_POLL_INTERVAL);
-      return () => clearInterval(interval);
-    }
-  }, [clusterId, clusterReady]);
+  const resetCluster = async () => {
+    setClusterId(null);
+    setClusterReady(false);
+  };
+
+  useInterval(
+    getClusterStatus,
+    clusterId && !clusterReady ? STATUS_POLL_INTERVAL : null);
 
   //
   // TRAINING
@@ -107,13 +108,16 @@ const TrainPanel = ({
     "endlr": 0.0,
     "max_epochs": 90,
     "warmup_epochs": 0,
-    "batch_size": 512,
+    "epochs_to_run": 5,
+    "input_size": 256,
+    "batch_size": 256,
     "momentum": 0.9,
     "weight_decay": 0.0001,
-    "aux_weight": 0.1,
+    "aux_weight": 0.04,
     "aux_labels_type": "imagenet",
     "restrict_aux_labels": true,
-    "freeze_backbone": true,
+    "freeze_backbone": false,
+    "cache_images_on_disk": true,
   });
   let optInputs = [
     {type: "number", displayName: "Initial LR", param: "initial_lr"},
@@ -122,12 +126,15 @@ const TrainPanel = ({
     {type: "number", displayName: "Weight decay", param: "weight_decay"},
     {type: "number", displayName: "Warmup epochs", param: "warmup_epochs"},
     {type: "number", displayName: "Max epochs", param: "max_epochs"},
+    {type: "number", displayName: "Epochs per job", param: "epochs_to_run"},
   ]
   let otherInputs = [
+    {type: "number", displayName: "Image input size", param: "input_size"},
     {type: "number", displayName: "Batch size", param: "batch_size"},
     {type: "number", displayName: "Aux loss weight", param: "aux_weight"},
     {type: "checkbox", displayName: "Restrict aux labels", param: "restrict_aux_labels"},
     {type: "checkbox", displayName: "Freeze backbone", param: "freeze_backbone"},
+    {type: "checkbox", displayName: "Cache images on disk", param: "cache_images_on_disk"},
   ]
 
   const updateDnnKwargs = (param, value) => {
@@ -148,7 +155,6 @@ const TrainPanel = ({
   };
 
   const trainDnnOneEpoch = async () => {
-    setDnnIsTraining(true);
     const url = new URL(`${endpoints.trainModel}/${datasetName}`);
     let body = {
       model_name: modelName,
@@ -170,12 +176,23 @@ const TrainPanel = ({
       body.resume = dnnCheckpointModel.latest.model_id;
     }
 
-    const modelResponse = await fetch(url, {
+    const r = await fetch(url, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(body),
-    }).then(r => r.json());
-    setTrainingModelId(modelResponse.model_id);
+    });
+    let data = await r.json();
+    if (r.ok) {
+      setTrainingModelId(data.model_id);
+    } else {
+      if (data.reason.startsWith("Cluster")) {
+        await resetCluster();
+      } else {
+        console.error("Model training did not start", data.reason);
+        setRequestDnnTraining(false);
+      }
+      setDnnIsTraining(false);
+    }
   };
 
   const getTrainingStatus = async () => {
@@ -185,16 +202,22 @@ const TrainPanel = ({
       method: "GET",
     }).then(r => r.json());
     if (modelStatus.has_model && dnnIsTraining) {
+      console.log("training status next epoch",
+                  new Date().toLocaleTimeString(),
+                  dnnIsTraining, calledDnnTrain.current,
+                  trainingModelId)
       // Start next epoch
       setPrevModelId(trainingModelId);
       setTrainingModelId(null);
       if (trainingEpoch + 1 >= dnnKwargs["max_epochs"]) {
         setRequestDnnTraining(false);
       } else {
-        setTrainingEpoch(trainingEpoch + 1);
+        setTrainingEpoch(
+          Math.min(dnnKwargs["max_epochs"] - 1,
+                   trainingEpoch + dnnKwargs["epochs_to_run"]));
       }
       setDnnIsTraining(false);
-    } else if (modelStatus.failed) {
+    } else if (modelStatus.failed && dnnIsTraining) {
       console.error("Model training failed", modelStatus.failure_reason);
       setRequestDnnTraining(false);
       setDnnIsTraining(false);
@@ -204,25 +227,32 @@ const TrainPanel = ({
     setTrainingTensorboardUrl(modelStatus.tensorboard_url);
   };
 
-  useEffect(() => {
-    if (dnnIsTraining && trainingModelId) {
-      const interval = setInterval(() => {
-        getTrainingStatus();
-      }, STATUS_POLL_INTERVAL);
-      return () => clearInterval(interval);
-    }
-  }, [dnnIsTraining, trainingModelId]);
+  useInterval(
+    getTrainingStatus,
+    dnnIsTraining && trainingModelId ? STATUS_POLL_INTERVAL : null);
 
   // Start training
   useEffect(() => {
     if (!requestDnnTraining) return;
     if (clusterReady && !dnnIsTraining) {
       setDnnIsTraining(true);
-      trainDnnOneEpoch();
     } else if (!clusterId) {
       startCreatingCluster();
     }
   }, [clusterReady, clusterId, requestDnnTraining, dnnIsTraining]);
+
+  const calledDnnTrain = useRef(false);
+  useEffect(() => {
+    console.log("dnn call",
+                new Date().toLocaleTimeString(),
+                dnnIsTraining, calledDnnTrain.current)
+    if (dnnIsTraining && !calledDnnTrain.current) {
+      calledDnnTrain.current = true;
+      trainDnnOneEpoch();
+    } else {
+      calledDnnTrain.current = false;
+    }
+  }, [dnnIsTraining]);
 
   //
   // INFERENCE (automatically pipelined with training)
@@ -271,21 +301,25 @@ const TrainPanel = ({
     setInferenceTimeLeft(inferenceStatus.time_left);
   };
 
-  useEffect(() => {
-    if (inferenceJobId) {
-      const interval = setInterval(() => {
-        getInferenceStatus();
-      }, STATUS_POLL_INTERVAL);
-      return () => clearInterval(interval);
-    }
-  }, [inferenceJobId]);
+  useInterval(
+    getInferenceStatus,
+    inferenceJobId ? STATUS_POLL_INTERVAL : null);
 
   useEffect(() => {
     if (prevModelId && !inferenceJobId && trainingEpoch > inferenceEpoch + 1 && !dnnIsInferring) {
       setDnnIsInferring(true);
-      inferOneEpoch();
     }
   }, [prevModelId, inferenceJobId, trainingEpoch, inferenceEpoch]);
+
+  const calledDnnInfer = useRef(false);
+  useEffect(() => {
+    if (dnnIsInferring && !calledDnnInfer.current) {
+      calledDnnInfer.current = true;
+      inferOneEpoch();
+    } else {
+      calledDnnInfer.current = false;
+    }
+  }, [dnnIsInferring]);
 
   //
   // RESET LOGIC
@@ -334,7 +368,6 @@ const TrainPanel = ({
       method: "GET",
       headers: {"Content-Type": "application/json"},
     }).then(res => res.json());
-    console.log(res.models);
     setModelInfo(res.models);
   }
 
@@ -380,7 +413,7 @@ const TrainPanel = ({
             {clusterReady ?
               <div>
                 Training model <b>{modelName} </b> &mdash;{" "}
-                time left for training epoch {trainingEpoch}: {timeLeftToString(trainingTimeLeft)}
+                time left for training {dnnKwargs["epochs_to_run"] > 1 ? "epochs " + trainingEpoch + "-" + (trainingEpoch + dnnKwargs["epochs_to_run"]) : "epoch " + trainingEpoch}: {timeLeftToString(trainingTimeLeft)}
                 {inferenceJobId && <span>, time left for inference epoch {inferenceEpoch}: {timeLeftToString(inferenceTimeLeft)}</span>}
                 <br />
                 TensorBoard:{" "}
