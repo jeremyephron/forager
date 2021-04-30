@@ -1,6 +1,6 @@
 variable "bgsplit_trainer_tensorboard_image_name" {
   type    = string
-  default = "tensorflow/tensorflow"
+  default = "tensorflow/tensorflow:2.4.1"
 }
 
 variable "bgsplit_trainer_tensorboard_node_pool_name" {

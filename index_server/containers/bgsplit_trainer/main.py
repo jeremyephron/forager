@@ -9,8 +9,11 @@ import logging
 import os.path
 import json
 import sys
+import shutil
 import types
 import numpy as np
+import tempfile
+import weakref
 from flask import Flask, request, abort
 from werkzeug.exceptions import HTTPException
 from dataclasses import dataclass, field
@@ -26,6 +29,11 @@ handler = logging.StreamHandler(sys.stdout)
 handler.setLevel(logging.DEBUG)
 logger.addHandler(handler)
 
+
+# For caching dataset images
+data_cache_dir = tempfile.TemporaryDirectory()
+data_finalizer = weakref.finalize(
+    data_cache_dir, shutil.rmtree, data_cache_dir.name)
 
 
 # Step 3: Call webhook to indicate completion
@@ -153,8 +161,9 @@ class TrainingJob:
                     val_positive_paths=self.val_positive_paths,
                     val_negative_paths=self.val_negative_paths,
                     val_unlabeled_paths=self.val_unlabeled_paths,
-                    notify_callback=self.notify_status
-                   )
+                    data_cache_dir=data_cache_dir.name,
+                    notify_callback=self.notify_status,
+                )
             logger.info('Running training')
             # Notify to send the model suffix so we can show the tensorboard url
             # asap
@@ -214,13 +223,16 @@ def start():
     if not working_lock.acquire(blocking=False):
         abort(503, description="Busy")
 
+    logger.debug(f'Received request')
     payload["_lock"] = working_lock
     log_payload = dict(payload)
     for k in ['train_positive_paths', 'train_negative_paths', 'train_unlabeled_paths',
               'val_positive_paths', 'val_negative_paths', 'val_unlabeled_paths']:
         log_payload[k] = len(log_payload[k])
     logger.debug(f'Received job payload: {log_payload}')
-    if last_job and last_job.last_checkpoint_path == payload['model_kwargs']['resume_from']:
+    resume_from_checkpoint = payload['model_kwargs']['resume_from']
+    if resume_from_checkpoint and last_job and \
+       resume_from_checkpoint == last_job.last_checkpoint_path:
         logger.info(f'Resuming from prior job ({last_job.model_id}) for model {payload["model_id"]}')
         current_job = last_job
         current_job.update_model_id_and_paths(payload)

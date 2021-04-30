@@ -1,5 +1,4 @@
 import React, { useState, useEffect,  useReducer, useRef } from "react";
-import useInterval from 'react-useinterval';
 import {
   Container,
   Row,

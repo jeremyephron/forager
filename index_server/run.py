@@ -1034,6 +1034,7 @@ current_models: CleanupDict[str, BGSplitTrainingJob] = CleanupDict(
 
 @app.route("/start_bgsplit_job", methods=["POST"])
 async def start_bgsplit_job(request):
+    logger.info(f"Train request received")
     # HACK(mihirg): sometimes we get empty identifiers (i.e., "") from the server that
     # would otherwise cause a crash here; we should probably figure out why this is, but
     # just filtering out for now.
@@ -1051,6 +1052,11 @@ async def start_bgsplit_job(request):
     pref_worker_id = request.json.get("preferred_worker_id", None)
 
     # Get cluster
+    if cluster_id not in current_clusters:
+        return resp.json(
+            {"reason": f"Cluster {cluster_id} does not exist."}, status=400
+        )
+
     cluster = current_clusters[cluster_id]
     # lock_id = current_clusters.lock(cluster_id)
     # cluster_unlock_fn = functools.partial(current_clusters.unlock, cluster_id, lock_id)
@@ -1116,18 +1122,27 @@ async def start_bgsplit_job(request):
 
     assert os.path.exists(aux_labels_local_path)
 
+    upload_aux_start = time.time()
     aux_labels_gcs_path = config.AUX_GCS_TMPL.format(index_id, alt)
     proc = await asyncio.create_subprocess_exec(
         "gsutil",
-        "-m",
-        "cp",
-        "-r",
-        "-n",
-        aux_labels_local_path,
-        aux_labels_gcs_path,
-    )
+        "-q",
+        "stat",
+        aux_labels_gcs_path)
+    if proc.wait() != 0:
+        # Does not exist, so upload
+        proc = await asyncio.create_subprocess_exec(
+            "gsutil",
+            "-m",
+            "cp",
+            "-r",
+            "-n",
+            aux_labels_local_path,
+            aux_labels_gcs_path,
+           )
+        await proc.wait()
     aux_labels_gcs_path = config.AUX_GCS_PUBLIC_TMPL.format(index_id, alt)
-    await proc.wait()
+    logger.debug(f"Upload aux time: {time.time() - upload_aux_start}")
 
     # 2. Train BG Split model
     trainers = [Trainer(url) for url in cluster.output["bgsplit_trainer_urls"]]
