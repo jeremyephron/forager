@@ -177,12 +177,11 @@ class LabeledIndex:
         start = time.perf_counter()
 
         # TODO(mihirg): Process CHUNK_SIZE rows at a time for large datasets
-        dists = cdist(
-            np.expand_dims(query_vector, axis=0),
-            local_flat_index.index,
-            metric="cosine" if dot_product else "euclidean",
-        )
-        dists = np.squeeze(dists, axis=0)
+        if dot_product:
+            dists = local_flat_index.index @ query_vector
+        else:
+            dists = cdist(np.expand_dims(query_vector, axis=0), local_flat_index.index)
+            dists = np.squeeze(dists, axis=0)
 
         sorted_results = []
         lowest_dist = np.min(dists)
