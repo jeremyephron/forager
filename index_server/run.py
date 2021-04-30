@@ -27,7 +27,7 @@ from PIL import Image
 from sanic import Sanic
 import sanic.response as resp
 from scipy.spatial.distance import squareform, cdist
-from sklearn import svm
+import sklearn
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 
 from typing import Callable, DefaultDict, Dict, List, Optional, Set, Tuple, Iterable
@@ -177,11 +177,12 @@ class LabeledIndex:
         start = time.perf_counter()
 
         # TODO(mihirg): Process CHUNK_SIZE rows at a time for large datasets
-        if dot_product:
-            dists = local_flat_index.index @ query_vector
-        else:
-            dists = cdist(np.expand_dims(query_vector, axis=0), local_flat_index.index)
-            dists = np.squeeze(dists, axis=0)
+        dists = cdist(
+            np.expand_dims(query_vector, axis=0),
+            local_flat_index.index,
+            metric="cosine" if dot_product else "euclidean",
+        )
+        dists = np.squeeze(dists, axis=0)
 
         sorted_results = []
         lowest_dist = np.min(dists)
@@ -1727,7 +1728,8 @@ async def train_svm_v2(request):
     # Train SVM and return serialized vector
     training_features = np.concatenate((pos_vectors, neg_vectors))
     training_labels = np.array([1] * len(pos_vectors) + [0] * len(neg_vectors))
-    model = svm.LinearSVC(C=0.1)
+    model = sklearn.svm.LinearSVC(C=0.1)
+    training_features = sklearn.preprocessing.normalize(training_features)
     model.fit(training_features, training_labels)
 
     w = np.array(model.coef_[0] * 1000, dtype=np.float32)
