@@ -142,6 +142,8 @@ class LabeledIndex:
         index = self.local_flat_indexes[model]
         return index
 
+    # NOTE(mihirg): We don't normalize scores here because this currently only runs on
+    # model outputs that are 0 to 1 anyway; consider adding as a param in the future
     def rank_brute_force(
         self, model: str, min_s: float = 0.0, max_s: float = 1.0
     ) -> List[QueryResult]:
@@ -149,14 +151,10 @@ class LabeledIndex:
         assert local_flat_index.scores is not None
 
         ranking = np.argsort(local_flat_index.scores)[::-1]
-        lowest_score = np.min(local_flat_index.scores)
-        highest_score = np.max(local_flat_index.scores)
-
         sorted_results = []
         for i in ranking:
             i = int(i)
             s = float(local_flat_index.scores[i])
-            s = (s - lowest_score) / (highest_score - lowest_score)  # normalize
             if min_s <= s <= max_s:
                 sorted_results.append(LabeledIndex.QueryResult(i, s))
 
@@ -1125,10 +1123,8 @@ async def start_bgsplit_job(request):
     upload_aux_start = time.time()
     aux_labels_gcs_path = config.AUX_GCS_TMPL.format(index_id, alt)
     proc = await asyncio.create_subprocess_exec(
-        "gsutil",
-        "-q",
-        "stat",
-        aux_labels_gcs_path)
+        "gsutil", "-q", "stat", aux_labels_gcs_path
+    )
     if proc.wait() != 0:
         # Does not exist, so upload
         proc = await asyncio.create_subprocess_exec(
@@ -1139,7 +1135,7 @@ async def start_bgsplit_job(request):
             "-n",
             aux_labels_local_path,
             aux_labels_gcs_path,
-           )
+        )
         await proc.wait()
     aux_labels_gcs_path = config.AUX_GCS_PUBLIC_TMPL.format(index_id, alt)
     logger.debug(f"Upload aux time: {time.time() - upload_aux_start}")
