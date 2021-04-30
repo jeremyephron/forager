@@ -13,6 +13,7 @@ import math
 import operator
 import os
 from pathlib import Path
+import random
 import re
 import shutil
 import time
@@ -1900,6 +1901,8 @@ async def query_active_validation(request):
         identifiers_to_weights[id] = weight
         if id not in old_identifiers:
             new_identifiers.append(id)
+
+    random.shuffle(new_identifiers)
 
     return resp.json(
         {
