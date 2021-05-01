@@ -1872,14 +1872,16 @@ def query_active_validation_v2(request, dataset_name):
     )
     response_data = r.json()
 
-    pks, paths = zip(
-        *DatasetItem.objects.filter(
+    pks_and_paths = list(
+        DatasetItem.objects.filter(
             dataset=dataset,
             identifier__in=response_data["identifiers"],
             is_val=True,
             google=False,
         ).values_list("pk", "path")
     )
+    random.shuffle(pks_and_paths)
+    pks, paths = zip(*pks_and_paths)
 
     bucket_name = dataset.val_directory[len("gs://") :].split("/")[0]
     path_template = "https://storage.googleapis.com/{:s}/".format(bucket_name) + "{:s}"
