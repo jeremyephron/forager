@@ -1618,6 +1618,7 @@ def query_knn_v2(request, dataset_name):
 @csrf_exempt
 def train_svm_v2(request, dataset_name):
     index_id = request.GET["index_id"]
+    model = request.GET.get("model", "imagenet")
     pos_tags = parse_tag_set_from_query_v2(request.GET["pos_tags"])
     neg_tags = parse_tag_set_from_query_v2(request.GET.get("neg_tags"))
     augment_negs = bool(
@@ -1672,6 +1673,7 @@ def train_svm_v2(request, dataset_name):
         "index_id": index_id,
         "pos_identifiers": pos_dataset_item_internal_identifiers,
         "neg_identifiers": neg_dataset_item_internal_identifiers,
+        "model": model,
     }
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/train_svm_v2",

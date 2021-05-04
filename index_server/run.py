@@ -1716,12 +1716,13 @@ async def train_svm_v2(request):
     pos_identifiers = list(filter(bool, request.json["pos_identifiers"]))
     neg_identifiers = list(filter(bool, request.json["neg_identifiers"]))
     index_id = request.json["index_id"]
+    embedding_model = request.json["model"]
 
     index = await get_index(index_id)
 
     # Get positive and negative image embeddings from local flat index
-    pos_vectors = index.get_embeddings(pos_identifiers)
-    neg_vectors = index.get_embeddings(neg_identifiers)
+    pos_vectors = index.get_embeddings(pos_identifiers, embedding_model)
+    neg_vectors = index.get_embeddings(neg_identifiers, embedding_model)
     assert len(pos_vectors) > 0 and len(neg_vectors) > 0
 
     # Train SVM and return serialized vector
