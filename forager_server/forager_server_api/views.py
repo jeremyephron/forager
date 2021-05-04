@@ -311,7 +311,7 @@ def get_model_status(request, model_id):
         m.checkpoint_path = response_data['checkpoint_path']
         m.save()
 
-        logging.info(f"NEW DNN - {m.model_id}")
+        logger.info(f"NEW DNN - {m.model_id}")
 
     return JsonResponse(response_data)
 
@@ -619,9 +619,9 @@ def generate_embedding_v2(request):
     image_id = payload.get("image_id")
     if image_id:
         payload["identifier"] = DatasetItem.objects.get(pk=image_id).identifier
-        logging.info("INTERNAL KNN")
+        logger.info("INTERNAL KNN")
     else:
-        logging.info("EXTERNAL BOOTSTRAPPING")
+        logger.info("EXTERNAL BOOTSTRAPPING")
 
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/generate_embedding",
@@ -652,9 +652,9 @@ def query_knn_v2(request, dataset_name):
     model = payload.get("model", "imagenet")
 
     if model == "clip":
-        logging.info("QUERY - CLIP")
+        logger.info("QUERY - CLIP")
     else:
-        logging.info(f"QUERY - KNN - {len(images)}")
+        logger.info(f"QUERY - KNN - {len(images)}")
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
@@ -744,14 +744,14 @@ def train_svm_v2(request, dataset_name):
     )
     response_data = r.json()
 
-    logging.info(f"NEW SVM - {response_data['svm_vector']}")
+    logger.info(f"NEW SVM - {response_data['svm_vector']}")
     return JsonResponse(response_data)  # {"svm_vector": base64-encoded string}
 
 
 @api_view(["POST"])
 @csrf_exempt
 def query_svm_v2(request, dataset_name):
-    logging.info("QUERY - SVM")
+    logger.info("QUERY - SVM")
 
     payload = json.loads(request.body)
     index_id = payload["index_id"]
@@ -795,7 +795,7 @@ def query_ranking_v2(request, dataset_name):
     score_max = float(payload.get("score_max", 1.0))
     model = payload["model"]
 
-    logging.info(f"QUERY - RANK - {model}")
+    logger.info(f"QUERY - RANK - {model}")
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
@@ -832,10 +832,10 @@ def query_images_v2(request, dataset_name):
     result_pks = filtered_images_v2(request, dataset)
     if order == "random":
         random.shuffle(result_pks)
-        logging.info("QUERY - RANDOM")
+        logger.info("QUERY - RANDOM")
     elif order == "id":
         result_pks.sort()
-        logging.info("QUERY - DATASET")
+        logger.info("QUERY - DATASET")
     results = {'pks': result_pks, 'distances': [-1 for _ in result_pks]}
     return JsonResponse(create_result_set_v2(results, "query"))
 
@@ -904,7 +904,7 @@ def query_metrics_v2(request, dataset_name):
     index_id = payload["index_id"]
     internal_identifiers_to_weights = payload["weights"]  # type: Dict[str, int]
 
-    logging.info(f"VALIDATION - METRICS")
+    logger.info(f"VALIDATION - METRICS")
 
     pos_dataset_item_pks, neg_dataset_item_pks = get_val_examples_v2(dataset, model_id)
 
@@ -955,7 +955,7 @@ def query_active_validation_v2(request, dataset_name):
     if current_f1 is None:
         current_f1 = 0.5
 
-    logging.info(f"VALIDATION - STACK")
+    logger.info(f"VALIDATION - STACK")
 
     pos_dataset_item_pks, neg_dataset_item_pks = get_val_examples_v2(dataset, model_id)
 
@@ -1177,9 +1177,9 @@ def add_annotations_v2(request):
     image_identifiers = payload["identifiers"]
 
     if len(image_identifiers) == 1:
-        logging.info(f"TAG - SINGLE")
+        logger.info(f"TAG - SINGLE")
     else:
-        logging.info(f"TAG - BULK")
+        logger.info(f"TAG - BULK")
 
     num_created = bulk_add_annotations_v2(payload, image_identifiers)
     return JsonResponse({"created": num_created})
@@ -1188,7 +1188,7 @@ def add_annotations_v2(request):
 @api_view(["POST"])
 @csrf_exempt
 def add_annotations_to_result_set_v2(request):
-    logging.info(f"TAG - PERCENTILE")
+    logger.info(f"TAG - PERCENTILE")
 
     payload = json.loads(request.body)
     result_set_id = payload["result_set_id"]
