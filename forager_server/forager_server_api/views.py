@@ -752,14 +752,14 @@ def train_svm_v2(request, dataset_name):
 @api_view(["POST"])
 @csrf_exempt
 def query_svm_v2(request, dataset_name):
-    logger.info(f"QUERY - SVM - {payload.get('split', 'train')}")
-
     payload = json.loads(request.body)
     index_id = payload["index_id"]
     svm_vector = payload["svm_vector"]
     score_min = float(payload.get("score_min", 0.0))
     score_max = float(payload.get("score_max", 1.0))
     model = payload.get("model", "imagenet")
+
+    logger.info(f"QUERY - SVM - {payload.get('split', 'train')}")
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
