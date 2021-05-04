@@ -655,7 +655,7 @@ def query_knn_v2(request, dataset_name):
     if model == "clip":
         logger.info(f"QUERY - CLIP - {payload.get('split', 'train')}")
     else:
-        logger.info(f"QUERY - KNN - {payload.get('split', 'train')} - {len(images)}")
+        logger.info(f"QUERY - KNN - {payload.get('split', 'train')} - {len(embeddings)}")
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
