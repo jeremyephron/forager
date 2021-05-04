@@ -802,14 +802,16 @@ const App = () => {
 
   const trainSvm = async () => {
     const url = new URL(`${endpoints.trainSvm}/${datasetName}`);
-    url.search = new URLSearchParams({
+    let body = {
       index_id: datasetInfo.index_id,
       pos_tags: svmPosTags.map(t => `${t.category}:${t.value}`),
       neg_tags: svmNegTags.map(t => `${t.category}:${t.value}`),
       augment_negs: svmAugmentNegs,
       include: svmAugmentIncludeTags.map(t => `${t.category}:${t.value}`),
       exclude: svmAugmentExcludeTags.map(t => `${t.category}:${t.value}`),
-    }).toString();
+    }
+    if (svmModel) body.model = svmModel.with_output.model_id;
+    url.search = new URLSearchParams(body).toString();
     const svmData = await fetch(url, {
       method: "GET",
     }).then(r => r.json());
