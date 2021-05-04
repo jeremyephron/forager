@@ -744,7 +744,7 @@ def train_svm_v2(request, dataset_name):
     )
     response_data = r.json()
 
-    logging.info(f"NEW SVM - {response_data["svm_vector"]}")
+    logging.info(f"NEW SVM - {response_data['svm_vector']}")
     return JsonResponse(response_data)  # {"svm_vector": base64-encoded string}
 
 
