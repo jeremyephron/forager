@@ -311,7 +311,7 @@ def get_model_status(request, model_id):
         m.checkpoint_path = response_data['checkpoint_path']
         m.save()
 
-        logger.info(f"NEW DNN - {m.model_id}")
+    logger.info(f"TRAINING STATUS - {model_id}")
 
     return JsonResponse(response_data)
 
@@ -369,6 +369,7 @@ def get_model_inference_status(request, job_id):
         m = get_object_or_404(DNNModel, model_id=model_id)
         m.output_directory = response_data['output_dir']
         m.save()
+        logger.info(f"NEW AVAILABLE DNN - {m.model_id}")
 
     return JsonResponse(response_data)
 
