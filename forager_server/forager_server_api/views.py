@@ -653,9 +653,9 @@ def query_knn_v2(request, dataset_name):
     model = payload.get("model", "imagenet")
 
     if model == "clip":
-        logger.info("QUERY - CLIP")
+        logger.info(f"QUERY - CLIP - {payload.get('split', 'train')}")
     else:
-        logger.info(f"QUERY - KNN - {len(images)}")
+        logger.info(f"QUERY - KNN - {payload.get('split', 'train')} - {len(images)}")
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
@@ -752,7 +752,7 @@ def train_svm_v2(request, dataset_name):
 @api_view(["POST"])
 @csrf_exempt
 def query_svm_v2(request, dataset_name):
-    logger.info("QUERY - SVM")
+    logger.info(f"QUERY - SVM - {payload.get('split', 'train')}")
 
     payload = json.loads(request.body)
     index_id = payload["index_id"]
@@ -796,7 +796,7 @@ def query_ranking_v2(request, dataset_name):
     score_max = float(payload.get("score_max", 1.0))
     model = payload["model"]
 
-    logger.info(f"QUERY - RANK - {model}")
+    logger.info(f"QUERY - RANK - {payload.get('split', 'train')} - {model}")
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
@@ -833,10 +833,10 @@ def query_images_v2(request, dataset_name):
     result_pks = filtered_images_v2(request, dataset)
     if order == "random":
         random.shuffle(result_pks)
-        logger.info("QUERY - RANDOM")
+        logger.info(f"QUERY - RANDOM - {payload.get('split', 'train')}")
     elif order == "id":
         result_pks.sort()
-        logger.info("QUERY - DATASET")
+        logger.info(f"QUERY - DATASET - {payload.get('split', 'train')}")
     results = {'pks': result_pks, 'distances': [-1 for _ in result_pks]}
     return JsonResponse(create_result_set_v2(results, "query"))
 
