@@ -1080,12 +1080,12 @@ async def start_bgsplit_job(request):
     ]
 
     val_pos_paths = [
-        os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
+        os.path.join(gcs_root_path, index.labels[index.train_identifiers[i]])
         for i in val_pos_identifiers
     ]
 
     val_neg_paths = [
-        os.path.join(gcs_root_path, index.labels[index.identifiers[i]])
+        os.path.join(gcs_root_path, index.labels[index.train_identifiers[i]])
         for i in val_neg_identifiers
     ]
 
