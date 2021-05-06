@@ -39,3 +39,5 @@ class DNNModel(models.Model):
     output_directory = models.TextField(null=True)
     last_updated = models.DateTimeField(auto_now=True)
     category_spec = models.JSONField(default=dict)
+    resume_model_id = models.CharField(max_length=300, null=True)
+    epoch = models.IntegerField(default=0)

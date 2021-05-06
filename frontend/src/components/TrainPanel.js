@@ -172,8 +172,10 @@ const TrainPanel = ({
     }
     if (prevModelId) {
       body.resume = prevModelId;
+      body.model_kwargs.resume_training = true;
     } else if (dnnCheckpointModel) {
       body.resume = dnnCheckpointModel.latest.model_id;
+      body.model_kwargs.resume_training = false;
     }
 
     const r = await fetch(url, {

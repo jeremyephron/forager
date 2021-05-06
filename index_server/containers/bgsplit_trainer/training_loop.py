@@ -56,7 +56,8 @@ class TrainingLoop():
         # Resume if requested
         resume_from = model_kwargs.get('resume_from', None)
         if resume_from:
-            self.load_checkpoint(resume_from)
+            resume_training = model_kwargs.get('resume_training', False)
+            self.load_checkpoint(resume_from, resume_training=resume_training)
 
         # Variables for estimating run-time
         self.train_batch_time = EMA(0)

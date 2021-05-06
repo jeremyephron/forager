@@ -232,6 +232,7 @@ def start():
     logger.debug(f'Received job payload: {log_payload}')
     resume_from_checkpoint = payload['model_kwargs']['resume_from']
     if resume_from_checkpoint and last_job and \
+       payload['model_kwargs'].get('resume_training', False) and \
        resume_from_checkpoint == last_job.last_checkpoint_path:
         logger.info(f'Resuming from prior job ({last_job.model_id}) for model {payload["model_id"]}')
         current_job = last_job

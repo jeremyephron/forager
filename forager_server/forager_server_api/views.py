@@ -16,7 +16,7 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.db.models import Q
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.views.decorators.csrf import csrf_exempt
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, get_list_or_404
 from django.conf import settings
 from google.cloud import storage
 from rest_framework import status
@@ -343,10 +343,10 @@ def create_model(request, dataset_name, dataset=None):
     )
 
     if resume_model_id:
-        resume_model_path = (
-            get_object_or_404(DNNModel, model_id=resume_model_id)
-            .checkpoint_path)
+        resume_model = get_object_or_404(DNNModel, model_id=resume_model_id)
+        resume_model_path = (resume_model.checkpoint_path)
     else:
+        resume_model = None
         resume_model_path = None
 
     params = {
@@ -386,6 +386,12 @@ def create_model(request, dataset_name, dataset=None):
             "augment_negs_exclude": payload.get("exclude", []) if augment_negs else [],
         }
     )
+    model_epoch = -1 + model_kwargs.get('epochs_to_run', 1)
+    if resume_model_id:
+        m.resume_model_id = resume_model_id
+        if model_kwargs.get('resume_training', False):
+            model_epoch += resume_model.epoch + 1
+    m.epoch = model_epoch
     m.save()
 
     return JsonResponse({
@@ -410,6 +416,34 @@ def get_model_status(request, model_id):
         m.save()
 
     return JsonResponse(response_data)
+
+
+@api_view(["POST"])
+@csrf_exempt
+def update_model_v2(request):
+    payload = json.loads(request.body)
+    # user = payload["user"]
+    old_model_name = payload["old_model_name"]
+    new_model_name = payload["new_model_name"]
+
+    models = get_list_or_404(DNNModel, name=old_model_name)
+    for m in models:
+        m.name = new_model_name
+        m.save()
+
+    return JsonResponse({"success": True})
+
+
+@api_view(['POST'])
+@csrf_exempt
+def delete_model_v2(request):
+    payload = json.loads(request.body)
+    model_name = payload["model_name"]
+    models = get_list_or_404(DNNModel, name=model_name)
+    for m in models:
+        m.delete()
+
+    return JsonResponse({"success": True})
 
 
 @api_view(['POST'])
@@ -2025,7 +2059,8 @@ def model_info(model):
         "has_output": model.output_directory is not None,
         "pos_tags": serialize_tag_set_for_client_v2(pos_tags),
         "neg_tags": serialize_tag_set_for_client_v2(neg_tags | augment_negs_include),
-        "augment_negs": model.category_spec.get("augment_negs", False)
+        "augment_negs": model.category_spec.get("augment_negs", False),
+        "epoch": model.epoch
     }
 
 

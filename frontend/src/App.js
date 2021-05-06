@@ -44,6 +44,7 @@ import {
   ImageStack,
   SignInModal,
   TagManagementModal,
+  ModelManagementModal,
   CategoryInput,
   FeatureInput,
   NewModeInput,
@@ -112,11 +113,17 @@ function MainHeader(props) {
   const [tagManagementIsOpen, setTagManagementIsOpen] = useState(false);
   const toggleTagManagement = () => setTagManagementIsOpen(!tagManagementIsOpen);
 
+  const [modelManagementIsOpen, setModelManagementIsOpen] = useState(false);
+  const toggleModelManagement = () => setModelManagementIsOpen(!modelManagementIsOpen);
+
   const [popoverOpen, setPopoverOpen] = useState(false);
 
   let datasetName = props.datasetName;
   let datasetInfo = props.datasetInfo;
   let setCategories = props.setCategories;
+
+  let modelInfo = props.modelInfo;
+  let setModelInfo = props.setModelInfo;
 
   let clusterIsOpen = props.clusterIsOpen;
   let setClusterIsOpen = props.setClusterIsOpen;
@@ -148,6 +155,15 @@ function MainHeader(props) {
       datasetName={datasetName}
       datasetCategories={datasetInfo.categories}
       setDatasetCategories={setCategories}
+      username={username}
+      isReadOnly={!!!(username)}
+    />
+    <ModelManagementModal
+      isOpen={modelManagementIsOpen}
+      toggle={toggleModelManagement}
+      datasetName={datasetName}
+      modelInfo={modelInfo}
+      setModelInfo={setModelInfo}
       username={username}
       isReadOnly={!!!(username)}
     />
@@ -205,6 +221,9 @@ function MainHeader(props) {
         <div>
           <span className="mr-4" onClick={toggleTagManagement} style={{cursor: "pointer"}}>
             Manage Tags
+          </span>
+          <span className="mr-4" onClick={toggleModelManagement} style={{cursor: "pointer"}}>
+            Manage Models
           </span>
           <span>
             {username ?
@@ -981,6 +1000,8 @@ const App = () => {
     datasetName: datasetName,
     datasetInfo: datasetInfo,
     setCategories: setCategories,
+    modelInfo: modelInfo,
+    setModelInfo: setModelInfo,
     clusterIsOpen: clusterIsOpen,
     setClusterIsOpen: setClusterIsOpen,
     clusteringStrength: clusteringStrength,
