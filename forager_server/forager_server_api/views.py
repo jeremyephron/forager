@@ -443,6 +443,8 @@ def delete_model_v2(request):
     for m in models:
         m.delete()
 
+    # TODO(fpoms): delete model data stored on disk locally
+
     return JsonResponse({"success": True})
 
 
