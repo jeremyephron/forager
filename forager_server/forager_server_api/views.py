@@ -1921,7 +1921,7 @@ def query_active_validation_v2(request, dataset_name):
             google=False,
         ).values_list("pk", "path")
     )
-    print(pks_and_paths)
+    print(response_data["identifiers"])
     random.shuffle(pks_and_paths)
     pks, paths = zip(*pks_and_paths)
 
