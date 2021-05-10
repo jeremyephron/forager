@@ -72,6 +72,7 @@ BGSPLIT_MAPPER_REQUEST_TIMEOUT = (
     3 * 60
 )  # seconds; more than a minute per image is probably too much
 BGSPLIT_MAPPER_CLOUD_RUN_URL = "https://forager-bgsplit-mapper-g6rwrca4fq-uc.a.run.app"
+BGSPLIT_MAPPER_JOB_DIR_TMPL = "dnn_outputs/{}"
 
 GCS_PUBLIC_ROOT_URL = "https://storage.googleapis.com/"
 

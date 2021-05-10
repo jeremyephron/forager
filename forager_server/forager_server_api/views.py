@@ -9,6 +9,7 @@ import random
 import requests
 import urllib.request
 import uuid
+import shutil
 
 from typing import List, Dict, NamedTuple, Optional
 
@@ -441,6 +442,8 @@ def delete_model_v2(request):
     model_name = payload["model_name"]
     models = get_list_or_404(DNNModel, name=model_name)
     for m in models:
+        shutil.rmtree(os.path.join(m.checkpoint_path, '..'))
+        shutil.rmtree(m.output_directory)
         m.delete()
 
     # TODO(fpoms): delete model data stored on disk locally

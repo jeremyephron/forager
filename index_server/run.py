@@ -1049,6 +1049,8 @@ async def start_bgsplit_job(request):
     resume_from = request.json["resume_from"]
     pref_worker_id = request.json.get("preferred_worker_id", None)
 
+    restrict_aux_labels = model_kwargs.get('restrict_aux_labels', True)
+
     # Get cluster
     if cluster_id not in current_clusters:
         return resp.json(
@@ -1069,10 +1071,11 @@ async def start_bgsplit_job(request):
         os.path.join(gcs_root_path, index.labels[index.train_identifiers[i]])
         for i in pos_identifiers
     ]
-    if len(pos_paths) == 0:
+    if len(pos_paths) == 0 and restrict_aux_labels:
         return resp.json(
-            {"reason": "Can not train model with 0 positives."}, status=400
-        )
+            {"reason":
+             "Can not train model with 0 positives and restricted aux labels."},
+            status=400)
 
     neg_paths = [
         os.path.join(gcs_root_path, index.labels[index.train_identifiers[i]])
@@ -1097,10 +1100,11 @@ async def start_bgsplit_job(request):
         .difference(set(val_neg_identifiers))
     )
 
-    if len(neg_paths) == 0:
+    if len(neg_paths) == 0 and restrict_aux_labels:
         return resp.json(
-            {"reason": "Can not train model with 0 negatives."}, status=400
-        )
+            {"reason": ("Can not train model with 0 negatives and "
+                        "restricted aux labels.")},
+            status=400)
 
     unlabeled_paths = [
         os.path.join(gcs_root_path, index.labels[index.train_identifiers[i]])
@@ -1232,6 +1236,7 @@ async def start_bgsplit_inference_job(request):
     job_id = str(uuid.uuid4())
 
     inference_job = BGSplitInferenceJob(
+        job_id=job_id,
         paths=all_paths,
         bucket=bucket,
         model_id=model_id,
