@@ -11,6 +11,7 @@ import aiohttp
 import json
 import urllib.parse
 import random
+import shutil
 
 from typing import Any, Callable, Dict, List, Optional
 from knn import utils
@@ -213,6 +214,8 @@ class BGSplitInferenceReducer(Reducer):
     CallbackType = Callable[[Result], None]
 
     def __init__(self, model_id: str, shared_dir: str, num_images: int):
+        self.job_id: Optional[str]
+
         self.model_id = model_id
         self.shared_dir = shared_dir
 
@@ -248,11 +251,17 @@ class BGSplitInferenceReducer(Reducer):
     def finish(self):
         self.embeddings.flush()
         np.save(self.collected_data_dir / config.MODEL_SCORES_FILE_NAME, self.scores)
+        if self.job_id:
+            job_path = os.path.join(
+                self.shared_dir, config.BGSPLIT_MAPPER_JOB_DIR_TMPL.format(
+                    self.job_id))
+            shutil.rmtree(job_path)
 
 
 class BGSplitInferenceJob:
     def __init__(
         self,
+        job_id: str,
         paths: List[str],
         bucket: str,
         model_id: str,
@@ -260,6 +269,7 @@ class BGSplitInferenceJob:
         cluster: TerraformModule,
         session: aiohttp.ClientSession,
     ):
+        self.job_id = job_id
         self.paths = paths
         self.bucket = bucket
         self.model_id = model_id
@@ -355,17 +365,18 @@ class BGSplitInferenceJob:
             * config.BGSPLIT_MAPPER_REQUEST_MULTIPLE(nproc)
         )
         chunk_size = config.BGSPLIT_MAPPER_CHUNK_SIZE(nproc)
+        reducer = BGSplitInferenceReducer(
+            model_id=self.model_id,
+            shared_dir=self.cluster_shared_dir,
+            num_images=len(self.paths)
+        )
         self.mapper_job = MapReduceJob(
             mapper=MapperSpec(
                 url=self.cluster.output["bgsplit_mapper_url"],
                 # url=config.BGSPLIT_MAPPER_CLOUD_RUN_URL,
                 n_mappers=n_mappers,
             ),
-            reducer=BGSplitInferenceReducer(
-                model_id=self.model_id,
-                shared_dir=self.cluster_shared_dir,
-                num_images=len(self.paths),
-            ),
+            reducer=reducer,
             mapper_args={
                 "input_bucket": self.bucket,
                 "return_type": "save",
@@ -376,4 +387,5 @@ class BGSplitInferenceJob:
             chunk_size=chunk_size,
             request_timeout=config.BGSPLIT_MAPPER_REQUEST_TIMEOUT,
         )
+        reducer.job_id = self.mapper_job.job_id
         return self.mapper_job
