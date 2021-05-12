@@ -59,6 +59,8 @@ class TrainingLoop():
             resume_training = model_kwargs.get('resume_training', False)
             self.load_checkpoint(resume_from, resume_training=resume_training)
 
+        self.writer = SummaryWriter(log_dir=model_kwargs['log_dir'])
+
         # Variables for estimating run-time
         self.train_batch_time = EMA(0)
         self.val_batch_time = EMA(0)
@@ -85,7 +87,6 @@ class TrainingLoop():
         assert 'aux_labels' in model_kwargs
         self.aux_weight = float(model_kwargs.get('aux_weight', 0.1))
         assert 'log_dir' in model_kwargs
-        self.writer = SummaryWriter(log_dir=model_kwargs['log_dir'])
 
     def _setup_dataset(
             self,
@@ -268,13 +269,21 @@ class TrainingLoop():
             aux_loss_value = self.aux_weight * self.auxiliary_loss(
                 aux_logits[valid_aux_labels],
                 aux_labels[valid_aux_labels])
-            loss_value += (main_loss_value + aux_loss_value).item()
-            main_pred = F.softmax(main_logits)
-            aux_pred = F.softmax(main_logits)
-            main_preds += list(main_pred.argmax(dim=1)[:].cpu().numpy())
-            aux_preds += list(aux_pred.argmax(dim=1)[:].cpu().numpy())
-            main_gts += list(main_labels[:].cpu().numpy())
-            aux_gts += list(aux_labels[:].cpu().numpy())
+            loss_value = torch.zeros_like(main_loss_value)
+            if valid_main_labels.sum() > 0:
+                loss_value += main_loss_value
+            if valid_aux_labels.sum() > 0:
+                loss_value += aux_loss_value
+            loss_value = loss_value.item()
+ 
+            if valid_main_labels.sum() > 0:
+                main_pred = F.softmax(main_logits[valid_main_labels])
+                main_preds += list(main_pred.argmax(dim=1)[valid_main_labels].cpu().numpy())
+                main_gts += list(main_labels[valid_main_labels].cpu().numpy())
+            if valid_aux_labels.sum() > 0:
+                aux_pred = F.softmax(main_logits[valid_main_labels])
+                aux_preds += list(aux_pred.argmax(dim=1)[valid_aux_labels].cpu().numpy())
+                aux_gts += list(aux_labels[valid_aux_labels].cpu().numpy())
             batch_end = time.perf_counter()
             self.val_batch_time += (batch_end - batch_start)
             self.global_val_batch_idx += 1
@@ -338,13 +347,20 @@ class TrainingLoop():
             # Compute loss
             valid_main_labels = main_labels != -1
             valid_aux_labels = aux_labels != -1
+
             main_loss_value = self.main_loss(
                 main_logits[valid_main_labels],
                 main_labels[valid_main_labels])
             aux_loss_value = self.aux_weight * self.auxiliary_loss(
                 aux_logits[valid_aux_labels],
                 aux_labels[valid_aux_labels])
-            loss_value = main_loss_value + aux_loss_value
+
+            loss_value = torch.zeros_like(main_loss_value)
+            if valid_main_labels.sum() > 0:
+                loss_value += main_loss_value
+            if valid_aux_labels.sum() > 0:
+                loss_value += aux_loss_value
+
             self.train_epoch_loss += loss_value.item()
             if torch.sum(valid_main_labels) > 0:
                 self.train_epoch_main_loss += main_loss_value.item()
@@ -355,13 +371,15 @@ class TrainingLoop():
             loss_value.backward()
             self.optimizer.step()
 
-            main_pred = F.softmax(main_logits, dim=1)
-            aux_pred = F.softmax(aux_logits, dim=1)
-            main_logits_all += list(main_logits[:].detach().cpu().numpy())
-            main_preds += list(main_pred.argmax(dim=1)[:].cpu().numpy())
-            aux_preds += list(aux_pred.argmax(dim=1)[:].cpu().numpy())
-            main_gts += list(main_labels[:].cpu().numpy())
-            aux_gts += list(aux_labels[:].cpu().numpy())
+            if valid_main_labels.sum() > 0:
+                main_pred = F.softmax(main_logits[valid_main_labels], dim=1)
+                main_logits_all += list(main_logits[valid_main_labels].detach().cpu().numpy())
+                main_preds += list(main_pred[valid_main_labels].argmax(dim=1).cpu().numpy())
+                main_gts += list(main_labels[valid_main_labels].cpu().numpy())
+            if valid_aux_labels.sum() > 0:
+                aux_pred = F.softmax(aux_logits[valid_aux_labels], dim=1)
+                aux_preds += list(aux_pred[valid_aux_labels].argmax(dim=1).cpu().numpy())
+                aux_gts += list(aux_labels[valid_aux_labels].cpu().numpy())
 
             batch_end = time.perf_counter()
             total_batch_time = (batch_end - batch_start)
@@ -415,9 +433,10 @@ class TrainingLoop():
         for k, v in [('train/epoch/' + tag , v) for tag, v in summary_data]:
             self.writer.add_scalar(k, v, self.current_epoch)
 
-        self.writer.add_histogram(
-            'train/epoch/softmax/main_head',
-            scipy.special.softmax(main_logits_all, axis=1)[:, 1])
+        if len(main_logits_all):
+            self.writer.add_histogram(
+                'train/epoch/softmax/main_head',
+                scipy.special.softmax(main_logits_all, axis=1)[:, 1])
 
     def run(self):
         self.last_checkpoint_path = None
