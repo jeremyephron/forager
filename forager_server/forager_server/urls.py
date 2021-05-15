@@ -167,4 +167,7 @@ urlpatterns = [
     path('api/stop_model_inference_v2/<slug:job_id>',
          views.stop_model_inference,
          name='stop_model_inference'),
+    path('api/create_dataset_v2',
+         views.create_dataset_v2,
+         name='create_dataset_v2'),
 ]

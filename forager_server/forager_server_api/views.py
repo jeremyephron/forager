@@ -2074,6 +2074,65 @@ def model_info(model):
     }
 
 
+@api_view(["POST"])
+@csrf_exempt
+def create_dataset_v2(request):
+    payload = json.loads(request.body)
+    name = payload["dataset"]
+    train_directory = payload["train_path"]
+    val_directory = payload["val_path"]
+    index_id = payload["index_id"]
+
+    assert all(d.startswith("gs://") for d in (train_directory, val_directory))
+
+    # Download index on index server
+    params = {"index_id": index_id}
+    requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/download_index",
+        json=params,
+    )
+
+    client = storage.Client()
+    all_blobs = []
+
+    for d, is_val in ((train_directory, False), (val_directory, True)):
+        split_dir = d[len("gs://") :].split("/")
+        bucket_name = split_dir[0]
+        bucket_path = "/".join(split_dir[1:])
+
+        bucket = client.get_bucket(bucket_name)
+        all_blobs.extend(
+            (blob, is_val) for blob in client.list_blobs(bucket, prefix=bucket_path)
+        )
+
+    dataset = Dataset(
+        name=name,
+        directory=train_directory,
+        val_directory=val_directory,
+        index_id=index_id
+    )
+    dataset.save()
+
+    # Create all the DatasetItems for this dataset
+    items = [
+        DatasetItem(
+            dataset=dataset,
+            identifier=os.path.basename(blob.name).split(".")[0],
+            path=blob.name,
+            is_val=is_val,
+        )
+        for blob, is_val in all_blobs
+        if (
+            blob.name.endswith(".jpg")
+            or blob.name.endswith(".jpeg")
+            or blob.name.endswith(".png")
+        )
+    ]
+    DatasetItem.objects.bulk_create(items, batch_size=10000)
+
+    return JsonResponse({"status": "success"})
+
+
 @api_view(["GET"])
 @csrf_exempt
 def get_annotations_v2(request):
