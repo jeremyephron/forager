@@ -440,13 +440,14 @@ def update_model_v2(request):
 def delete_model_v2(request):
     payload = json.loads(request.body)
     model_name = payload["model_name"]
+    #cluster_id = payload['cluster_id']
     models = get_list_or_404(DNNModel, name=model_name)
     for m in models:
-        shutil.rmtree(os.path.join(m.checkpoint_path, '..'))
-        shutil.rmtree(m.output_directory)
+        # TODO(fpoms): delete model data stored on NFS?
+        #shutil.rmtree(os.path.join(m.checkpoint_path, '..'))
+        shutil.rmtree(m.output_directory, ignore_errors=True)
         m.delete()
 
-    # TODO(fpoms): delete model data stored on disk locally
 
     return JsonResponse({"success": True})
 

@@ -85,11 +85,11 @@ spec:
         name: ${local.bgsplit_mapper_app_name}
         resources:
           limits:
-            cpu: "15"
+            cpu: "14"
             memory: "60G"
             nvidia.com/gpu: ${var.bgsplit_mapper_gpus}
           requests:
-            cpu: "15"
+            cpu: "14"
             memory: "60G"
         env:
         - name: PORT
