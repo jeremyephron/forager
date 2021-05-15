@@ -30,6 +30,8 @@ import { faTags } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import ReactPaginate from "react-paginate";
 
+import { useParams } from "react-router-dom";
+
 import fromPairs from "lodash/fromPairs";
 import size from "lodash/size";
 import some from "lodash/some";
@@ -650,6 +652,8 @@ function ImageClusterViewer(props) {
 
 
 const App = () => {
+  let { datasetName } = useParams();
+
   //
   // DOCUMENT EVENT HANDLERS
   //
@@ -703,7 +707,6 @@ const App = () => {
   const [clusterIsOpen, setClusterIsOpen] = useState(false);
 
   // Load dataset info on initial page load
-  const [datasetName, setDatasetName] = useState("waymo");
   const [datasetInfo, setDatasetInfo] = useState({
     isNotLoaded: true,
     categories: [],

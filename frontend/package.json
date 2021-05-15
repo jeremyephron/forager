@@ -20,6 +20,7 @@
     "react-lazyload": "^3.2.0",
     "react-paginate": "^7.1.2",
     "react-progressive-image": "^0.6.0",
+    "react-router-dom": "^5.2.0",
     "react-scripts": "^4.0.2",
     "react-svg": "^11.2.3",
     "react-time-ago": "^6.2.2",
