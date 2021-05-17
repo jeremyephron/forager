@@ -15,6 +15,7 @@ from typing import (
 
 from gcloud.aio.storage import Storage
 import click
+from tqdm import tqdm
 
 
 def unasync(coro):
@@ -94,7 +95,7 @@ async def process_image_gen(images, src_gcs_path, dst_gcs_path, sampling_rate, c
     src_bucket, src_path = parse_gcs_path(src_gcs_path)
     dst_bucket, dst_path = parse_gcs_path(dst_gcs_path)
 
-    for image in images:
+    for image in tqdm(images):
         if random.random() > sampling_rate:
             continue
         filename = image["file_name"]
