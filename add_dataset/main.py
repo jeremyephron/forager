@@ -1,5 +1,4 @@
 import asyncio
-import click
 import functools
 import json
 import os
@@ -8,6 +7,7 @@ import tempfile
 import uuid
 
 import aiohttp
+import click
 from PIL import Image
 from tqdm import tqdm
 
@@ -46,6 +46,9 @@ def unasync(coro):
 
 
 @click.command()
+@click.argument("name")
+@click.argument("train_gcs_path")
+@click.argument("val_gcs_path")
 @unasync
 async def main(name, train_gcs_path, val_gcs_path):
     index_id = str(uuid.uuid4())
