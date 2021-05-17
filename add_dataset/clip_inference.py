@@ -8,7 +8,7 @@ import clip
 from PIL import Image
 from tqdm import tqdm
 
-BATCH_SIZE = 1
+BATCH_SIZE = 256
 EMBEDDING_DIM = 512
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
