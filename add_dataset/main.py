@@ -142,16 +142,16 @@ async def main(name, train_gcs_path, val_gcs_path):
         #     },
         # )
 
-        print("Generating ResNet distance matrix...")
-        generate_distance_matrix.run(
-            str(res5_path / "embeddings.npy"),
-            len(image_paths),
-            resnet_inference.EMBEDDING_DIMS["res5"],
-            str(res5_path / "distances.npy"),
-        )
+        # print("Generating ResNet distance matrix...")
+        # generate_distance_matrix.run(
+        #     str(res5_path / "embeddings.npy"),
+        #     len(image_paths),
+        #     resnet_inference.EMBEDDING_DIMS["res5"],
+        #     str(res5_path / "distances.npy"),
+        # )
 
-        print("Running CLIP inference...")
-        clip_inference.run(image_paths, str(clip_path / "embeddings.npy"))
+        # print("Running CLIP inference...")
+        # clip_inference.run(image_paths, str(clip_path / "embeddings.npy"))
 
         # Upload index to Cloud Storage
         proc = await asyncio.create_subprocess_exec(
@@ -166,8 +166,8 @@ async def main(name, train_gcs_path, val_gcs_path):
 
         # Create thumbnails
         print("Creating thumbnails...")
-        for image_path in tqdm(image_paths):
-            resize_image(image_paths, thumbnails_dir)
+        for path in tqdm(image_paths):
+            resize_image(path, thumbnails_dir)
 
         # Upload thumbnails to Cloud Storage
         proc = await asyncio.create_subprocess_exec(
