@@ -153,23 +153,12 @@ async def main(name, train_gcs_path, val_gcs_path):
         # print("Running CLIP inference...")
         # clip_inference.run(image_paths, str(clip_path / "embeddings.npy"))
 
-        # Upload index to Cloud Storage
-        proc = await asyncio.create_subprocess_exec(
-            "gsutil",
-            "-m",
-            "cp",
-            "-r",
-            str(thumbnails_dir),
-            os.path.join(THUMBNAIL_UPLOAD_GCS_PATH, index_id),
-        )
-        await proc.wait()
-
         # Create thumbnails
         print("Creating thumbnails...")
         for path in tqdm(image_paths):
             resize_image(path, thumbnails_dir)
 
-        # Upload thumbnails to Cloud Storage
+        # Upload index to Cloud Storage
         proc = await asyncio.create_subprocess_exec(
             "gsutil",
             "-m",
@@ -177,6 +166,17 @@ async def main(name, train_gcs_path, val_gcs_path):
             "-r",
             str(index_dir),
             os.path.join(INDEX_UPLOAD_GCS_PATH, index_id),
+        )
+        await proc.wait()
+
+        # Upload thumbnails to Cloud Storage
+        proc = await asyncio.create_subprocess_exec(
+            "gsutil",
+            "-m",
+            "cp",
+            "-r",
+            str(thumbnails_dir),
+            os.path.join(THUMBNAIL_UPLOAD_GCS_PATH, index_id),
         )
         await proc.wait()
 
