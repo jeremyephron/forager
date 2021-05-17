@@ -46,7 +46,8 @@ async def limited_as_completed_from_async_coro_gen(
             state.hit_stop_iteration = True
 
     def schedule_getting_next_coro():
-        task = asyncio.create_task(get_next_coro(), name=NEXT_CORO_TASK_NAME)
+        task = asyncio.create_task(get_next_coro())
+        task.get_name = lambda: NEXT_CORO_TASK_NAME  # patch for Python 3.7
         state.pending.append(task)
         state.next_coro_is_pending = True
 
