@@ -54,6 +54,8 @@ async def main(name, train_gcs_path, val_gcs_path):
     index_id = str(uuid.uuid4())
 
     with tempfile.TemporaryDirectory() as parent_dir_name:
+        parent_dir_name = "/home/mihir/temp"
+
         parent_dir = Path(parent_dir_name)
 
         train_dir = parent_dir / "train"
