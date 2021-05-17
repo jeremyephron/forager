@@ -63,33 +63,33 @@ async def main(name, train_gcs_path, val_gcs_path):
         thumbnails_dir = parent_dir / "thumbnails"
         index_dir = parent_dir / "index"
         for d in (train_dir, val_dir, thumbnails_dir, index_dir):
-            d.mkdir(parents=True)
+            d.mkdir(parents=True, exist_ok=True)
 
         # Download train images
         print("Downloading training images...")
-        proc = await asyncio.create_subprocess_exec(
-            "gsutil",
-            "-m",
-            "cp",
-            "-r",
-            train_gcs_path,
-            str(train_dir),
-        )
-        await proc.wait()
-        train_paths = [p for e in IMAGE_EXTENSIONS for p in train_dir.glob(f"*.{e}")]
+        # proc = await asyncio.create_subprocess_exec(
+        #     "gsutil",
+        #     "-m",
+        #     "cp",
+        #     "-r",
+        #     train_gcs_path,
+        #     str(train_dir),
+        # )
+        # await proc.wait()
+        train_paths = [p for e in IMAGE_EXTENSIONS for p in train_dir.glob(f"**/*.{e}")]
 
         # Download val images
         print("Downloading validation images...")
-        proc = await asyncio.create_subprocess_exec(
-            "gsutil",
-            "-m",
-            "cp",
-            "-r",
-            val_gcs_path,
-            str(val_dir),
-        )
-        await proc.wait()
-        val_paths = [p for e in IMAGE_EXTENSIONS for p in val_dir.glob(f"*.{e}")]
+        # proc = await asyncio.create_subprocess_exec(
+        #     "gsutil",
+        #     "-m",
+        #     "cp",
+        #     "-r",
+        #     val_gcs_path,
+        #     str(val_dir),
+        # )
+        # await proc.wait()
+        val_paths = [p for e in IMAGE_EXTENSIONS for p in val_dir.glob(f"**/*.{e}")]
 
         # Create identifier files
         train_labels = [str(p.relative_to(train_dir)) for p in train_paths]
@@ -112,7 +112,7 @@ async def main(name, train_gcs_path, val_gcs_path):
         res5_path = index_dir / "local" / "imagenet"
         clip_path = index_dir / "local" / "clip"
         for d in (res4_path, res5_path, clip_path):
-            d.mkdir(parents=True)
+            d.mkdir(parents=True, exist_ok=True)
 
         image_paths = train_paths + val_paths
         print("Running ResNet inference...")
