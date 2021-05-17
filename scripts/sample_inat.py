@@ -61,7 +61,7 @@ async def limited_as_completed_from_async_coro_gen(
 
         for done in done_set:
             assert isinstance(done, asyncio.Task)
-            if done.get_name() == NEXT_CORO_TASK_NAME:
+            if hasattr(done, "get_name") and done.get_name() == NEXT_CORO_TASK_NAME:
                 state.next_coro_is_pending = False
                 if state.hit_stop_iteration:
                     continue
