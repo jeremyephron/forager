@@ -86,7 +86,7 @@ def parse_gcs_path(path):
     path = path[len("gs://") :]
     bucket_end = path.find("/")
     bucket = path[:bucket_end]
-    relative_path = path[bucket_end].strip("/")
+    relative_path = path[bucket_end:].strip("/")
     return bucket, relative_path
 
 
