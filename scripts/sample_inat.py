@@ -102,7 +102,7 @@ async def process_image_gen(images, src_gcs_path, dst_gcs_path, sampling_rate, c
             src_bucket,
             os.path.join(src_path, filename),
             dst_bucket,
-            os.path.join(dst_path, os.path.basename(filename)),
+            new_name=os.path.join(dst_path, os.path.basename(filename)),
         )
 
 
