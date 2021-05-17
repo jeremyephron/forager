@@ -12,7 +12,7 @@ from detectron2.checkpoint.detection_checkpoint import DetectionCheckpointer
 from detectron2.modeling.backbone.resnet import build_resnet_backbone
 from detectron2.config.config import get_cfg as get_default_detectron_config
 
-BATCH_SIZE = 8
+BATCH_SIZE = 1
 EMBEDDING_DIMS = {"res4": 1024, "res5": 2048}
 WEIGHTS_PATH = "R-50.pkl"
 RESNET_CONFIG = get_default_detectron_config()
