@@ -26,6 +26,15 @@ RESIZE_THREAD_POOL_SIZE = 10
 RESIZE_MAX_HEIGHT = 200
 
 
+def parse_gcs_path(path):
+    assert path.startswith("gs://")
+    path = path[len("gs://") :]
+    bucket_end = path.find("/")
+    bucket = path[:bucket_end]
+    relative_path = path[bucket_end:].strip("/")
+    return bucket, relative_path
+
+
 def make_identifier(path):
     return os.path.basename(path).split(".")[0]
 
@@ -72,7 +81,7 @@ async def main(name, train_gcs_path, val_gcs_path):
         #     "-m",
         #     "cp",
         #     "-r",
-        #     train_gcs_path,
+        #     os.path.join(train_gcs_path, "*"),
         #     str(train_dir),
         # )
         # await proc.wait()
@@ -85,27 +94,36 @@ async def main(name, train_gcs_path, val_gcs_path):
         #     "-m",
         #     "cp",
         #     "-r",
-        #     val_gcs_path,
+        #     os.path.join(val_gcs_path, "*"),
         #     str(val_dir),
         # )
         # await proc.wait()
         val_paths = [p for e in IMAGE_EXTENSIONS for p in val_dir.glob(f"**/*.{e}")]
 
         # Create identifier files
-        train_labels = [str(p.relative_to(train_dir)) for p in train_paths]
-        val_labels = [str(p.relative_to(val_dir)) for p in val_paths]
+        # _, train_gcs_relative_path = parse_gcs_path(train_gcs_path)
+        # _, val_gcs_relative_path = parse_gcs_path(val_gcs_path)
 
-        labels = train_labels + val_labels
-        json.dump(labels, Path(index_dir / "labels.json").open("w"))
+        # train_labels = [
+        #     os.path.join(train_gcs_relative_path, p.relative_to(train_dir))
+        #     for p in train_paths
+        # ]
+        # val_labels = [
+        #     os.path.join(val_gcs_relative_path, p.relative_to(val_dir))
+        #     for p in val_paths
+        # ]
 
-        train_identifiers = {make_identifier(l): i for i, l in enumerate(train_labels)}
-        json.dump(train_identifiers, Path(index_dir / "identifiers.json").open("w"))
+        # labels = train_labels + val_labels
+        # json.dump(labels, Path(index_dir / "labels.json").open("w"))
 
-        val_identifiers = {
-            make_identifier(l): i + len(train_identifiers)
-            for i, l in enumerate(val_labels)
-        }
-        json.dump(val_identifiers, Path(index_dir / "val_identifiers.json").open("w"))
+        # train_identifiers = {make_identifier(l): i for i, l in enumerate(train_labels)}
+        # json.dump(train_identifiers, Path(index_dir / "identifiers.json").open("w"))
+
+        # val_identifiers = {
+        #     make_identifier(l): i + len(train_identifiers)
+        #     for i, l in enumerate(val_labels)
+        # }
+        # json.dump(val_identifiers, Path(index_dir / "val_identifiers.json").open("w"))
 
         # Create embeddings
         res4_path = index_dir / "local" / "imagenet_early"
@@ -115,14 +133,14 @@ async def main(name, train_gcs_path, val_gcs_path):
             d.mkdir(parents=True, exist_ok=True)
 
         image_paths = train_paths + val_paths
-        print("Running ResNet inference...")
-        resnet_inference.run(
-            image_paths,
-            {
-                "res4": str(res4_path / "embeddings.npy"),
-                "res5": str(res5_path / "embeddings.npy"),
-            },
-        )
+        # print("Running ResNet inference...")
+        # resnet_inference.run(
+        #     image_paths,
+        #     {
+        #         "res4": str(res4_path / "embeddings.npy"),
+        #         "res5": str(res5_path / "embeddings.npy"),
+        #     },
+        # )
 
         print("Generating ResNet distance matrix...")
         generate_distance_matrix.run(
