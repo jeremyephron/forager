@@ -17,7 +17,7 @@ import resnet_inference
 
 
 SERVER_URL = os.environ["SERVER_URL"]
-CREATE_DATASET_ENDPOINT = "/api/create_dataset_v2"
+CREATE_DATASET_ENDPOINT = "api/create_dataset_v2"
 IMAGE_EXTENSIONS = ("jpg", "jpeg", "png")
 
 INDEX_UPLOAD_GCS_PATH = "gs://foragerml/indexes/"  # trailing slash = directory
