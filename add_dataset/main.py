@@ -3,7 +3,6 @@ import functools
 import json
 import os
 from pathlib import Path
-import tempfile
 import uuid
 
 import aiohttp
@@ -62,122 +61,121 @@ def unasync(coro):
 async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size):
     index_id = str(uuid.uuid4())
 
-    with tempfile.TemporaryDirectory() as parent_dir_name:
-        parent_dir = Path(parent_dir_name)
+    parent_dir = Path() / name
 
-        train_dir = parent_dir / "train"
-        val_dir = parent_dir / "val"
-        thumbnails_dir = parent_dir / "thumbnails"
-        index_dir = parent_dir / "index"
-        for d in (train_dir, val_dir, thumbnails_dir, index_dir):
-            d.mkdir(parents=True, exist_ok=True)
+    train_dir = parent_dir / "train"
+    val_dir = parent_dir / "val"
+    thumbnails_dir = parent_dir / "thumbnails"
+    index_dir = parent_dir / "index"
+    for d in (train_dir, val_dir, thumbnails_dir, index_dir):
+        d.mkdir(parents=True, exist_ok=True)
 
-        # Download train images
-        print("Downloading training images...")
-        proc = await asyncio.create_subprocess_exec(
-            "gsutil",
-            "-m",
-            "cp",
-            "-r",
-            os.path.join(train_gcs_path, "*"),
-            str(train_dir),
-        )
-        await proc.wait()
-        train_paths = [p for e in IMAGE_EXTENSIONS for p in train_dir.glob(f"**/*.{e}")]
+    # Download train images
+    print("Downloading training images...")
+    proc = await asyncio.create_subprocess_exec(
+        "gsutil",
+        "-m",
+        "cp",
+        "-r",
+        "-n",
+        os.path.join(train_gcs_path, "*"),
+        str(train_dir),
+    )
+    await proc.wait()
+    train_paths = [p for e in IMAGE_EXTENSIONS for p in train_dir.glob(f"**/*.{e}")]
 
-        # Download val images
-        print("Downloading validation images...")
-        proc = await asyncio.create_subprocess_exec(
-            "gsutil",
-            "-m",
-            "cp",
-            "-r",
-            os.path.join(val_gcs_path, "*"),
-            str(val_dir),
-        )
-        await proc.wait()
-        val_paths = [p for e in IMAGE_EXTENSIONS for p in val_dir.glob(f"**/*.{e}")]
+    # Download val images
+    print("Downloading validation images...")
+    proc = await asyncio.create_subprocess_exec(
+        "gsutil",
+        "-m",
+        "cp",
+        "-r",
+        "-n",
+        os.path.join(val_gcs_path, "*"),
+        str(val_dir),
+    )
+    await proc.wait()
+    val_paths = [p for e in IMAGE_EXTENSIONS for p in val_dir.glob(f"**/*.{e}")]
 
-        # Create identifier files
-        _, train_gcs_relative_path = parse_gcs_path(train_gcs_path)
-        _, val_gcs_relative_path = parse_gcs_path(val_gcs_path)
+    # Create identifier files
+    _, train_gcs_relative_path = parse_gcs_path(train_gcs_path)
+    _, val_gcs_relative_path = parse_gcs_path(val_gcs_path)
 
-        train_labels = [
-            os.path.join(train_gcs_relative_path, p.relative_to(train_dir))
-            for p in train_paths
-        ]
-        val_labels = [
-            os.path.join(val_gcs_relative_path, p.relative_to(val_dir))
-            for p in val_paths
-        ]
+    train_labels = [
+        os.path.join(train_gcs_relative_path, p.relative_to(train_dir))
+        for p in train_paths
+    ]
+    val_labels = [
+        os.path.join(val_gcs_relative_path, p.relative_to(val_dir)) for p in val_paths
+    ]
 
-        labels = train_labels + val_labels
-        json.dump(labels, Path(index_dir / "labels.json").open("w"))
+    labels = train_labels + val_labels
+    json.dump(labels, Path(index_dir / "labels.json").open("w"))
 
-        train_identifiers = {make_identifier(l): i for i, l in enumerate(train_labels)}
-        json.dump(train_identifiers, Path(index_dir / "identifiers.json").open("w"))
+    train_identifiers = {make_identifier(l): i for i, l in enumerate(train_labels)}
+    json.dump(train_identifiers, Path(index_dir / "identifiers.json").open("w"))
 
-        val_identifiers = {
-            make_identifier(l): i + len(train_identifiers)
-            for i, l in enumerate(val_labels)
-        }
-        json.dump(val_identifiers, Path(index_dir / "val_identifiers.json").open("w"))
+    val_identifiers = {
+        make_identifier(l): i + len(train_identifiers) for i, l in enumerate(val_labels)
+    }
+    json.dump(val_identifiers, Path(index_dir / "val_identifiers.json").open("w"))
 
-        # Create embeddings
-        res4_path = index_dir / "local" / "imagenet_early"
-        res5_path = index_dir / "local" / "imagenet"
-        clip_path = index_dir / "local" / "clip"
-        for d in (res4_path, res5_path, clip_path):
-            d.mkdir(parents=True, exist_ok=True)
+    # Create embeddings
+    res4_path = index_dir / "local" / "imagenet_early"
+    res5_path = index_dir / "local" / "imagenet"
+    clip_path = index_dir / "local" / "clip"
+    for d in (res4_path, res5_path, clip_path):
+        d.mkdir(parents=True, exist_ok=True)
 
-        image_paths = train_paths + val_paths
-        print("Running ResNet inference...")
-        resnet_inference.run(
-            image_paths,
-            {
-                "res4": str(res4_path / "embeddings.npy"),
-                "res5": str(res5_path / "embeddings.npy"),
-            },
-            batch_size=resnet_batch_size,
-        )
+    image_paths = train_paths + val_paths
+    print("Running ResNet inference...")
+    resnet_inference.run(
+        image_paths,
+        {
+            "res4": str(res4_path / "embeddings.npy"),
+            "res5": str(res5_path / "embeddings.npy"),
+        },
+        batch_size=resnet_batch_size,
+    )
 
-        print("Generating ResNet distance matrix...")
-        generate_distance_matrix.run(
-            str(res5_path / "embeddings.npy"),
-            len(image_paths),
-            resnet_inference.EMBEDDING_DIMS["res5"],
-            str(res5_path / "distances.npy"),
-        )
+    print("Generating ResNet distance matrix...")
+    generate_distance_matrix.run(
+        str(res5_path / "embeddings.npy"),
+        len(image_paths),
+        resnet_inference.EMBEDDING_DIMS["res5"],
+        str(res5_path / "distances.npy"),
+    )
 
-        print("Running CLIP inference...")
-        clip_inference.run(image_paths, str(clip_path / "embeddings.npy"))
+    print("Running CLIP inference...")
+    clip_inference.run(image_paths, str(clip_path / "embeddings.npy"))
 
-        # Create thumbnails
-        print("Creating thumbnails...")
-        for path in tqdm(image_paths):
-            resize_image(path, thumbnails_dir)
+    # Create thumbnails
+    print("Creating thumbnails...")
+    for path in tqdm(image_paths):
+        resize_image(path, thumbnails_dir)
 
-        # Upload index to Cloud Storage
-        proc = await asyncio.create_subprocess_exec(
-            "gsutil",
-            "-m",
-            "cp",
-            "-r",
-            str(index_dir),
-            os.path.join(INDEX_UPLOAD_GCS_PATH, index_id),
-        )
-        await proc.wait()
+    # Upload index to Cloud Storage
+    proc = await asyncio.create_subprocess_exec(
+        "gsutil",
+        "-m",
+        "cp",
+        "-r",
+        str(index_dir),
+        os.path.join(INDEX_UPLOAD_GCS_PATH, index_id),
+    )
+    await proc.wait()
 
-        # Upload thumbnails to Cloud Storage
-        proc = await asyncio.create_subprocess_exec(
-            "gsutil",
-            "-m",
-            "cp",
-            "-r",
-            str(thumbnails_dir),
-            os.path.join(THUMBNAIL_UPLOAD_GCS_PATH, index_id),
-        )
-        await proc.wait()
+    # Upload thumbnails to Cloud Storage
+    proc = await asyncio.create_subprocess_exec(
+        "gsutil",
+        "-m",
+        "cp",
+        "-r",
+        str(thumbnails_dir),
+        os.path.join(THUMBNAIL_UPLOAD_GCS_PATH, index_id),
+    )
+    await proc.wait()
 
     # Add to database
     params = {
