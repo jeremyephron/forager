@@ -57,13 +57,12 @@ def unasync(coro):
 @click.argument("name")
 @click.argument("train_gcs_path")
 @click.argument("val_gcs_path")
+@click.option("--resnet_batch_size", type=int, default=1)
 @unasync
-async def main(name, train_gcs_path, val_gcs_path):
+async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size):
     index_id = str(uuid.uuid4())
 
     with tempfile.TemporaryDirectory() as parent_dir_name:
-        parent_dir_name = "/home/mihir/temp"
-
         parent_dir = Path(parent_dir_name)
 
         train_dir = parent_dir / "train"
@@ -139,6 +138,7 @@ async def main(name, train_gcs_path, val_gcs_path):
                 "res4": str(res4_path / "embeddings.npy"),
                 "res5": str(res5_path / "embeddings.npy"),
             },
+            batch_size=resnet_batch_size,
         )
 
         print("Generating ResNet distance matrix...")

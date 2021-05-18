@@ -12,7 +12,6 @@ from detectron2.checkpoint.detection_checkpoint import DetectionCheckpointer
 from detectron2.modeling.backbone.resnet import build_resnet_backbone
 from detectron2.config.config import get_cfg as get_default_detectron_config
 
-BATCH_SIZE = 1
 EMBEDDING_DIMS = {"res4": 1024, "res5": 2048}
 WEIGHTS_PATH = "R-50.pkl"
 RESNET_CONFIG = get_default_detectron_config()
@@ -51,6 +50,7 @@ def load_image(path):
 def run(
     image_paths: List[str],
     embeddings_output_filenames: Dict[str, str],
+    batch_size: int = 1,
 ):
     embeddings = {
         layer: np.memmap(
@@ -63,16 +63,16 @@ def run(
     }
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        for i in tqdm(range(0, len(image_paths), BATCH_SIZE)):
+        for i in tqdm(range(0, len(image_paths), batch_size)):
             # Load batch of images
-            batch_paths = image_paths[i : i + BATCH_SIZE]
+            batch_paths = image_paths[i : i + batch_size]
             images = torch.cat(list(executor.map(load_image, batch_paths)))
 
             with torch.no_grad():
                 output_dict = model(images)
                 for layer, e in embeddings.items():
                     outs = output_dict[layer].mean(dim=(2, 3))
-                    e[i : i + BATCH_SIZE] = outs.cpu().numpy()
+                    e[i : i + batch_size] = outs.cpu().numpy()
 
     for e in embeddings.values():
         e.flush()
