@@ -864,7 +864,10 @@ class LabeledIndex:
                 )
         except Exception as e:
             self.logger.warning(f"Error loading index from {self.index_dir}: {e}")
-        self._load_local_indexes()
+        try:
+            self._load_local_indexes()
+        except Exception as e:
+            self.logger.warning(f"Error loading FAISS indexes: {e}")
         self.logger.info(f"Finished loading index from {self.index_dir}")
 
         self.ready.set()
@@ -1049,7 +1052,7 @@ async def start_bgsplit_job(request):
     resume_from = request.json["resume_from"]
     pref_worker_id = request.json.get("preferred_worker_id", None)
 
-    restrict_aux_labels = model_kwargs.get('restrict_aux_labels', True)
+    restrict_aux_labels = model_kwargs.get("restrict_aux_labels", True)
 
     # Get cluster
     if cluster_id not in current_clusters:
@@ -1073,9 +1076,11 @@ async def start_bgsplit_job(request):
     ]
     if len(pos_paths) == 0 and restrict_aux_labels:
         return resp.json(
-            {"reason":
-             "Can not train model with 0 positives and restricted aux labels."},
-            status=400)
+            {
+                "reason": "Can not train model with 0 positives and restricted aux labels."
+            },
+            status=400,
+        )
 
     neg_paths = [
         os.path.join(gcs_root_path, index.labels[index.train_identifiers[i]])
@@ -1102,9 +1107,13 @@ async def start_bgsplit_job(request):
 
     if len(neg_paths) == 0 and restrict_aux_labels:
         return resp.json(
-            {"reason": ("Can not train model with 0 negatives and "
-                        "restricted aux labels.")},
-            status=400)
+            {
+                "reason": (
+                    "Can not train model with 0 negatives and " "restricted aux labels."
+                )
+            },
+            status=400,
+        )
 
     unlabeled_paths = [
         os.path.join(gcs_root_path, index.labels[index.train_identifiers[i]])
