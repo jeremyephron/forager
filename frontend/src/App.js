@@ -820,6 +820,7 @@ const App = () => {
   const [queryResultData, setQueryResultData] = useState({
     images: [],
     clustering: [],
+    type: null,
   });
 
   const trainSvm = async () => {
@@ -888,11 +889,6 @@ const App = () => {
       body: JSON.stringify(body),
     }).then(r => r.json());
 
-    if ((resultSet.type === "knn" || resultSet.type === "svm") &&
-        (queryResultSet.type !== "knn" && queryResultSet.type !== "svm")) {
-      setOrderByClusterSize(false);
-    }
-
     setPage(0);
     setQueryResultSet(resultSet);
   };
@@ -905,6 +901,7 @@ const App = () => {
       setQueryResultData({
         images: [],
         clustering: [],
+        type: null,
       });
       return;
     };
@@ -933,9 +930,15 @@ const App = () => {
 
     window.scrollTo(0, 0);
 
+    if ((queryResultSet.type === "knn" || queryResultSet.type === "svm") &&
+        (queryResultData.type !== "knn" && queryResultData.type !== "svm")) {
+      setOrderByClusterSize(false);
+    }
+
     setQueryResultData({
       images,
       clustering: results.clustering,
+      type: queryResultSet.type,
     });
   };
 
