@@ -1129,7 +1129,7 @@ async def start_bgsplit_job(request):
     proc = await asyncio.create_subprocess_exec(
         "gsutil", "-q", "stat", aux_labels_gcs_path
     )
-    if proc.wait() != 0:
+    if await proc.wait() != 0:
         # Does not exist, so upload
         proc = await asyncio.create_subprocess_exec(
             "gsutil",

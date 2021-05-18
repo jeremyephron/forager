@@ -12,6 +12,7 @@ import json
 import urllib.parse
 import random
 import shutil
+import subprocess
 
 from typing import Any, Callable, Dict, List, Optional
 from knn import utils
@@ -255,7 +256,11 @@ class BGSplitInferenceReducer(Reducer):
             job_path = os.path.join(
                 self.shared_dir, config.BGSPLIT_MAPPER_JOB_DIR_TMPL.format(
                     self.job_id))
-            shutil.rmtree(job_path)
+            subprocess.Popen(
+                f"sudo chmod -R ug+rw {job_path} && sudo rm -rf {job_path}",
+                stdout=None,
+                stderr=None,
+                shell=True)
 
 
 class BGSplitInferenceJob:
