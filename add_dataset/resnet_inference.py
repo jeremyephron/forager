@@ -72,6 +72,7 @@ def run(
                 output_dict = model(images)
                 for layer, e in embeddings.items():
                     outs = output_dict[layer].mean(dim=(2, 3))
+                    outs /= outs.norm(dim=-1, keepdim=True)
                     e[i : i + batch_size] = outs.cpu().numpy()
 
     for e in embeddings.values():

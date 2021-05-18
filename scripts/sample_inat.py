@@ -112,7 +112,7 @@ async def process_image_gen(images, src_gcs_path, dst_gcs_path, sampling_rate, c
 @click.argument("src_gcs_path")
 @click.argument("dst_gcs_path")
 @click.option("--sampling_rate", default=1.0, type=float)
-@click.option("--limit", default=10, type=int)
+@click.option("--limit", default=30, type=int)
 @unasync
 async def main(split_json, src_gcs_path, dst_gcs_path, sampling_rate, limit):
     images = json.load(split_json)["images"]
