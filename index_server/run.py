@@ -334,15 +334,16 @@ class LabeledIndex:
         return results
 
     def get_train_identifiers(self) -> List[str]:
-        assert self.train_identifiers
+        assert self.train_identifiers is not None
         return list(self.train_identifiers.keys())
 
     def get_val_identifiers(self) -> List[str]:
-        assert self.val_identifiers
+        assert self.val_identifiers is not None
         return list(self.val_identifiers.keys())
 
     def identifiers_to_inds(self, identifiers: Iterable[str]) -> List[int]:
-        assert self.train_identifiers and self.val_identifiers
+        assert self.train_identifiers is not None 
+        assert self.val_identifiers is not None
         inds = [
             self.train_identifiers[id]
             if id in self.train_identifiers
