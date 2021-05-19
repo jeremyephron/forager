@@ -2118,7 +2118,7 @@ def create_dataset_v2(request):
     items = [
         DatasetItem(
             dataset=dataset,
-            identifier=os.path.basename(blob.name).split(".")[0],
+            identifier=os.path.splitext(os.path.basename(path))[0],
             path=blob.name,
             is_val=is_val,
         )

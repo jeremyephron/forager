@@ -34,7 +34,7 @@ def parse_gcs_path(path):
 
 
 def make_identifier(path):
-    return os.path.basename(path).split(".")[0]
+    return os.path.splitext(os.path.basename(path))[0]
 
 
 def resize_image(input_path, output_dir):
