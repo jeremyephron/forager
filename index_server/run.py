@@ -342,7 +342,7 @@ class LabeledIndex:
         return list(self.val_identifiers.keys())
 
     def identifiers_to_inds(self, identifiers: Iterable[str]) -> List[int]:
-        assert self.train_identifiers is not None 
+        assert self.train_identifiers is not None
         assert self.val_identifiers is not None
         inds = [
             self.train_identifiers[id]
@@ -362,34 +362,17 @@ class LabeledIndex:
     def cluster_identifiers(
         self, identifiers: Iterable[str], model: str = config.DEFAULT_QUERY_MODEL
     ) -> List[List[float]]:
-        inds = self.identifiers_to_inds(identifiers)
-        return self._cluster(inds, model)
+        embeddings = self.get_embeddings(identifiers, model)
+        return self._cluster(embeddings)
 
-    def cluster_results(
-        self, results: List[QueryResult], model: str = config.DEFAULT_QUERY_MODEL
-    ) -> List[List[float]]:
-        inds = [result.id for result in results]
-        return self._cluster(inds, model)
-
-    def _cluster(self, inds: List[int], model: str) -> List[List[float]]:
-        # TODO(mihirg): Consider performing hierarchical clustering once over the entire
-        # dataset during index build time
-        local_flat_index = self.get_local_flat_index(model)
-        assert local_flat_index.distance_matrix is not None
-        if len(inds) <= 1:
-            return []
-
-        # Construct condensed distance submatrix
-        dists = local_flat_index.distance_matrix[np.ix_(inds, inds)]
-        condensed = squareform(dists)
-
+    def _cluster(self, embeddings: np.ndarray) -> List[List[float]]:
         # Perform hierarchical clustering
-        result = fastcluster.linkage(condensed, method="ward", preserve_input=False)
+        result = fastcluster.linkage(embeddings, method="ward", preserve_input=False)
         max_dist = result[-1, 2]
 
         # Simplify dendogram matrix by using original cluster indexes
         simplified = []
-        clusters = list(range(len(inds)))
+        clusters = list(range(len(embeddings)))
         for a, b, dist, _ in result:
             a, b = int(a), int(b)
             simplified.append([clusters[a], clusters[b], dist / max_dist])

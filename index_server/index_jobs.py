@@ -140,7 +140,7 @@ class IndexType(IntEnum):
 class Trainer:
     def __init__(self, url: str):
         self.url = url
-        hash_object = hashlib.sha256(url.encode('utf-8'))
+        hash_object = hashlib.sha256(url.encode("utf-8"))
         hex_dig = hash_object.hexdigest()
         self.trainer_id = str(hex_dig)
         self.lock = asyncio.Lock()

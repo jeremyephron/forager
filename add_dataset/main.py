@@ -11,7 +11,6 @@ from PIL import Image
 from tqdm import tqdm
 
 import clip_inference
-import generate_distance_matrix
 import resnet_inference
 
 
@@ -137,14 +136,6 @@ async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size):
             "res5": str(res5_path / "embeddings.npy"),
         },
         batch_size=resnet_batch_size,
-    )
-
-    print("Generating ResNet distance matrix...")
-    generate_distance_matrix.run(
-        str(res5_path / "embeddings.npy"),
-        len(image_paths),
-        resnet_inference.EMBEDDING_DIMS["res5"],
-        str(res5_path / "distances.npy"),
     )
 
     print("Running CLIP inference...")
