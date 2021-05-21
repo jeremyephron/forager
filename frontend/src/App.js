@@ -919,7 +919,7 @@ const App = () => {
 
     const images = results.paths.map((path, i) => {
       let filename = path.substring(path.lastIndexOf("/") + 1);
-      let id = filename.substring(0, filename.indexOf("."));
+      let id = filename.substring(0, filename.lastIndexOf("."));
       return {
         name: filename,
         src: path,
