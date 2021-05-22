@@ -4,11 +4,15 @@ import json
 import os
 from pathlib import Path
 import uuid
+import numpy as np
+import random
+import time
 
 import aiohttp
 import click
 from PIL import Image
 from tqdm import tqdm
+from datetime import timedelta
 
 import clip_inference
 import resnet_inference
@@ -36,6 +40,8 @@ def parse_gcs_path(path):
 def make_identifier(path):
     return os.path.splitext(os.path.basename(path))[0]
 
+def make_old_identifier(path):
+    return os.path.basename(path).split('.')[0]
 
 def resize_image(input_path, output_dir):
     image = Image.open(input_path)
@@ -78,19 +84,20 @@ async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size):
         d.mkdir(parents=True, exist_ok=True)
 
     # Download train images
-    print("Downloading training images...")
-    proc = await asyncio.create_subprocess_exec(
-        "gsutil",
-        "-m",
-        "cp",
-        "-r",
-        "-n",
-        os.path.join(train_gcs_path, "*"),
-        str(train_dir),
-    )
-    await proc.wait()
+    download_start = time.time()
+    if True:
+        print("Downloading training images...")
+        proc = await asyncio.create_subprocess_exec(
+            "gsutil",
+            "-m",
+            "cp",
+            "-r",
+            "-n",
+            os.path.join(train_gcs_path, "*"),
+            str(train_dir),
+           )
+        await proc.wait()
     train_paths = [p for e in IMAGE_EXTENSIONS for p in train_dir.glob(f"**/*.{e}")]
-
     # Download val images
     print("Downloading validation images...")
     proc = await asyncio.create_subprocess_exec(
@@ -103,6 +110,8 @@ async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size):
         str(val_dir),
     )
     await proc.wait()
+    download_end = time.time()
+
     val_paths = [p for e in IMAGE_EXTENSIONS for p in val_dir.glob(f"**/*.{e}")]
 
     # Create identifier files
@@ -136,45 +145,59 @@ async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size):
         d.mkdir(parents=True, exist_ok=True)
 
     image_paths = train_paths + val_paths
-    print("Running ResNet inference...")
-    resnet_inference.run(
-        image_paths,
-        {
-            "res4": str(res4_path / "embeddings.npy"),
-            "res5": str(res5_path / "embeddings.npy"),
-        },
-        batch_size=resnet_batch_size,
-    )
 
-    print("Running CLIP inference...")
-    clip_inference.run(image_paths, str(clip_path / "embeddings.npy"))
+    resnet_layers = {
+        "res4": str(res4_path / "embeddings.npy"),
+        "res5": str(res5_path / "embeddings.npy"),
+    }
+    resnet_start = time.time()
+    if True:
+        print("Running ResNet inference...")
+        resnet_inference.run(
+            image_paths,
+            resnet_layers,
+            batch_size=resnet_batch_size,
+           )
+    resnet_end = time.time()
+
+    clip_start = time.time()
+    if True:
+        print("Running CLIP inference...")
+        clip_inference.run(image_paths, str(clip_path / "embeddings.npy"))
+    clip_end = time.time()
 
     # Create thumbnails
-    print("Creating thumbnails...")
-    for path in tqdm(image_paths):
-        resize_image(path, thumbnails_dir)
+    thumbnail_start = time.time()
+    if True:
+        print("Creating thumbnails...")
+        for path in tqdm(image_paths):
+            resize_image(path, thumbnails_dir)
+    thumbnail_end = time.time()
 
     # Upload index to Cloud Storage
-    proc = await asyncio.create_subprocess_exec(
-        "gsutil",
-        "-m",
-        "cp",
-        "-r",
-        str(index_dir),
-        os.path.join(INDEX_UPLOAD_GCS_PATH, index_id),
-    )
-    await proc.wait()
+    upload_start = time.time()
+    if True:
+         proc = await asyncio.create_subprocess_exec(
+             "gsutil",
+             "-m",
+             "cp",
+             "-r",
+             str(index_dir),
+             os.path.join(INDEX_UPLOAD_GCS_PATH, index_id),
+             )
+         await proc.wait()
 
-    # Upload thumbnails to Cloud Storage
-    proc = await asyncio.create_subprocess_exec(
-        "gsutil",
-        "-m",
-        "cp",
-        "-r",
-        str(thumbnails_dir),
-        os.path.join(THUMBNAIL_UPLOAD_GCS_PATH, index_id),
-    )
-    await proc.wait()
+         # Upload thumbnails to Cloud Storage
+         proc = await asyncio.create_subprocess_exec(
+             "gsutil",
+             "-m",
+             "cp",
+             "-r",
+             str(thumbnails_dir),
+             os.path.join(THUMBNAIL_UPLOAD_GCS_PATH, index_id),
+             )
+         await proc.wait()
+    upload_end = time.time()
 
     # Add to database
     params = {
@@ -183,13 +206,26 @@ async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size):
         "val_path": val_gcs_path,
         "index_id": index_id,
     }
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            os.path.join(SERVER_URL, CREATE_DATASET_ENDPOINT), json=params
-        ) as response:
-            j = await response.json()
-            assert j["status"] == "success", j
+    add_db_start = time.time()
+    if True:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                os.path.join(SERVER_URL, CREATE_DATASET_ENDPOINT), json=params
+            ) as response:
+                j = await response.json()
+                assert j["status"] == "success", j
+    add_db_end = time.time()
 
+
+    print('Timing')
+    for k, t in [
+            ('Download', download_end-download_start),
+            ('Resnet', resnet_end-resnet_start),
+            ('Clip', clip_end-clip_start),
+            ('Thumbnail', thumbnail_end-thumbnail_start),
+            ('Upload', upload_end-upload_start),
+            ('Add db', add_db_end-add_db_start)]:
+        print('{:15} {}'.format(k, str(timedelta(seconds=t))))
 
 if __name__ == "__main__":
     main()
