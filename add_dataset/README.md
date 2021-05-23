@@ -20,10 +20,11 @@ Then, download a pre-trained ResNet-50 model from [here](https://dl.fbaipublicfi
 Now you're ready to use this script. Usage is as follows:
 
 ```
-python main.py [DATASET NAME] [TRAIN SET PATH] [VALIDATION SET PATH] [optional: --resnet_batch_size N]
+SERVER_URL=[SERVER URL] python main.py [DATASET NAME] [TRAIN SET PATH] [VALIDATION SET PATH] [optional: --resnet_batch_size N]
 ```
 
 where:
+- `SERVER URL` is the url (http://ip:port) for the Forager server; ask us if you need this
 - `DATASET NAME` is a unique name for this dataset (alphanumeric + dashes and underscores)
 - `TRAIN SET PATH` is a path to the directory on Cloud Storage containing training images, of the form gs://path/to/train/images
 - `VALIDATION SET PATH` is a path to the directory on Cloud Storage containing validation images, of the form gs://path/to/val/images
