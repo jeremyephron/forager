@@ -15,6 +15,7 @@ import resnet_inference
 
 
 SERVER_URL = os.environ["SERVER_URL"]
+GET_DATASET_ENDPOINT = "api/get_dataset_info_v2"
 CREATE_DATASET_ENDPOINT = "api/create_dataset_v2"
 IMAGE_EXTENSIONS = ("jpg", "jpeg", "png")
 
@@ -58,6 +59,13 @@ def unasync(coro):
 @click.option("--resnet_batch_size", type=int, default=1)
 @unasync
 async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size):
+    # Make sure that a dataset with this name doesn't already exist
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            os.path.join(SERVER_URL, GET_DATASET_ENDPOINT, name)
+        ) as response:
+            assert response.status == 404, f"Dataset {name} already exists"
+
     index_id = str(uuid.uuid4())
 
     parent_dir = Path() / name
