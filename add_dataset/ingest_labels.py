@@ -71,3 +71,7 @@ async def main(name, label_json, user):
             ) as response:
                 j = await response.json()
                 print(f"Created {j['created']} ({category}, {value}) labels")
+
+
+if __name__ == "__main__":
+    main()
