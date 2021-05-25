@@ -40,6 +40,7 @@ def resize_image(input_path, output_dir):
 @click.argument("name")
 @click.argument("train_gcs_path")
 @click.argument("val_gcs_path")
+@click.option("--resnet_full_batch_size", type=int, default=1)
 @click.option("--resnet_batch_size", type=int, default=16)
 @click.option("--resnet_resize_size", type=int, default=256)
 @click.option("--resnet_crop_size", type=int, default=224)
@@ -48,6 +49,7 @@ async def main(
     name,
     train_gcs_path,
     val_gcs_path,
+    resnet_full_batch_size,
     resnet_batch_size,
     resnet_resize_size,
     resnet_crop_size,
@@ -87,17 +89,18 @@ async def main(
         await proc.wait()
     train_paths = [p for e in IMAGE_EXTENSIONS for p in train_dir.glob(f"**/*.{e}")]
     # Download val images
-    print("Downloading validation images...")
-    proc = await asyncio.create_subprocess_exec(
-        "gsutil",
-        "-m",
-        "cp",
-        "-r",
-        "-n",
-        os.path.join(val_gcs_path, "*"),
-        str(val_dir),
-    )
-    await proc.wait()
+    if True:
+        print("Downloading validation images...")
+        proc = await asyncio.create_subprocess_exec(
+            "gsutil",
+            "-m",
+            "cp",
+            "-r",
+            "-n",
+            os.path.join(val_gcs_path, "*"),
+            str(val_dir),
+        )
+        await proc.wait()
     download_end = time.time()
 
     val_paths = [p for e in IMAGE_EXTENSIONS for p in val_dir.glob(f"**/*.{e}")]
@@ -180,11 +183,12 @@ async def main(
         with open(str(aux_labels_dir / "imagenet.pickle"), "wb") as f:
             pickle.dump(aux_labels, f)
 
+    if True:
         # Run at full resolution
         resnet_inference.run(
             image_paths,
             resnet_full_layers,
-            batch_size=1,
+            batch_size=resnet_full_batch_size,
         )
 
     resnet_end = time.time()

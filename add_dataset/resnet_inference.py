@@ -4,6 +4,8 @@ from typing import List, Dict, Optional
 
 import numpy as np
 import torch
+import torch.nn as nn
+import torch.nn.functional
 import torchvision.transforms.functional as tvf
 import functools
 from PIL import Image
@@ -158,6 +160,15 @@ def load_image(resize_size, crop_size, path):
     return image.to(device)
 
 
+def pad_image(target_height, target_width, image):
+    image_height = image.shape[3]
+    image_width = image.shape[2]
+    padding_height = target_height - image_height
+    padding_width = target_width - image_width
+    return torch.nn.functional.pad(
+        image, (0, padding_height, 0, padding_width))
+
+
 def run(
     image_paths: List[str],
     embeddings_output_filenames: Dict[str, str],
@@ -170,19 +181,28 @@ def run(
             embeddings_output_filenames[layer],
             dtype="float32",
             mode="w+",
-            shape=(len(image_paths), dim),
+            shape=(len(image_paths), EMBEDDING_DIMS[layer]),
         )
-        for layer, dim in EMBEDDING_DIMS.items()
+        for layer in embeddings_output_filenames.keys()
     }
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         for i in tqdm(range(0, len(image_paths), batch_size)):
             # Load batch of images
             batch_paths = image_paths[i : i + batch_size]
+            images = list(
+                executor.map(
+                    functools.partial(load_image, resize_to, crop_to), batch_paths
+                )
+            )
+            # Add padding to same size if not all same size
+            max_height = np.max([img.shape[3] for img in images])
+            max_width = np.max([img.shape[2] for img in images])
             images = torch.cat(
                 list(
                     executor.map(
-                        functools.partial(load_image, resize_to, crop_to), batch_paths
+                        functools.partial(pad_image, max_height, max_width),
+                        images
                     )
                 )
             )
