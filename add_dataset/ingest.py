@@ -7,6 +7,7 @@ import uuid
 import numpy as np
 import random
 import time
+import pickle
 
 import aiohttp
 import click
@@ -24,6 +25,7 @@ CREATE_DATASET_ENDPOINT = "api/create_dataset_v2"
 IMAGE_EXTENSIONS = ("jpg", "jpeg", "png")
 
 INDEX_UPLOAD_GCS_PATH = "gs://foragerml/indexes/"  # trailing slash = directory
+AUX_LABELS_UPLOAD_GCS_PATH = "gs://foragerml/aux_labels/"  # trailing slash = directory
 THUMBNAIL_UPLOAD_GCS_PATH = "gs://foragerml/thumbnails/"  # trailing slash = directory
 RESIZE_MAX_HEIGHT = 200
 
@@ -62,9 +64,13 @@ def unasync(coro):
 @click.argument("name")
 @click.argument("train_gcs_path")
 @click.argument("val_gcs_path")
-@click.option("--resnet_batch_size", type=int, default=1)
+@click.option("--resnet_batch_size", type=int, default=16)
+@click.option("--resnet_resize_size", type=int, default=256)
+@click.option("--resnet_crop_size", type=int, default=224)
 @unasync
-async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size):
+async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size,
+               resnet_resize_size, resnet_crop_size):
+
     # Make sure that a dataset with this name doesn't already exist
     async with aiohttp.ClientSession() as session:
         async with session.get(
@@ -80,7 +86,8 @@ async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size):
     val_dir = parent_dir / "val"
     thumbnails_dir = parent_dir / "thumbnails"
     index_dir = parent_dir / "index"
-    for d in (train_dir, val_dir, thumbnails_dir, index_dir):
+    aux_labels_dir = parent_dir / "aux_labels"
+    for d in (train_dir, val_dir, thumbnails_dir, index_dir, aux_labels_dir):
         d.mkdir(parents=True, exist_ok=True)
 
     # Download train images
@@ -140,8 +147,14 @@ async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size):
     # Create embeddings
     res4_path = index_dir / "local" / "imagenet_early"
     res5_path = index_dir / "local" / "imagenet"
+    linear_path = index_dir / "local" / "imagenet_linear"
+
+    res4_full_path = index_dir / "local" / "imagenet_full_early"
+    res5_full_path = index_dir / "local" / "imagenet_full"
+
     clip_path = index_dir / "local" / "clip"
-    for d in (res4_path, res5_path, clip_path):
+    for d in (res4_path, res5_path, clip_path, linear_path,
+              res4_full_path, res5_full_path):
         d.mkdir(parents=True, exist_ok=True)
 
     image_paths = train_paths + val_paths
@@ -149,16 +162,46 @@ async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size):
     resnet_layers = {
         "res4": str(res4_path / "embeddings.npy"),
         "res5": str(res5_path / "embeddings.npy"),
+        "linear": str(linear_path / "embeddings.npy"),
+    }
+    resnet_full_layers = {
+        "res4": str(res4_full_path / "embeddings.npy"),
+        "res5": str(res5_full_path / "embeddings.npy"),
     }
     resnet_start = time.time()
     if True:
         print("Running ResNet inference...")
+        # Run at cropped resnet size
         resnet_inference.run(
             image_paths,
             resnet_layers,
             batch_size=resnet_batch_size,
+            resize_to=resnet_resize_size,
+            crop_to=resnet_crop_size,
            )
+        # Copy aux labels
+        linear_embeddings = np.memmap(
+            resnet_layers["linear"],
+            dtype="float32",
+            mode="r",
+            shape=(len(image_paths), resnet_inference.EMBEDDING_DIMS["linear"]),
+        )
+        model_labels = np.argmax(linear_embeddings, axis=1)
+        aux_labels = {}
+        for label, aux_l in zip(labels, model_labels[:]):
+            aux_labels[os.path.basename(label)] = aux_l
+        with open(str(aux_labels_dir / "imagenet.pickle"), 'wb') as f:
+            pickle.dump(aux_labels, f)
+
+        # Run at full resolution
+        resnet_inference.run(
+            image_paths,
+            resnet_full_layers,
+            batch_size=1,
+           )
+
     resnet_end = time.time()
+
 
     clip_start = time.time()
     if True:
@@ -184,6 +227,16 @@ async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size):
              "-r",
              str(index_dir),
              os.path.join(INDEX_UPLOAD_GCS_PATH, index_id),
+             )
+         await proc.wait()
+
+         proc = await asyncio.create_subprocess_exec(
+             "gsutil",
+             "-m",
+             "cp",
+             "-r",
+             str(aux_labels_dir),
+             os.path.join(AUX_LABELS_UPLOAD_GCS_PATH, index_id),
              )
          await proc.wait()
 
