@@ -1108,34 +1108,7 @@ async def start_bgsplit_job(request):
     # 1. If aux labels have not been generated, then generate them
     # TODO(fpoms): Actually generate aux labels; and maybe move this to index build?
     alt = aux_labels_type
-    aux_labels_local_path = None
-    if alt == "imagenet":
-        aux_labels_local_path = config.AUX_DIR_TMPL.format(index_id, alt)
-    else:
-        aux_labels_local_path = ""
-        assert alt == "imagenet"
-
-    assert os.path.exists(aux_labels_local_path)
-
-    upload_aux_start = time.time()
-    aux_labels_gcs_path = config.AUX_GCS_TMPL.format(index_id, alt)
-    proc = await asyncio.create_subprocess_exec(
-        "gsutil", "-q", "stat", aux_labels_gcs_path
-    )
-    if await proc.wait() != 0:
-        # Does not exist, so upload
-        proc = await asyncio.create_subprocess_exec(
-            "gsutil",
-            "-m",
-            "cp",
-            "-r",
-            "-n",
-            aux_labels_local_path,
-            aux_labels_gcs_path,
-        )
-        await proc.wait()
     aux_labels_gcs_path = config.AUX_GCS_PUBLIC_TMPL.format(index_id, alt)
-    logger.debug(f"Upload aux time: {time.time() - upload_aux_start}")
 
     # 2. Train BG Split model
     trainers = [Trainer(url) for url in cluster.output["bgsplit_trainer_urls"]]
