@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
+import DatasetList from './DatasetList';
 import App from './App';
 
 import {
@@ -13,13 +14,11 @@ import TimeAgo from "javascript-time-ago";
 import en from "javascript-time-ago/locale/en";
 TimeAgo.addDefaultLocale(en);
 
-const DEFAULT_DATASET_NAME = "waymo";
-
 ReactDOM.render(
   <React.StrictMode>
     <Router>
       <Switch>
-        <Redirect exact from="/" to={`/${DEFAULT_DATASET_NAME}`} />
+        <Route exact path="/" children={<DatasetList />} />
         <Route path="/:datasetName" children={<App />} />
       </Switch>
     </Router>

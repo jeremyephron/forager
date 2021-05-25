@@ -1,4 +1,5 @@
 import React, { useState, useEffect,  useReducer, useRef } from "react";
+import useInterval from "react-useinterval";
 import {
   Container,
   Row,
@@ -93,7 +94,10 @@ const endpoints = fromPairs(toPairs({
   queryKnn: "query_knn_v2",
   queryRanking: "query_ranking_v2",
   generateEmbedding: 'generate_embedding_v2',
+  keepAlive: 'keep_alive_v2',
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
+
+const KEEP_ALIVE_INTERVAL = 60000; // ms
 
 function MainHeader(props) {
   const [loginIsOpen, setLoginIsOpen] = useState(false);
@@ -107,7 +111,6 @@ function MainHeader(props) {
     setLoginIsOpen(false);
     e.preventDefault();
   }
-
 
   //
   // TAG MANAGEMENT MODAL
@@ -653,6 +656,19 @@ function ImageClusterViewer(props) {
 
 const App = () => {
   let { datasetName } = useParams();
+
+  //
+  // PERIODICALLY SEND KEEP ALIVE TO KEEP CLOUD RUN ENDPOINTS FAST
+  //
+
+  const sendKeepAlive = () => {
+    const url = new URL(endpoints.keepAlive);
+    fetch(url, {
+      method: "POST",
+    });
+  };
+  useEffect(sendKeepAlive, []);
+  useInterval(sendKeepAlive, KEEP_ALIVE_INTERVAL);
 
   //
   // DOCUMENT EVENT HANDLERS
