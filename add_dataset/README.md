@@ -22,7 +22,7 @@ Also install the following packages using the linked instructions:
 - [CLIP](https://github.com/openai/CLIP#usage)
 - [Detectron2](https://detectron2.readthedocs.io/en/latest/tutorials/install.html) (the pre-built wheels are easiest if you're on Linux)
 
-Then, download a pre-trained ResNet-50 model from [here](https://dl.fbaipublicfiles.com/detectron2/ImageNetPretrained/MSRA/R-50.pkl
+Finally, download a pre-trained ResNet-50 model from [here](https://dl.fbaipublicfiles.com/detectron2/ImageNetPretrained/MSRA/R-50.pkl
 ) and place it in the same folder as this script.
 
 ## Running the ingest script
