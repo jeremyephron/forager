@@ -2172,6 +2172,24 @@ def add_annotations_v2(request):
 
 @api_view(["POST"])
 @csrf_exempt
+def add_annotations_by_internal_identifiers_v2(request, dataset_name):
+    # TODO(mihirg): Make variable naming more clear
+    # "identifier" = di.pk (above), "internal identifier" = di.identifier (here)
+    dataset = get_object_or_404(Dataset, name=dataset_name)
+
+    payload = json.loads(request.body)
+    internal_identifiers = payload["identifiers"]
+    dataset_items = DatasetItem.objects.filter(
+        dataset=dataset, identifier__in=internal_identifiers
+    )
+    pks = list(dataset_items.values_list("pk", flat=True))
+
+    num_created = bulk_add_annotations_v2(payload, pks)
+    return JsonResponse({"created": num_created})
+
+
+@api_view(["POST"])
+@csrf_exempt
 def add_annotations_to_result_set_v2(request):
     payload = json.loads(request.body)
     result_set_id = payload["result_set_id"]
@@ -2196,6 +2214,7 @@ def bulk_add_annotations_v2(payload, image_identifiers):
     user = payload["user"]
     category = payload["category"]
     value_str = payload["value"]
+    mode = payload.get("mode", "tag" if len(image_identifiers) == 1 else "tag-bulk")
     try:
         value, custom_value = int(LabelValue[value_str]), None
     except KeyError:
@@ -2204,7 +2223,7 @@ def bulk_add_annotations_v2(payload, image_identifiers):
     annotation_data = {
         "type": 0,  # full-frame
         "value": value,
-        "mode": "tag" if len(image_identifiers) == 1 else "tag-bulk",
+        "mode": mode,
         "version": ANN_VERSION,
     }
     if custom_value:
