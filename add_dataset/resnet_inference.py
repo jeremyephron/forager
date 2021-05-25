@@ -1,10 +1,9 @@
 import concurrent.futures
 
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 
 import numpy as np
 import torch
-import torch.nn as nn
 import torchvision.transforms.functional as tvf
 import functools
 from PIL import Image
@@ -13,7 +12,12 @@ from tqdm import tqdm
 from detectron2.layers import ShapeSpec
 from detectron2.checkpoint.detection_checkpoint import DetectionCheckpointer
 from detectron2.modeling.backbone.resnet import (
-    ResNet, BasicStem, DeformBottleneckBlock, BottleneckBlock, BasicBlock)
+    ResNet,
+    BasicStem,
+    DeformBottleneckBlock,
+    BottleneckBlock,
+    BasicBlock,
+)
 from detectron2.config.config import get_cfg as get_default_detectron_config
 
 
@@ -57,11 +61,15 @@ def build_resnet_backbone(cfg, input_shape, num_classes=None):
     }[depth]
 
     if depth in [18, 34]:
-        assert out_channels == 64, "Must set MODEL.RESNETS.RES2_OUT_CHANNELS = 64 for R18/R34"
+        assert (
+            out_channels == 64
+        ), "Must set MODEL.RESNETS.RES2_OUT_CHANNELS = 64 for R18/R34"
         assert not any(
             deform_on_per_stage
         ), "MODEL.RESNETS.DEFORM_ON_PER_STAGE unsupported for R18/R34"
-        assert res5_dilation == 1, "Must set MODEL.RESNETS.RES5_DILATION = 1 for R18/R34"
+        assert (
+            res5_dilation == 1
+        ), "Must set MODEL.RESNETS.RES5_DILATION = 1 for R18/R34"
         assert num_groups == 1, "Must set MODEL.RESNETS.NUM_GROUPS = 1 for R18/R34"
 
     stages = []
@@ -96,8 +104,13 @@ def build_resnet_backbone(cfg, input_shape, num_classes=None):
         out_channels *= 2
         bottleneck_channels *= 2
         stages.append(blocks)
-    return ResNet(stem, stages, num_classes=num_classes,
-                  out_features=out_features, freeze_at=freeze_at)
+    return ResNet(
+        stem,
+        stages,
+        num_classes=num_classes,
+        out_features=out_features,
+        freeze_at=freeze_at,
+    )
 
 
 EMBEDDING_DIMS = {"res4": 1024, "res5": 2048, "linear": 1000}
@@ -108,8 +121,9 @@ RESNET_CONFIG.MODEL.RESNETS.OUT_FEATURES = list(EMBEDDING_DIMS.keys())
 
 # Create model
 shape = ShapeSpec(channels=3)
-backbone = build_resnet_backbone(RESNET_CONFIG, shape,
-                                 num_classes=EMBEDDING_DIMS["linear"])
+backbone = build_resnet_backbone(
+    RESNET_CONFIG, shape, num_classes=EMBEDDING_DIMS["linear"]
+)
 model = torch.nn.Sequential(backbone)
 
 
@@ -120,7 +134,7 @@ checkpointer.load(WEIGHTS_PATH)
 model.to(device)
 model.eval()
 
-#model = torch.nn.DataParallel(model)
+# model = torch.nn.DataParallel(model)
 
 pixel_mean = torch.tensor(RESNET_CONFIG.MODEL.PIXEL_MEAN).view(-1, 1, 1)
 pixel_std = torch.tensor(RESNET_CONFIG.MODEL.PIXEL_STD).view(-1, 1, 1)
@@ -165,9 +179,13 @@ def run(
         for i in tqdm(range(0, len(image_paths), batch_size)):
             # Load batch of images
             batch_paths = image_paths[i : i + batch_size]
-            images = torch.cat(list(executor.map(
-                functools.partial(load_image, resize_to, crop_to),
-                batch_paths)))
+            images = torch.cat(
+                list(
+                    executor.map(
+                        functools.partial(load_image, resize_to, crop_to), batch_paths
+                    )
+                )
+            )
 
             with torch.no_grad():
                 output_dict = model(images)

@@ -5,7 +5,6 @@ import os
 from pathlib import Path
 import uuid
 import numpy as np
-import random
 import time
 import pickle
 
@@ -42,8 +41,10 @@ def parse_gcs_path(path):
 def make_identifier(path):
     return os.path.splitext(os.path.basename(path))[0]
 
+
 def make_old_identifier(path):
-    return os.path.basename(path).split('.')[0]
+    return os.path.basename(path).split(".")[0]
+
 
 def resize_image(input_path, output_dir):
     image = Image.open(input_path)
@@ -68,8 +69,14 @@ def unasync(coro):
 @click.option("--resnet_resize_size", type=int, default=256)
 @click.option("--resnet_crop_size", type=int, default=224)
 @unasync
-async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size,
-               resnet_resize_size, resnet_crop_size):
+async def main(
+    name,
+    train_gcs_path,
+    val_gcs_path,
+    resnet_batch_size,
+    resnet_resize_size,
+    resnet_crop_size,
+):
 
     # Make sure that a dataset with this name doesn't already exist
     async with aiohttp.ClientSession() as session:
@@ -102,7 +109,7 @@ async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size,
             "-n",
             os.path.join(train_gcs_path, "*"),
             str(train_dir),
-           )
+        )
         await proc.wait()
     train_paths = [p for e in IMAGE_EXTENSIONS for p in train_dir.glob(f"**/*.{e}")]
     # Download val images
@@ -153,8 +160,14 @@ async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size,
     res5_full_path = index_dir / "local" / "imagenet_full"
 
     clip_path = index_dir / "local" / "clip"
-    for d in (res4_path, res5_path, clip_path, linear_path,
-              res4_full_path, res5_full_path):
+    for d in (
+        res4_path,
+        res5_path,
+        clip_path,
+        linear_path,
+        res4_full_path,
+        res5_full_path,
+    ):
         d.mkdir(parents=True, exist_ok=True)
 
     image_paths = train_paths + val_paths
@@ -178,7 +191,7 @@ async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size,
             batch_size=resnet_batch_size,
             resize_to=resnet_resize_size,
             crop_to=resnet_crop_size,
-           )
+        )
         # Copy aux labels
         linear_embeddings = np.memmap(
             resnet_layers["linear"],
@@ -190,7 +203,7 @@ async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size,
         aux_labels = {}
         for label, aux_l in zip(labels, model_labels[:]):
             aux_labels[os.path.basename(label)] = aux_l
-        with open(str(aux_labels_dir / "imagenet.pickle"), 'wb') as f:
+        with open(str(aux_labels_dir / "imagenet.pickle"), "wb") as f:
             pickle.dump(aux_labels, f)
 
         # Run at full resolution
@@ -198,10 +211,9 @@ async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size,
             image_paths,
             resnet_full_layers,
             batch_size=1,
-           )
+        )
 
     resnet_end = time.time()
-
 
     clip_start = time.time()
     if True:
@@ -220,36 +232,36 @@ async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size,
     # Upload index to Cloud Storage
     upload_start = time.time()
     if True:
-         proc = await asyncio.create_subprocess_exec(
-             "gsutil",
-             "-m",
-             "cp",
-             "-r",
-             str(index_dir),
-             os.path.join(INDEX_UPLOAD_GCS_PATH, index_id),
-             )
-         await proc.wait()
+        proc = await asyncio.create_subprocess_exec(
+            "gsutil",
+            "-m",
+            "cp",
+            "-r",
+            str(index_dir),
+            os.path.join(INDEX_UPLOAD_GCS_PATH, index_id),
+        )
+        await proc.wait()
 
-         proc = await asyncio.create_subprocess_exec(
-             "gsutil",
-             "-m",
-             "cp",
-             "-r",
-             str(aux_labels_dir),
-             os.path.join(AUX_LABELS_UPLOAD_GCS_PATH, index_id),
-             )
-         await proc.wait()
+        proc = await asyncio.create_subprocess_exec(
+            "gsutil",
+            "-m",
+            "cp",
+            "-r",
+            str(aux_labels_dir),
+            os.path.join(AUX_LABELS_UPLOAD_GCS_PATH, index_id),
+        )
+        await proc.wait()
 
-         # Upload thumbnails to Cloud Storage
-         proc = await asyncio.create_subprocess_exec(
-             "gsutil",
-             "-m",
-             "cp",
-             "-r",
-             str(thumbnails_dir),
-             os.path.join(THUMBNAIL_UPLOAD_GCS_PATH, index_id),
-             )
-         await proc.wait()
+        # Upload thumbnails to Cloud Storage
+        proc = await asyncio.create_subprocess_exec(
+            "gsutil",
+            "-m",
+            "cp",
+            "-r",
+            str(thumbnails_dir),
+            os.path.join(THUMBNAIL_UPLOAD_GCS_PATH, index_id),
+        )
+        await proc.wait()
     upload_end = time.time()
 
     # Add to database
@@ -269,16 +281,17 @@ async def main(name, train_gcs_path, val_gcs_path, resnet_batch_size,
                 assert j["status"] == "success", j
     add_db_end = time.time()
 
-
-    print('Timing')
+    print("Timing")
     for k, t in [
-            ('Download', download_end-download_start),
-            ('Resnet', resnet_end-resnet_start),
-            ('Clip', clip_end-clip_start),
-            ('Thumbnail', thumbnail_end-thumbnail_start),
-            ('Upload', upload_end-upload_start),
-            ('Add db', add_db_end-add_db_start)]:
-        print('{:15} {}'.format(k, str(timedelta(seconds=t))))
+        ("Download", download_end - download_start),
+        ("Resnet", resnet_end - resnet_start),
+        ("Clip", clip_end - clip_start),
+        ("Thumbnail", thumbnail_end - thumbnail_start),
+        ("Upload", upload_end - upload_start),
+        ("Add db", add_db_end - add_db_start),
+    ]:
+        print("{:15} {}".format(k, str(timedelta(seconds=t))))
+
 
 if __name__ == "__main__":
     main()
