@@ -6,6 +6,7 @@ class Dataset(models.Model):
     directory = models.CharField(max_length=600)
     val_directory = models.CharField(max_length=600, blank=True)
     index_id = models.CharField(max_length=300, blank=True)
+    hidden = models.BooleanField(default=False)
 
 
 class DatasetItem(models.Model):

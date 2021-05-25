@@ -1561,6 +1561,15 @@ def get_results_v2(request, dataset_name):
 
 @api_view(["POST"])
 @csrf_exempt
+def keep_alive_v2(request):
+    requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/keep_alive",
+    )
+    return JsonResponse({"status": "success"})
+
+
+@api_view(["POST"])
+@csrf_exempt
 def generate_embedding_v2(request):
     payload = json.loads(request.body)
     image_id = payload.get("image_id")
@@ -1983,6 +1992,14 @@ def add_val_annotations_v2(request):
 
 
 # DATASET INFO
+
+
+@api_view(["GET"])
+@csrf_exempt
+def get_datasets_v2(request):
+    datasets = Dataset.objects.filter(hidden=False)
+    dataset_names = list(datasets.values_list("name", flat=True))
+    return JsonResponse({"dataset_names": dataset_names})
 
 
 @api_view(["GET"])

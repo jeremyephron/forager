@@ -1881,6 +1881,32 @@ async def query_active_validation(request):
     )
 
 
+last_keep_alive_time = 0
+
+
+async def _keep_alive():
+    global last_keep_alive_time
+    if time.time() - last_keep_alive_time < config.MIN_TIME_BETWEEN_KEEP_ALIVES:
+        return
+    last_keep_alive_time = time.time()
+
+    async def keep_endpoint_alive(session, endpoint):
+        async with session.post(endpoint):
+            pass
+
+    async with aiohttp.ClientSession() as session:
+        asyncio.gather(
+            keep_endpoint_alive(session, config.MAPPER_CLOUD_RUN_URL),
+            keep_endpoint_alive(session, config.CLIP_TEXT_INFERENCE_CLOUD_RUN_URL),
+        )
+
+
+@app.route("/keep_alive", methods=["POST"])
+async def keep_alive(request):
+    app.add_task(_keep_alive())
+    return resp.text("", status=204)
+
+
 # CLEANUP
 
 
