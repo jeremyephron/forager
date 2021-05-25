@@ -6,7 +6,7 @@ Before running this script, you need write access to the `foragerml` bucket on G
 
 ## Data model
 
-Training and validation images should be stored in separate directories on Google Cloud Storage. The directories must be publicly-accessible on Cloud Storage (i.e., `allUsers` should have "Storage Object Viewer" access: see [here](https://cloud.google.com/storage/docs/access-control/making-data-public) for more info). While the contents of these directories can be nested arbitrarily deep, each image should ultimately have a unique basename (i.e., the final part of the file path after the last slash). For example, instead of having two images at `gs://path/to/train/A/image.jpg` and `gs://path/to/train/B/image.jpg`, you should place the images at `gs://path/to/train/A.jpg` and `gs://path/to/train/B.jpg`).
+Training and validation images should be stored in separate directories on Google Cloud Storage. The directories must be publicly-accessible on Cloud Storage (i.e., `allUsers` should have "Storage Object Viewer" access: see [here](https://cloud.google.com/storage/docs/access-control/making-data-public) for more info). The contents of these directories can be nested arbitrarily deep -- the ingest script will recurse into subdirectories to find all images, however each image should ultimately have a unique basename (i.e., the final part of the file path after the last slash). For example, instead of having two images at `gs://path/to/train/A/image.jpg` and `gs://path/to/train/B/image.jpg`, you should place the images at `gs://path/to/train/A.jpg` and `gs://path/to/train/B.jpg`).
 
 ## Setup/dependencies
 
