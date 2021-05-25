@@ -2101,9 +2101,9 @@ def create_dataset_v2(request):
         bucket_name = split_dir[0]
         bucket_path = "/".join(split_dir[1:])
 
-        bucket = client.get_bucket(bucket_name)
         all_blobs.extend(
-            (blob, is_val) for blob in client.list_blobs(bucket, prefix=bucket_path)
+            (blob, is_val)
+            for blob in client.list_blobs(bucket_name, prefix=bucket_path)
         )
 
     dataset = Dataset(
