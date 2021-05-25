@@ -1,5 +1,4 @@
 import asyncio
-import functools
 import json
 import os
 from pathlib import Path
@@ -16,6 +15,7 @@ from datetime import timedelta
 
 import clip_inference
 import resnet_inference
+from utils import make_identifier, parse_gcs_path, unasync
 
 
 SERVER_URL = os.environ["SERVER_URL"]
@@ -29,36 +29,11 @@ THUMBNAIL_UPLOAD_GCS_PATH = "gs://foragerml/thumbnails/"  # trailing slash = dir
 RESIZE_MAX_HEIGHT = 200
 
 
-def parse_gcs_path(path):
-    assert path.startswith("gs://")
-    path = path[len("gs://") :]
-    bucket_end = path.find("/")
-    bucket = path[:bucket_end]
-    relative_path = path[bucket_end:].strip("/")
-    return bucket, relative_path
-
-
-def make_identifier(path):
-    return os.path.splitext(os.path.basename(path))[0]
-
-
-def make_old_identifier(path):
-    return os.path.basename(path).split(".")[0]
-
-
 def resize_image(input_path, output_dir):
     image = Image.open(input_path)
     image = image.convert("RGB")
     image.thumbnail((image.width, RESIZE_MAX_HEIGHT))
     image.save(output_dir / f"{make_identifier(input_path)}.jpg")
-
-
-def unasync(coro):
-    @functools.wraps(coro)
-    def wrapper(*args, **kwargs):
-        return asyncio.run(coro(*args, **kwargs))
-
-    return wrapper
 
 
 @click.command()
@@ -77,7 +52,6 @@ async def main(
     resnet_resize_size,
     resnet_crop_size,
 ):
-
     # Make sure that a dataset with this name doesn't already exist
     async with aiohttp.ClientSession() as session:
         async with session.get(
