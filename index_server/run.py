@@ -1895,7 +1895,7 @@ async def _keep_alive():
             pass
 
     async with aiohttp.ClientSession() as session:
-        asyncio.gather(
+        await asyncio.gather(
             keep_endpoint_alive(session, config.MAPPER_CLOUD_RUN_URL),
             keep_endpoint_alive(session, config.CLIP_TEXT_INFERENCE_CLOUD_RUN_URL),
         )
