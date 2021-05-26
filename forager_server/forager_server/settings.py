@@ -28,6 +28,7 @@ if os.path.exists(django_settings_path):
 else:
     django_settings = {
         'secret_key': 's&*+2lskkfm0l&ni9rd873xhy3tdb_04*w3cpon9*)1m8ehtib',
+        'frontend_port': 4000,
         'allowed_hosts': [],
         'db': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -140,7 +141,8 @@ STATIC_URL = '/static/'
 CORS_ALLOW_CREDENTIALS = True
 CORS_ORIGIN_WHITELIST = (
     ['http://127.0.0.1:3000', 'http://localhost:3000'] +
-    ['http://' + h + ':4000' for h in ALLOWED_HOSTS])
+    ['http://' + h + ':' + django_settings.get('frontend_port', 4000)
+     for h in django_settings['allowed_hosts']])
 CSRF_TRUSTED_ORIGINS  = ['127.0.0.1', 'localhost'] + ALLOWED_HOSTS
 SESSION_COOKIE_SAMESITE = 'None' # as a string
 SESSION_COOKIE_SECURE = True
