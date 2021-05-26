@@ -8,7 +8,7 @@ else
 fi
 
 export REACT_APP_SERVER_URL=http://$ip_addr:8000
-export PORT=$(jq ".frontend_port//4000" ~$config_user/forager/django_settings.json)
+export PORT=$(jq ".frontend_port//4000" $(eval echo ~$config_user)/forager/django_settings.json)
 
 npm run build
 serve -s build
