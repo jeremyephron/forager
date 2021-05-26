@@ -138,10 +138,12 @@ USE_TZ = True
 STATIC_URL = '/static/'
 
 # source of the frontend requests
+frontend_port = django_settings.get('frontend_port', 4000)
 CORS_ALLOW_CREDENTIALS = True
 CORS_ORIGIN_WHITELIST = (
     ['http://127.0.0.1:3000', 'http://localhost:3000'] +
-    ['http://' + h + ':' + str(django_settings.get('frontend_port', 4000))
+    ['http://' + h + ((':' + str(frontend_port))
+                      if frontend_port != 80 else "")
      for h in django_settings['allowed_hosts']])
 CSRF_TRUSTED_ORIGINS  = ['127.0.0.1', 'localhost'] + ALLOWED_HOSTS
 SESSION_COOKIE_SAMESITE = 'None' # as a string
