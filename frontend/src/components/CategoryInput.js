@@ -82,12 +82,14 @@ const MyToken = forwardRef((props, ref) => {
     populateAll,
   } = allProps;
 
+  const target = document.getElementById(innerId);
+
   return (
     <>
       {!disabled ?
         <InteractiveToken {...allProps} ref={ref} id={innerId} /> :
         <StaticToken {...allProps} id={innerId} />}
-      <Popover
+      {target !== null && <Popover
         placement="top"
         isOpen={isOpen && !!(document.getElementById(innerId))}
         target={innerId}
@@ -133,7 +135,7 @@ const MyToken = forwardRef((props, ref) => {
             </a>
           </div>}
         </PopoverBody>
-      </Popover>
+      </Popover>}
     </>
   );
 });
