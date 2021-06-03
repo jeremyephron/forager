@@ -226,7 +226,7 @@ class Migration(migrations.Migration):
         migrations.AddField("Annotation", "bbox_x2", models.FloatField(null=True)),
         migrations.AddField("Annotation", "bbox_y2", models.FloatField(null=True)),
         migrations.AddField("Annotation", "misc_data", models.JSONField(default=dict)),
-        migrations.RunField(populate_new_annotation_fields),
+        migrations.RunPython(populate_new_annotation_fields),
         migrations.RemoveField("Annotation", "label_function"),
         migrations.RemoveField("Annotation", "label_category"),
         migrations.RemoveField("Annotation", "label_type"),
