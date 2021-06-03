@@ -183,7 +183,7 @@ class Migration(migrations.Migration):
                 ),
             ],
         ),
-        migrations.Mode(
+        migrations.CreateModel(
             "Mode",
             fields=[
                 ID_FIELD,
