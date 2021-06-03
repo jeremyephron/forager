@@ -1,4 +1,5 @@
 from collections import defaultdict, namedtuple
+from dataclasses import dataclass
 import distutils.util
 from enum import IntEnum
 import itertools
@@ -6,27 +7,22 @@ import json
 import math
 import os
 import random
-import requests
-import urllib.request
 import uuid
 import shutil
 
 from typing import List, Dict, NamedTuple, Optional
 
-from django.http import HttpRequest, HttpResponse, JsonResponse
-from django.db.models import Q
-from django.core.exceptions import ValidationError, ObjectDoesNotExist
+from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404, get_list_or_404
 from django.conf import settings
 from google.cloud import storage
-from rest_framework import status
 from rest_framework.decorators import api_view
-from pycocotools.coco import COCO
+import requests
 from expiringdict import ExpiringDict
-from dataclasses import dataclass
 
 from .models import Dataset, DatasetItem, Annotation, DNNModel
+
 
 class LabelValue(IntEnum):
     TOMBSTONE = -1
@@ -35,6 +31,7 @@ class LabelValue(IntEnum):
     HARD_NEGATIVE = 3
     UNSURE = 4
     CUSTOM = 5
+
 
 def nest_anns(anns, nest_category=True, nest_lf=True):
     if nest_category and nest_lf:
@@ -73,7 +70,7 @@ def filter_most_recent_anns(nested_anns):
         filt_anns = []
         most_recent = None
         for ann in anns:
-            if ann.label_type == 'klabel_frame':
+            if ann.label_type == "klabel_frame":
                 if most_recent is None or ann.created > most_recent.created:
                     most_recent = ann
             else:
@@ -85,34 +82,29 @@ def filter_most_recent_anns(nested_anns):
     if len(nested_anns) == 0:
         return {}
     if isinstance(next(iter(nested_anns.items()))[1], list):
-       data = defaultdict(list)
-       for pk, anns in nested_anns.items():
-           data[pk] = filter_fn(anns)
+        data = defaultdict(list)
+        for pk, anns in nested_anns.items():
+            data[pk] = filter_fn(anns)
+    elif isinstance(next(iter(next(iter(nested_anns.items()))[1].items()))[1], list):
+        data = defaultdict(lambda: defaultdict(list))
+        for pk, label_fns_data in nested_anns.items():
+            for label_fn, anns in label_fns_data.items():
+                data[pk][label_fn] = filter_fn(anns)
     elif isinstance(
-            next(iter(
-                next(iter(nested_anns.items()))[1].items()
-            ))[1],
-            list):
-       data = defaultdict(lambda: defaultdict(list))
-       for pk, label_fns_data in nested_anns.items():
-           for label_fn, anns in label_fns_data.items():
-               data[pk][label_fn] = filter_fn(anns)
-    elif isinstance(
-            next(iter(
-                next(iter(
-                    next(iter(nested_anns.items()))[1].items()
-                ))[1].items()
-            ))[1],
-            list):
-       data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
-       for pk, cat_fns_data in nested_anns.items():
-           for cat, label_fns_data in cat_fns_data.items():
-               for label_fn, anns in label_fns_data.items():
-                   data[pk][cat][label_fn] = filter_fn(anns)
+        next(iter(next(iter(next(iter(nested_anns.items()))[1].items()))[1].items()))[
+            1
+        ],
+        list,
+    ):
+        data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+        for pk, cat_fns_data in nested_anns.items():
+            for cat, label_fns_data in cat_fns_data.items():
+                for label_fn, anns in label_fns_data.items():
+                    data[pk][cat][label_fn] = filter_fn(anns)
     return data
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @csrf_exempt
 def start_cluster(request):
     # TODO(mihirg): Remove this setting from Django; it's now managed by Terraform
@@ -123,13 +115,15 @@ def start_cluster(request):
         json=params,
     )
     response_data = r.json()
-    return JsonResponse({
-        "status": "success",
-        "cluster_id": response_data["cluster_id"],
-    })
+    return JsonResponse(
+        {
+            "status": "success",
+            "cluster_id": response_data["cluster_id"],
+        }
+    )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @csrf_exempt
 def get_cluster_status(request, cluster_id):
     params = {"cluster_id": cluster_id}
@@ -140,7 +134,7 @@ def get_cluster_status(request, cluster_id):
     return JsonResponse(response_data)
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @csrf_exempt
 def stop_cluster(request, cluster_id):
     params = {"cluster_id": cluster_id}
@@ -148,26 +142,28 @@ def stop_cluster(request, cluster_id):
         settings.EMBEDDING_SERVER_ADDRESS + "/stop_cluster",
         json=params,
     )
-    return JsonResponse({
-        "status": "success",
-    })
+    return JsonResponse(
+        {
+            "status": "success",
+        }
+    )
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @csrf_exempt
 def create_model(request, dataset_name, dataset=None):
     payload = json.loads(request.body)
-    model_name = payload['model_name']
-    cluster_id = payload['cluster_id']
-    bucket_name = payload['bucket']
-    index_id = payload['index_id']
-    pos_tags = parse_tag_set_from_query_v2(payload['pos_tags'])
-    neg_tags = parse_tag_set_from_query_v2(payload['neg_tags'])
-    val_pos_tags = parse_tag_set_from_query_v2(payload['val_pos_tags'])
-    val_neg_tags = parse_tag_set_from_query_v2(payload['val_neg_tags'])
-    augment_negs = bool(payload['augment_negs'])
-    model_kwargs = payload['model_kwargs']
-    resume_model_id = payload.get('resume', None)
+    model_name = payload["model_name"]
+    cluster_id = payload["cluster_id"]
+    bucket_name = payload["bucket"]
+    index_id = payload["index_id"]
+    pos_tags = parse_tag_set_from_query_v2(payload["pos_tags"])
+    neg_tags = parse_tag_set_from_query_v2(payload["neg_tags"])
+    val_pos_tags = parse_tag_set_from_query_v2(payload["val_pos_tags"])
+    val_neg_tags = parse_tag_set_from_query_v2(payload["val_neg_tags"])
+    augment_negs = bool(payload["augment_negs"])
+    model_kwargs = payload["model_kwargs"]
+    resume_model_id = payload.get("resume", None)
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
     eligible_images = DatasetItem.objects.filter(
@@ -176,7 +172,8 @@ def create_model(request, dataset_name, dataset=None):
     annotations = Annotation.objects.filter(
         dataset_item__in=eligible_images,
         label_category__in=tag_sets_to_category_list_v2(
-            pos_tags, neg_tags, val_pos_tags, val_neg_tags),
+            pos_tags, neg_tags, val_pos_tags, val_neg_tags
+        ),
         label_type="klabel_frame",
     )
     tags_by_pk = get_tags_from_annotations_v2(annotations)
@@ -232,7 +229,7 @@ def create_model(request, dataset_name, dataset=None):
 
     if resume_model_id:
         resume_model = get_object_or_404(DNNModel, model_id=resume_model_id)
-        resume_model_path = (resume_model.checkpoint_path)
+        resume_model_path = resume_model.checkpoint_path
     else:
         resume_model = None
         resume_model_path = None
@@ -257,10 +254,10 @@ def create_model(request, dataset_name, dataset=None):
     response_data = r.json()
 
     if r.status_code != 200:
-        return JsonResponse({
-            "status": "failure",
-            "reason": response_data.get("reason", "")
-        }, status=r.status_code)
+        return JsonResponse(
+            {"status": "failure", "reason": response_data.get("reason", "")},
+            status=r.status_code,
+        )
 
     m = DNNModel(
         dataset=dataset,
@@ -272,35 +269,36 @@ def create_model(request, dataset_name, dataset=None):
             "neg_tags": payload["neg_tags"],
             "augment_negs_include": payload.get("include", []) if augment_negs else [],
             "augment_negs_exclude": payload.get("exclude", []) if augment_negs else [],
-        }
+        },
     )
-    model_epoch = -1 + model_kwargs.get('epochs_to_run', 1)
+    model_epoch = -1 + model_kwargs.get("epochs_to_run", 1)
     if resume_model_id:
         m.resume_model_id = resume_model_id
-        if model_kwargs.get('resume_training', False):
+        if model_kwargs.get("resume_training", False):
             model_epoch += resume_model.epoch + 1
     m.epoch = model_epoch
     m.save()
 
-    return JsonResponse({
-        "status": "success",
-        "model_id": response_data["model_id"],
-    })
+    return JsonResponse(
+        {
+            "status": "success",
+            "model_id": response_data["model_id"],
+        }
+    )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @csrf_exempt
 def get_model_status(request, model_id):
     params = {"model_id": model_id}
     r = requests.get(
-        settings.EMBEDDING_SERVER_ADDRESS + "/bgsplit_job_status",
-        params=params
+        settings.EMBEDDING_SERVER_ADDRESS + "/bgsplit_job_status", params=params
     )
     response_data = r.json()
     if response_data["has_model"]:
         # Index has been successfully created & uploaded -> persist
         m = get_object_or_404(DNNModel, model_id=model_id)
-        m.checkpoint_path = response_data['checkpoint_path']
+        m.checkpoint_path = response_data["checkpoint_path"]
         m.save()
 
     return JsonResponse(response_data)
@@ -322,41 +320,43 @@ def update_model_v2(request):
     return JsonResponse({"success": True})
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @csrf_exempt
 def delete_model_v2(request):
     payload = json.loads(request.body)
     model_name = payload["model_name"]
-    #cluster_id = payload['cluster_id']
+    # cluster_id = payload['cluster_id']
     models = get_list_or_404(DNNModel, name=model_name)
     for m in models:
         # TODO(fpoms): delete model data stored on NFS?
-        #shutil.rmtree(os.path.join(m.checkpoint_path, '..'))
+        # shutil.rmtree(os.path.join(m.checkpoint_path, '..'))
         shutil.rmtree(m.output_directory, ignore_errors=True)
         m.delete()
-
 
     return JsonResponse({"success": True})
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @csrf_exempt
 def run_model_inference(request, dataset_name, dataset=None):
     payload = json.loads(request.body)
-    model_id = payload['model_id']
-    cluster_id = payload['cluster_id']
-    bucket_name = payload['bucket']
-    index_id = payload['index_id']
+    model_id = payload["model_id"]
+    cluster_id = payload["cluster_id"]
+    bucket_name = payload["bucket"]
+    index_id = payload["index_id"]
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
-    model_checkpoint_path = (
-        get_object_or_404(DNNModel, model_id=model_id)
-        .checkpoint_path)
+    model_checkpoint_path = get_object_or_404(
+        DNNModel, model_id=model_id
+    ).checkpoint_path
     if model_checkpoint_path is None or len(model_checkpoint_path) == 0:
-        return JsonResponse({
-            "status": "failure",
-            "reason": f"Model {model_id} does not have a model checkpoint."
-        }, status=400)
+        return JsonResponse(
+            {
+                "status": "failure",
+                "reason": f"Model {model_id} does not have a model checkpoint.",
+            },
+            status=400,
+        )
 
     params = {
         "bucket": bucket_name,
@@ -371,38 +371,39 @@ def run_model_inference(request, dataset_name, dataset=None):
     )
     response_data = r.json()
 
-    return JsonResponse({
-        "status": "success",
-        "job_id": response_data["job_id"],
-    })
+    return JsonResponse(
+        {
+            "status": "success",
+            "job_id": response_data["job_id"],
+        }
+    )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @csrf_exempt
 def get_model_inference_status(request, job_id):
     params = {"job_id": job_id}
     r = requests.get(
         settings.EMBEDDING_SERVER_ADDRESS + "/bgsplit_inference_job_status",
-        params=params
+        params=params,
     )
     response_data = r.json()
     if response_data["has_output"]:
         model_id = response_data["model_id"]
         # Index has been successfully created & uploaded -> persist
         m = get_object_or_404(DNNModel, model_id=model_id)
-        m.output_directory = response_data['output_dir']
+        m.output_directory = response_data["output_dir"]
         m.save()
 
     return JsonResponse(response_data)
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @csrf_exempt
 def stop_model_inference(request, job_id):
     params = {"job_id": job_id}
     r = requests.post(
-        settings.EMBEDDING_SERVER_ADDRESS + "/stop_bgsplit_inference_job",
-        json=params
+        settings.EMBEDDING_SERVER_ADDRESS + "/stop_bgsplit_inference_job", json=params
     )
     response_data = r.json()
     return JsonResponse(response_data, status=r.status_code)
@@ -417,12 +418,14 @@ def stop_model_inference(request, job_id):
 Tag = namedtuple("Tag", "category value")  # type: NamedTuple[str, str]
 PkType = int
 
+
 @dataclass
 class ResultSet:
     type: str
     ranking: List[PkType]
     distances: List[float]
     model: Optional[str]
+
 
 # TODO(fpoms): this needs to be wrapped in a lock so that
 # updates are atomic across concurrent requests
@@ -483,9 +486,7 @@ def get_tags_from_annotations_v2(annotations):
     return tags_by_pk
 
 
-def filtered_images_v2(
-    request, dataset, exclude_pks=None
-) -> List[PkType]:
+def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
     if request.method == "POST":
         payload = json.loads(request.body)
         include_tags = parse_tag_set_from_query_v2(payload.get("include"))
@@ -523,9 +524,7 @@ def filtered_images_v2(
     annotations = (
         Annotation.objects.filter(
             dataset_item__in=dataset_items,
-            label_category__in=tag_sets_to_category_list_v2(
-                include_tags, exclude_tags
-            ),
+            label_category__in=tag_sets_to_category_list_v2(include_tags, exclude_tags),
             label_type="klabel_frame",
         )
         # ).order_by(
@@ -571,14 +570,11 @@ def process_image_query_results_v2(request, dataset, query_response):
 
 
 def create_result_set_v2(results, type, model=None):
-    pks = results['pks']
-    distances = results['distances']
+    pks = results["pks"]
+    distances = results["distances"]
     result_set_id = str(uuid.uuid4())
     current_result_sets[result_set_id] = ResultSet(
-        type=type,
-        ranking=pks,
-        distances=distances,
-        model=model
+        type=type, ranking=pks, distances=distances, model=model
     )
     return {
         "id": result_set_id,
@@ -598,8 +594,10 @@ def get_results_v2(request, dataset_name):
     num_to_return = int(request.GET.get("num", 1000))
 
     result_set = current_result_sets[result_set_id]
-    pks = result_set.ranking[offset_to_return: offset_to_return + num_to_return]
-    distances = result_set.distances[offset_to_return: offset_to_return + num_to_return]
+    pks = result_set.ranking[offset_to_return : offset_to_return + num_to_return]
+    distances = result_set.distances[
+        offset_to_return : offset_to_return + num_to_return
+    ]
 
     dataset_items_by_pk = DatasetItem.objects.in_bulk(pks)
     dataset_items = [dataset_items_by_pk[pk] for pk in pks]  # preserve order
@@ -627,12 +625,14 @@ def get_results_v2(request, dataset_name):
     ]
     dataset_item_identifiers = [di.pk for di in dataset_items]
 
-    return JsonResponse({
-        "paths": dataset_item_paths,
-        "identifiers": dataset_item_identifiers,
-        "distances": distances,
-        "clustering": clustering_data["clustering"],
-    })
+    return JsonResponse(
+        {
+            "paths": dataset_item_paths,
+            "identifiers": dataset_item_identifiers,
+            "distances": distances,
+            "clustering": clustering_data["clustering"],
+        }
+    )
 
 
 @api_view(["POST"])
@@ -734,9 +734,9 @@ def train_svm_v2(request, dataset_name):
             neg_dataset_item_pks.append(pk)
 
     # Augment with randomly sampled negatives if requested
-    num_extra_negs = settings.SVM_NUM_NEGS_MULTIPLIER * len(
-        pos_dataset_item_pks
-    ) - len(neg_dataset_item_pks)
+    num_extra_negs = settings.SVM_NUM_NEGS_MULTIPLIER * len(pos_dataset_item_pks) - len(
+        neg_dataset_item_pks
+    )
     if augment_negs and num_extra_negs > 0:
         # Uses "include" and "exclude" category sets from GET request
         all_eligible_pks = filtered_images_v2(
@@ -853,7 +853,7 @@ def query_images_v2(request, dataset_name):
         random.shuffle(result_pks)
     elif order == "id":
         result_pks.sort()
-    results = {'pks': result_pks, 'distances': [-1 for _ in result_pks]}
+    results = {"pks": result_pks, "distances": [-1 for _ in result_pks]}
     return JsonResponse(create_result_set_v2(results, "query"))
 
 
@@ -872,9 +872,11 @@ def get_val_examples_v2(dataset, model_id):
     pos_tags = parse_tag_set_from_query_v2(model.category_spec["pos_tags"])
     neg_tags = parse_tag_set_from_query_v2(model.category_spec["neg_tags"])
     augment_negs = model.category_spec.get("augment_negs", False)
-    augment_negs_include = parse_tag_set_from_query_v2(
-        model.category_spec.get("augment_negs_include", [])
-    ) if augment_negs else set()
+    augment_negs_include = (
+        parse_tag_set_from_query_v2(model.category_spec.get("augment_negs_include", []))
+        if augment_negs
+        else set()
+    )
 
     # Limit to validation set
     eligible_dataset_items = DatasetItem.objects.filter(
@@ -932,7 +934,7 @@ def query_metrics_v2(request, dataset_name):
     weights = []
     for pk, label in itertools.chain(
         ((pk, True) for pk in pos_dataset_item_pks),
-        ((pk, False) for pk in neg_dataset_item_pks)
+        ((pk, False) for pk in neg_dataset_item_pks),
     ):
         di = dataset_items_by_pk[pk]
         identifier = di.identifier
@@ -980,7 +982,7 @@ def query_active_validation_v2(request, dataset_name):
     labels = []
     for pk, label in itertools.chain(
         ((pk, True) for pk in pos_dataset_item_pks),
-        ((pk, False) for pk in neg_dataset_item_pks)
+        ((pk, False) for pk in neg_dataset_item_pks),
     ):
         di = dataset_items_by_pk[pk]
         identifiers.append(di.identifier)
@@ -1017,11 +1019,13 @@ def query_active_validation_v2(request, dataset_name):
     path_template = "https://storage.googleapis.com/{:s}/".format(bucket_name) + "{:s}"
     paths = [path_template.format(p) for p in paths]
 
-    return JsonResponse({
-        "paths": paths,
-        "identifiers": pks,
-        "weights": response_data["weights"],
-    })
+    return JsonResponse(
+        {
+            "paths": paths,
+            "identifiers": pks,
+            "weights": response_data["weights"],
+        }
+    )
 
 
 @api_view(["POST"])
@@ -1083,12 +1087,14 @@ def get_datasets_v2(request):
 def get_dataset_info_v2(request, dataset_name):
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
-    annotations = Annotation.objects.filter(
-        dataset_item__in=dataset.datasetitem_set.filter(),
-        label_type__exact="klabel_frame",  # deliberately exclude VAL_NEGATIVE_TYPE
-    ).order_by(
-        "dataset_item", "label_category", "-created"
-    ).distinct("dataset_item", "label_category")
+    annotations = (
+        Annotation.objects.filter(
+            dataset_item__in=dataset.datasetitem_set.filter(),
+            label_type__exact="klabel_frame",  # deliberately exclude VAL_NEGATIVE_TYPE
+        )
+        .order_by("dataset_item", "label_category", "-created")
+        .distinct("dataset_item", "label_category")
+    )
 
     # Unique categories that have at least one non-tombstone label
     categories_and_custom_values = {}
@@ -1109,8 +1115,12 @@ def get_dataset_info_v2(request, dataset_name):
         {
             "categories": categories_and_custom_values,
             "index_id": dataset.index_id,
-            "num_train": dataset.datasetitem_set.filter(google=False, is_val=False).count(),
-            "num_val": dataset.datasetitem_set.filter(google=False, is_val=True).count(),
+            "num_train": dataset.datasetitem_set.filter(
+                google=False, is_val=False
+            ).count(),
+            "num_val": dataset.datasetitem_set.filter(
+                google=False, is_val=True
+            ).count(),
         }
     )
 
@@ -1121,10 +1131,9 @@ def get_models_v2(request, dataset_name):
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
     model_objs = DNNModel.objects.filter(
-        dataset=dataset, checkpoint_path__isnull=False,
-    ).order_by(
-        "-last_updated"
-    )
+        dataset=dataset,
+        checkpoint_path__isnull=False,
+    ).order_by("-last_updated")
 
     model_names = set()
     latest = {}
@@ -1140,11 +1149,11 @@ def get_models_v2(request, dataset_name):
         {
             "name": model_name,
             "latest": model_info(latest[model_name]),
-            "with_output": model_info(with_output.get(model_name))
+            "with_output": model_info(with_output.get(model_name)),
         }
         for model_name in model_names
     ]
-    return JsonResponse({'models': models})
+    return JsonResponse({"models": models})
 
 
 def model_info(model):
@@ -1164,7 +1173,7 @@ def model_info(model):
         "pos_tags": serialize_tag_set_for_client_v2(pos_tags),
         "neg_tags": serialize_tag_set_for_client_v2(neg_tags | augment_negs_include),
         "augment_negs": model.category_spec.get("augment_negs", False),
-        "epoch": model.epoch
+        "epoch": model.epoch,
     }
 
 
@@ -1203,7 +1212,7 @@ def create_dataset_v2(request):
         name=name,
         directory=train_directory,
         val_directory=val_directory,
-        index_id=index_id
+        index_id=index_id,
     )
     dataset.save()
 
@@ -1243,8 +1252,7 @@ def get_annotations_v2(request):
     # ).distinct("dataset_item", "label_category")
     tags_by_pk = get_tags_from_annotations_v2(annotations)
     annotations_by_pk = {
-        pk: serialize_tag_set_for_client_v2(tags)
-        for pk, tags in tags_by_pk.items()
+        pk: serialize_tag_set_for_client_v2(tags) for pk, tags in tags_by_pk.items()
     }
     return JsonResponse(annotations_by_pk)
 
@@ -1378,13 +1386,15 @@ def get_category_counts_v2(request, dataset_name):
     payload = json.loads(request.body)
     categories = payload["categories"]
 
-    anns = Annotation.objects.filter(
-        dataset_item__in=dataset.datasetitem_set.filter(),
-        label_category__in=categories,
-        label_type__exact="klabel_frame",
-    ).order_by(
-        "dataset_item", "label_category", "-created"
-    ).distinct("dataset_item", "label_category")
+    anns = (
+        Annotation.objects.filter(
+            dataset_item__in=dataset.datasetitem_set.filter(),
+            label_category__in=categories,
+            label_type__exact="klabel_frame",
+        )
+        .order_by("dataset_item", "label_category", "-created")
+        .distinct("dataset_item", "label_category")
+    )
 
     n_labeled = {c: {value.name: 0 for value in LabelValue} for c in categories}
     for ann in anns:
