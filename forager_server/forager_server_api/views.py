@@ -389,8 +389,20 @@ def serialize_tag_set_for_client_v2(ts):
 
 def get_tags_from_annotations_v2(annotations):
     tags_by_pk = defaultdict(list)
+
+    mode_pks = set()
+    category_pks = set()
     for ann in annotations:
-        tags_by_pk[ann.dataset_item.pk].append(Tag(ann.category.name, ann.mode.name))
+        category_pks.add(ann.category.pk)
+        mode_pks.add(ann.mode.pk)
+
+    categories_by_pk = Category.objects.in_bulk(list(category_pks))
+    modes_by_pk = Mode.objects.in_bulk(list(mode_pks))
+
+    for ann in annotations:
+        category = categories_by_pk[ann.category.pk]
+        mode = modes_by_pk[ann.mode.pk]
+        tags_by_pk[ann.dataset_item.pk].append(Tag(category, mode))
     return tags_by_pk
 
 
@@ -1244,22 +1256,18 @@ def get_category_counts_v2(request, dataset_name):
     category_names = payload["categories"]
 
     categories = Category.objects.filter(name__in=category_names)
-    category_by_pk = {c.pk: c for c in categories}
-
     counts = (
         Annotation.objects.filter(
             dataset_item__in=dataset.datasetitem_set.filter(), category__in=categories
         )
-        .values("category", "mode")
+        .values("category__name", "mode__name")
         .annotate(n=Count("pk"))
     )
-    mode_pks = list(set(c["mode"] for c in counts))
-    mode_by_pk = Mode.objects.in_bulk(mode_pks)
 
     n_labeled = defaultdict(dict)
     for c in counts:
-        category = category_by_pk[c["category"]].name
-        mode = mode_by_pk[c["mode"]].name
+        category = c["category__name"]
+        mode = c["mode__name"]
         n_labeled[category][mode] = c["n"]
 
     return JsonResponse({"numLabeled": n_labeled})
