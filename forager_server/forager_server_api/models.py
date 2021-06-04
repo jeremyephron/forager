@@ -35,7 +35,9 @@ class DatasetItem(models.Model):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["dataset", "identifier"]),
+            models.UniqueConstraint(
+                fields=["dataset", "identifier"], name="unique_identifier"
+            ),
         ]
         indexes = [
             models.Index(fields=["dataset", "is_val", "identifier"]),
