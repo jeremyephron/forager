@@ -98,7 +98,7 @@ def populate_user_category_and_mode(apps, schema_editor):
     db_alias = schema_editor.connection.alias
 
     Annotation = apps.get_model(APP_NAME, "Annotation")
-    User = apps.get_model(APP_NAME, "Annotation")
+    User = apps.get_model(APP_NAME, "User")
     Category = apps.get_model(APP_NAME, "Category")
     Mode = apps.get_model(APP_NAME, "Mode")
 
@@ -126,7 +126,7 @@ def populate_new_annotation_fields(apps, schema_editor):
     db_alias = schema_editor.connection.alias
 
     Annotation = apps.get_model(APP_NAME, "Annotation")
-    User = apps.get_model(APP_NAME, "Annotation")
+    User = apps.get_model(APP_NAME, "User")
     Category = apps.get_model(APP_NAME, "Category")
     Mode = apps.get_model(APP_NAME, "Mode")
 
