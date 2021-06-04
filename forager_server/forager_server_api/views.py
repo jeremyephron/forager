@@ -1,10 +1,11 @@
 from collections import defaultdict, namedtuple
 from dataclasses import dataclass
 import distutils.util
-from enum import IntEnum
+import functools
 import itertools
 import json
 import math
+import operator
 import os
 import random
 import uuid
@@ -12,6 +13,7 @@ import shutil
 
 from typing import List, Dict, NamedTuple, Optional
 
+from django.db.models import Q, Count
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404, get_list_or_404
@@ -21,87 +23,7 @@ from rest_framework.decorators import api_view
 import requests
 from expiringdict import ExpiringDict
 
-from .models import Dataset, DatasetItem, Annotation, DNNModel
-
-
-class LabelValue(IntEnum):
-    TOMBSTONE = -1
-    POSITIVE = 1
-    NEGATIVE = 2
-    HARD_NEGATIVE = 3
-    UNSURE = 4
-    CUSTOM = 5
-
-
-def nest_anns(anns, nest_category=True, nest_lf=True):
-    if nest_category and nest_lf:
-        data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
-        for ann in anns:
-            # Only use most recent perframe ann
-            k = ann.dataset_item.pk
-            c = ann.label_category
-            u = ann.label_function
-            data[k][c][u].append(ann)
-    elif nest_category:
-        data = defaultdict(lambda: defaultdict(list))
-        for ann in anns:
-            # Only use most recent perframe ann
-            k = ann.dataset_item.pk
-            c = ann.label_category
-            data[k][c].append(ann)
-    elif nest_lf:
-        data = defaultdict(lambda: defaultdict(list))
-        for ann in anns:
-            # Only use most recent perframe ann
-            k = ann.dataset_item.pk
-            u = ann.label_function
-            data[k][u].append(ann)
-    else:
-        data = defaultdict(list)
-        for ann in anns:
-            # Only use most recent perframe ann
-            k = ann.dataset_item.pk
-            data[k].append(ann)
-    return data
-
-
-def filter_most_recent_anns(nested_anns):
-    def filter_fn(anns):
-        filt_anns = []
-        most_recent = None
-        for ann in anns:
-            if ann.label_type == "klabel_frame":
-                if most_recent is None or ann.created > most_recent.created:
-                    most_recent = ann
-            else:
-                filt_anns.append(ann)
-        if most_recent:
-            filt_anns.append(most_recent)
-        return filt_anns
-
-    if len(nested_anns) == 0:
-        return {}
-    if isinstance(next(iter(nested_anns.items()))[1], list):
-        data = defaultdict(list)
-        for pk, anns in nested_anns.items():
-            data[pk] = filter_fn(anns)
-    elif isinstance(next(iter(next(iter(nested_anns.items()))[1].items()))[1], list):
-        data = defaultdict(lambda: defaultdict(list))
-        for pk, label_fns_data in nested_anns.items():
-            for label_fn, anns in label_fns_data.items():
-                data[pk][label_fn] = filter_fn(anns)
-    elif isinstance(
-        next(iter(next(iter(next(iter(nested_anns.items()))[1].items()))[1].items()))[
-            1
-        ],
-        list,
-    ):
-        data = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
-        for pk, cat_fns_data in nested_anns.items():
-            for cat, label_fns_data in cat_fns_data.items():
-                for label_fn, anns in label_fns_data.items():
-                    data[pk][cat][label_fn] = filter_fn(anns)
-    return data
+from .models import Dataset, DatasetItem, Category, Mode, User, Annotation, DNNModel
 
 
 @api_view(["POST"])
@@ -109,10 +31,8 @@ def filter_most_recent_anns(nested_anns):
 def start_cluster(request):
     # TODO(mihirg): Remove this setting from Django; it's now managed by Terraform
     # (or figure out how to set it from the frontend if we need that)
-    params = {"n_nodes": settings.EMBEDDING_CLUSTER_NODES}
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/start_cluster",
-        json=params,
     )
     response_data = r.json()
     return JsonResponse(
@@ -166,9 +86,7 @@ def create_model(request, dataset_name, dataset=None):
     resume_model_id = payload.get("resume", None)
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
-    eligible_images = DatasetItem.objects.filter(
-        dataset=dataset, google=False, is_val=False
-    )
+    eligible_images = DatasetItem.objects.filter(dataset=dataset, is_val=False)
     annotations = Annotation.objects.filter(
         dataset_item__in=eligible_images,
         label_category__in=tag_sets_to_category_list_v2(
@@ -451,12 +369,18 @@ def parse_tag_set_from_query_v2(s):
     return ts
 
 
-def tag_sets_to_category_list_v2(*tagsets):
-    categories = set()
-    for ts in tagsets:
-        for tag in ts:
-            categories.add(tag.category)
-    return list(categories)
+def tag_sets_to_query(*tagsets):
+    merged = set().union(*tagsets)
+    return functools.reduce(
+        operator.or_,
+        [
+            Q(
+                annotation__category__name=t.category,
+                annotation__mode__name=t.value,
+            )
+            for t in merged
+        ],
+    )
 
 
 def serialize_tag_set_for_client_v2(ts):
@@ -464,25 +388,9 @@ def serialize_tag_set_for_client_v2(ts):
 
 
 def get_tags_from_annotations_v2(annotations):
-    # [image][category][#]
-    anns = filter_most_recent_anns(nest_anns(annotations, nest_lf=False))
-
     tags_by_pk = defaultdict(list)
-    for di_pk, anns_by_cat in anns.items():
-        for cat, ann_list in anns_by_cat.items():
-            if not cat:
-                continue
-            assert len(ann_list) == 1  # should only be one latest per-frame annotation
-            ann = ann_list[0]
-
-            label_data = json.loads(ann.label_data)
-            value = LabelValue(label_data["value"])
-            if value == LabelValue.TOMBSTONE:
-                continue
-            value_str = (
-                label_data["custom_value"] if value == LabelValue.CUSTOM else value.name
-            )
-            tags_by_pk[di_pk].append(Tag(cat, value_str))
+    for ann in annotations:
+        tags_by_pk[ann.dataset_item.pk].append(Tag(ann.category.name, ann.mode.name))
     return tags_by_pk
 
 
@@ -506,9 +414,7 @@ def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
         exclude_pks = set(exclude_pks)
         pks = [pk for pk in pks if pk not in exclude_pks]
     elif not pks:
-        dataset_items = DatasetItem.objects.filter(
-            dataset=dataset, google=False, is_val=is_val
-        )
+        dataset_items = DatasetItem.objects.filter(dataset=dataset, is_val=is_val)
         if exclude_pks:
             dataset_items = dataset_items.exclude(pk__in=exclude_pks)
         pks = list(dataset_items.values_list("pk", flat=True))
@@ -519,35 +425,12 @@ def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
     if dataset_items is None:
         dataset_items = DatasetItem.objects.filter(pk__in=pks)
 
-    # TODO(mihirg, fpoms): Speed up by filtering positive labels without having to json
-    # decode all annotations
-    annotations = (
-        Annotation.objects.filter(
-            dataset_item__in=dataset_items,
-            label_category__in=tag_sets_to_category_list_v2(include_tags, exclude_tags),
-            label_type="klabel_frame",
-        )
-        # ).order_by(
-        #     "dataset_item", "label_category", "-created"
-        # ).distinct("dataset_item", "label_category")
-    )
-    tags_by_pk = get_tags_from_annotations_v2(annotations)
+    if include_tags:
+        dataset_items.filter(tag_sets_to_query(include_tags))
+    if exclude_tags:
+        dataset_items.exclude(tag_sets_to_query(exclude_tags))
 
-    # TODO(mihirg, fpoms): Move all logic here into SQL query
-    filtered = []
-    for pk in pks:
-        include = not include_tags  # include everything if no explicit filter
-        exclude = False
-        for tag in tags_by_pk[pk]:
-            if tag in exclude_tags:
-                exclude = True
-                break
-            elif tag in include_tags:
-                include = True
-
-        if include and not exclude:
-            filtered.append(pk)
-
+    filtered = list(dataset_items.values_list("pk", flat=True))
     return filtered
 
 
@@ -602,7 +485,7 @@ def get_results_v2(request, dataset_name):
     dataset_items_by_pk = DatasetItem.objects.in_bulk(pks)
     dataset_items = [dataset_items_by_pk[pk] for pk in pks]  # preserve order
 
-    bucket_name = dataset.directory[len("gs://") :].split("/")[0]
+    bucket_name = dataset.train_directory[len("gs://") :].split("/")[0]
     path_template = "https://storage.googleapis.com/{:s}/".format(bucket_name) + "{:s}"
 
     internal_identifiers = [di.identifier for di in dataset_items]
@@ -715,23 +598,20 @@ def train_svm_v2(request, dataset_name):
     )
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
-    eligible_images = DatasetItem.objects.filter(
-        dataset=dataset, google=False, is_val=False
-    )
-    annotations = Annotation.objects.filter(
-        dataset_item__in=eligible_images,
-        label_category__in=tag_sets_to_category_list_v2(pos_tags, neg_tags),
-        label_type="klabel_frame",
-    )
-    tags_by_pk = get_tags_from_annotations_v2(annotations)
 
-    pos_dataset_item_pks = []
-    neg_dataset_item_pks = []
-    for pk, tags in tags_by_pk.items():
-        if any(t in pos_tags for t in tags):
-            pos_dataset_item_pks.append(pk)
-        elif any(t in neg_tags for t in tags):
-            neg_dataset_item_pks.append(pk)
+    pos_dataset_items = DatasetItem.objects.filter(
+        tag_sets_to_query(pos_tags),
+        dataset=dataset,
+        is_val=False,
+    )
+    neg_dataset_items = DatasetItem.objects.filter(
+        tag_sets_to_query(neg_tags),
+        dataset=dataset,
+        is_val=False,
+    ).difference(pos_dataset_items)
+
+    pos_dataset_item_pks = list(pos_dataset_items.values_list("pk", flat=True))
+    neg_dataset_item_pks = list(neg_dataset_items.values_list("pk", flat=True))
 
     # Augment with randomly sampled negatives if requested
     num_extra_negs = settings.SVM_NUM_NEGS_MULTIPLIER * len(pos_dataset_item_pks) - len(
@@ -881,7 +761,6 @@ def get_val_examples_v2(dataset, model_id):
     # Limit to validation set
     eligible_dataset_items = DatasetItem.objects.filter(
         dataset=dataset,
-        google=False,
         is_val=True,
     )
 
@@ -1007,7 +886,6 @@ def query_active_validation_v2(request, dataset_name):
                 dataset=dataset,
                 identifier__in=response_data["identifiers"],
                 is_val=True,
-                google=False,
             ).values_list("pk", "path")
         )
         random.shuffle(pks_and_paths)
@@ -1087,26 +965,30 @@ def get_datasets_v2(request):
 def get_dataset_info_v2(request, dataset_name):
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
-    annotations = (
-        Annotation.objects.filter(
-            dataset_item__in=dataset.datasetitem_set.filter(),
-            label_type__exact="klabel_frame",  # deliberately exclude VAL_NEGATIVE_TYPE
-        )
-        .order_by("dataset_item", "label_category", "-created")
-        .distinct("dataset_item", "label_category")
+    categories_and_modes = (
+        Annotation.objects.filter(dataset_item__in=dataset.datasetitem_set.filter())
+        .values("category", "mode")
+        .distinct()
     )
 
-    # Unique categories that have at least one non-tombstone label
+    mode_pks = set()
+    category_pks = set()
+    for c in categories_and_modes:
+        category_pks.add(c["category"])
+        mode_pks.add(c["mode"])
+
+    categories_by_pk = Category.objects.in_bulk(list(category_pks))
+    modes_by_pk = Mode.objects.in_bulk(list(mode_pks))
+
+    # TODO: Don't return categories here; use get_category_counts_v2
     categories_and_custom_values = {}
-    for ann in annotations:
-        label_data = json.loads(ann.label_data)
-        if label_data["value"] == LabelValue.TOMBSTONE:
-            continue
-        custom_value_set = categories_and_custom_values.setdefault(
-            ann.label_category, set()
-        )
-        if "custom_value" in label_data:
-            custom_value_set.add(label_data["custom_value"])
+    for c in categories_and_modes:
+        category = categories_by_pk[c["category"]].name
+        mode = modes_by_pk[c["mode"]].name
+
+        custom_value_set = categories_and_custom_values.setdefault(category, set())
+        if mode not in ("POSITIVE", "NEGATIVE", "HARD_NEGATIVE", "UNSURE"):
+            custom_value_set.add(mode)
     categories_and_custom_values = {
         k: sorted(v) for k, v in categories_and_custom_values.items()
     }
@@ -1115,12 +997,8 @@ def get_dataset_info_v2(request, dataset_name):
         {
             "categories": categories_and_custom_values,
             "index_id": dataset.index_id,
-            "num_train": dataset.datasetitem_set.filter(
-                google=False, is_val=False
-            ).count(),
-            "num_val": dataset.datasetitem_set.filter(
-                google=False, is_val=True
-            ).count(),
+            "num_train": dataset.datasetitem_set.filter(is_val=False).count(),
+            "num_val": dataset.datasetitem_set.filter(is_val=True).count(),
         }
     )
 
@@ -1210,7 +1088,7 @@ def create_dataset_v2(request):
 
     dataset = Dataset(
         name=name,
-        directory=train_directory,
+        train_directory=train_directory,
         val_directory=val_directory,
         index_id=index_id,
     )
@@ -1239,17 +1117,13 @@ def create_dataset_v2(request):
 @api_view(["GET"])
 @csrf_exempt
 def get_annotations_v2(request):
-    image_identifiers = [i for i in request.GET["identifiers"].split(",") if i]
-    if not image_identifiers:
+    image_pks = [i for i in request.GET["identifiers"].split(",") if i]
+    if not image_pks:
         return JsonResponse({})
 
     annotations = Annotation.objects.filter(
-        dataset_item__in=DatasetItem.objects.filter(pk__in=image_identifiers),
-        label_type__in=("klabel_frame", VAL_NEGATIVE_TYPE),
+        dataset_item__in=DatasetItem.objects.filter(pk__in=image_pks),
     )
-    # ).order_by(
-    #     "dataset_item", "label_category", "-created"
-    # ).distinct("dataset_item", "label_category")
     tags_by_pk = get_tags_from_annotations_v2(annotations)
     annotations_by_pk = {
         pk: serialize_tag_set_for_client_v2(tags) for pk, tags in tags_by_pk.items()
@@ -1257,35 +1131,27 @@ def get_annotations_v2(request):
     return JsonResponse(annotations_by_pk)
 
 
-# TODO(mihirg): Consider filtering by, e.g., major version in methods that query
-# Annotations
-ANN_VERSION = "2.0.2"
-
-
 @api_view(["POST"])
 @csrf_exempt
 def add_annotations_v2(request):
     payload = json.loads(request.body)
-    image_identifiers = payload["identifiers"]
-    num_created = bulk_add_annotations_v2(payload, image_identifiers)
+    image_pks = payload["identifiers"]
+    images = DatasetItem.objects.filter(pk__in=image_pks)
+    num_created = bulk_add_annotations_v2(payload, images)
     return JsonResponse({"created": num_created})
 
 
 @api_view(["POST"])
 @csrf_exempt
 def add_annotations_by_internal_identifiers_v2(request, dataset_name):
-    # TODO(mihirg): Make variable naming more clear
-    # "identifier" = di.pk (above), "internal identifier" = di.identifier (here)
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
     payload = json.loads(request.body)
-    internal_identifiers = payload["identifiers"]
-    dataset_items = DatasetItem.objects.filter(
-        dataset=dataset, identifier__in=internal_identifiers
+    image_identifiers = payload["identifiers"]
+    images = DatasetItem.objects.filter(
+        dataset=dataset, identifier__in=image_identifiers
     )
-    pks = list(dataset_items.values_list("pk", flat=True))
-
-    num_created = bulk_add_annotations_v2(payload, pks)
+    num_created = bulk_add_annotations_v2(payload, images)
     return JsonResponse({"created": num_created})
 
 
@@ -1302,81 +1168,72 @@ def add_annotations_to_result_set_v2(request):
     # e.g., lower_bound=0.0, upper_bound=0.5 -> second half of the result set
     start_index = math.ceil(len(result_ranking) * (1.0 - upper_bound))
     end_index = math.floor(len(result_ranking) * (1.0 - lower_bound))
-    image_identifiers = result_ranking[start_index:end_index]
+    image_pks = result_ranking[start_index:end_index]
 
-    num_created = bulk_add_annotations_v2(payload, image_identifiers)
+    images = DatasetItem.objects.filter(pk__in=image_pks)
+    num_created = bulk_add_annotations_v2(payload, images)
     return JsonResponse({"created": num_created})
 
 
-def bulk_add_annotations_v2(payload, image_identifiers):
-    if not image_identifiers:
+def bulk_add_annotations_v2(payload, images):
+    if not images:
         return 0
 
-    user = payload["user"]
-    category = payload["category"]
-    value_str = payload["value"]
-    mode = payload.get("mode", "tag" if len(image_identifiers) == 1 else "tag-bulk")
-    try:
-        value, custom_value = int(LabelValue[value_str]), None
-    except KeyError:
-        value, custom_value = LabelValue.CUSTOM, value_str
+    user_email = payload["user"]
+    category_name = payload["category"]
+    mode_name = payload["mode"]
+    created_by = payload.get("mode", "tag" if len(images) == 1 else "tag-bulk")
 
-    annotation_data = {
-        "type": 0,  # full-frame
-        "value": value,
-        "mode": mode,
-        "version": ANN_VERSION,
-    }
-    if custom_value:
-        annotation_data["custom_value"] = custom_value
-    annotation = json.dumps(annotation_data)
+    user = User.objects.get_or_create(email=user_email)
+    category = Category.objects.get_or_create(name=category_name)
+    mode = Mode.objects.get_or_create(name=mode_name)
 
-    dataset_items = DatasetItem.objects.filter(pk__in=image_identifiers)
-    Annotation.objects.bulk_create(
-        (
-            Annotation(
-                dataset_item=di,
-                label_function=user,
-                label_category=category,
-                label_type="klabel_frame",
-                label_data=annotation,
+    Annotation.objects.filter(dataset_item__in=images, category=category).delete()
+
+    # TODO: Add an actual endpoint to delete annotations (probably by pk); don't rely
+    # on this hacky "TOMBSTONE" string
+    if mode != "TOMBSTONE":
+        Annotation.objects.bulk_create(
+            (
+                Annotation(
+                    dataset_item=di,
+                    user=user,
+                    category=category,
+                    mode=mode,
+                    misc_data={"created_by": created_by},
+                )
+                for di in images
             )
-            for di in dataset_items
         )
-    )
 
-    return len(image_identifiers)
+    return len(images)
 
 
 @api_view(["POST"])
 @csrf_exempt
 def delete_category_v2(request):
     payload = json.loads(request.body)
-    # user = payload["user"]
     category = payload["category"]
 
-    n, _ = Annotation.objects.filter(
-        # label_function__exact=user,
-        label_category__exact=category,
-    ).delete()
+    category = Category.objects.get(name=category)
+    category.delete()
 
-    return JsonResponse({"deleted": n})
+    return JsonResponse({"status": "success"})
 
 
 @api_view(["POST"])
 @csrf_exempt
 def update_category_v2(request):
     payload = json.loads(request.body)
-    # user = payload["user"]
-    old_category = payload["oldCategory"]
-    new_category = payload["newCategory"]
 
-    n = Annotation.objects.filter(
-        # label_function__exact=user,
-        label_category__exact=old_category,
-    ).update(label_category=new_category)
+    old_category_name = payload["oldCategory"]
+    new_category_name = payload["newCategory"]
 
-    return JsonResponse({"updated": n})
+    category = Category.objects.get(name=old_category_name)
+    category.name = new_category_name
+    category.save()
+
+    return JsonResponse({"status": "success"})
 
 
 @api_view(["POST"])
@@ -1384,22 +1241,25 @@ def update_category_v2(request):
 def get_category_counts_v2(request, dataset_name):
     dataset = get_object_or_404(Dataset, name=dataset_name)
     payload = json.loads(request.body)
-    categories = payload["categories"]
+    category_names = payload["categories"]
 
-    anns = (
+    categories = Category.objects.filter(name__in=category_names)
+    category_by_pk = {c.pk: c for c in categories}
+
+    counts = (
         Annotation.objects.filter(
-            dataset_item__in=dataset.datasetitem_set.filter(),
-            label_category__in=categories,
-            label_type__exact="klabel_frame",
+            dataset_item__in=dataset.datasetitem_set.filter(), category__in=categories
         )
-        .order_by("dataset_item", "label_category", "-created")
-        .distinct("dataset_item", "label_category")
+        .values("category", "mode")
+        .annotate(n=Count("pk"))
     )
+    mode_pks = list(set(c["mode"] for c in counts))
+    mode_by_pk = Mode.objects.in_bulk(mode_pks)
 
-    n_labeled = {c: {value.name: 0 for value in LabelValue} for c in categories}
-    for ann in anns:
-        label_data = json.loads(ann.label_data)
-        value = LabelValue(label_data["value"])
-        n_labeled[ann.label_category][value.name] += 1
+    n_labeled = defaultdict(dict)
+    for c in counts:
+        category = category_by_pk[c["category"]].name
+        mode = mode_by_pk[c["mode"]].name
+        n_labeled[category][mode] = c["n"]
 
     return JsonResponse({"numLabeled": n_labeled})
