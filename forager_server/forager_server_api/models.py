@@ -12,9 +12,19 @@ class Dataset(models.Model):
     index_id = models.CharField(max_length=MEDIUM_STRING_LENGTH)
     hidden = models.BooleanField(default=False)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=["name"]),
+        ]
+
 
 class User(models.Model):
     email = models.EmailField(unique=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["email"]),
+        ]
 
 
 class DatasetItem(models.Model):
@@ -23,13 +33,31 @@ class DatasetItem(models.Model):
     path = models.CharField(max_length=LONG_STRING_LENGTH)
     is_val = models.BooleanField(default=False)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["dataset", "identifier"]),
+        ]
+        indexes = [
+            models.Index(fields=["dataset", "is_val", "identifier"]),
+        ]
+
 
 class Category(models.Model):
     name = models.CharField(max_length=MEDIUM_STRING_LENGTH, unique=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=["name"]),
+        ]
+
 
 class Mode(models.Model):
     name = models.CharField(max_length=MEDIUM_STRING_LENGTH, unique=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["name"]),
+        ]
 
 
 class Annotation(models.Model):
@@ -43,6 +71,11 @@ class Annotation(models.Model):
     bbox_x2 = models.FloatField(null=True)
     bbox_y2 = models.FloatField(null=True)
     misc_data = models.JSONField(default=dict)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["dataset_item", "category", "mode"]),
+        ]
 
 
 class DNNModel(models.Model):
