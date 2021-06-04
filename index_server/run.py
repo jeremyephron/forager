@@ -355,8 +355,14 @@ class LabeledIndex:
     def get_embeddings(
         self, identifiers: Iterable[str], model: str = config.DEFAULT_QUERY_MODEL
     ) -> np.ndarray:
+        start_time = time.perf_counter()
         local_flat_index = self.get_local_flat_index(model)
+        middle_time = time.perf_counter()
         inds = self.identifiers_to_inds(identifiers)
+        end_time = time.perf_counter()
+        print(
+            f"get_local_flat_index took {middle_time - start_time}; identifiers_to_inds took {end_time - middle_time}"
+        )
         return local_flat_index.index[inds]
 
     def cluster_identifiers(
