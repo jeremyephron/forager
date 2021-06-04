@@ -137,7 +137,7 @@ def populate_new_annotation_fields(apps, schema_editor):
         value = LabelValue(label_data["value"])
         mode = label_data["custom_value"] if value == LabelValue.CUSTOM else value.name
 
-        ann.user = User.objects.using(db_alias).get(name=user)
+        ann.user = User.objects.using(db_alias).get(email=user)
         ann.category = Category.objects.using(db_alias).get(name=category)
         ann.mode = Mode.objects.using(db_alias).get(name=mode)
         if "mode" in label_data:
