@@ -26,7 +26,7 @@ import numpy as np
 from PIL import Image
 from sanic import Sanic
 import sanic.response as resp
-from scipy.spatial.distance import squareform, cdist
+from scipy.spatial.distance import cdist
 from sklearn import svm
 from sklearn.metrics import accuracy_score, precision_score, recall_score
 
@@ -362,8 +362,12 @@ class LabeledIndex:
     def cluster_identifiers(
         self, identifiers: Iterable[str], model: str = config.DEFAULT_QUERY_MODEL
     ) -> List[List[float]]:
+        start_time = time.perf_counter()
         embeddings = self.get_embeddings(identifiers, model)
-        return self._cluster(embeddings)
+        ret = self._cluster(embeddings)
+        end_time = time.perf_counter()
+        print(f"Clustering took {end_time - start_time} seconds")
+        return ret
 
     def _cluster(self, embeddings: np.ndarray) -> List[List[float]]:
         # Perform hierarchical clustering
