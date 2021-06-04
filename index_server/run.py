@@ -364,9 +364,12 @@ class LabeledIndex:
     ) -> List[List[float]]:
         start_time = time.perf_counter()
         embeddings = self.get_embeddings(identifiers, model)
+        middle_time = time.perf_counter()
         ret = self._cluster(embeddings)
         end_time = time.perf_counter()
-        print(f"Clustering took {end_time - start_time} seconds")
+        print(
+            f"Clustering took {end_time - start_time} seconds - {middle_time - start_time} to read embeddings + {end_time - middle_time} to perform clustering"
+        )
         return ret
 
     def _cluster(self, embeddings: np.ndarray) -> List[List[float]]:
