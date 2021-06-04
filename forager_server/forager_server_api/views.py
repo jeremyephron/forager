@@ -389,20 +389,12 @@ def serialize_tag_set_for_client_v2(ts):
 
 def get_tags_from_annotations_v2(annotations):
     tags_by_pk = defaultdict(list)
-
-    mode_pks = set()
-    category_pks = set()
-    for ann in annotations:
-        category_pks.add(ann.category.pk)
-        mode_pks.add(ann.mode.pk)
-
-    categories_by_pk = Category.objects.in_bulk(list(category_pks))
-    modes_by_pk = Mode.objects.in_bulk(list(mode_pks))
-
-    for ann in annotations:
-        category = categories_by_pk[ann.category.pk]
-        mode = modes_by_pk[ann.mode.pk]
-        tags_by_pk[ann.dataset_item.pk].append(Tag(category, mode))
+    ann_dicts = annotations.values("dataset_item__pk", "category__name", "mode__name")
+    for ann in ann_dicts:
+        pk = ann["dataset_item__pk"]
+        category = ann["category__name"]
+        mode = ann["mode__name"]
+        tags_by_pk[pk].append(Tag(category, mode))
     return tags_by_pk
 
 
@@ -979,24 +971,15 @@ def get_dataset_info_v2(request, dataset_name):
 
     categories_and_modes = (
         Annotation.objects.filter(dataset_item__in=dataset.datasetitem_set.filter())
-        .values("category", "mode")
+        .values("category__name", "mode__name")
         .distinct()
     )
-
-    mode_pks = set()
-    category_pks = set()
-    for c in categories_and_modes:
-        category_pks.add(c["category"])
-        mode_pks.add(c["mode"])
-
-    categories_by_pk = Category.objects.in_bulk(list(category_pks))
-    modes_by_pk = Mode.objects.in_bulk(list(mode_pks))
 
     # TODO: Don't return categories here; use get_category_counts_v2
     categories_and_custom_values = {}
     for c in categories_and_modes:
-        category = categories_by_pk[c["category"]].name
-        mode = modes_by_pk[c["mode"]].name
+        category = c["category__name"]
+        mode = c["mode__name"]
 
         custom_value_set = categories_and_custom_values.setdefault(category, set())
         if mode not in ("POSITIVE", "NEGATIVE", "HARD_NEGATIVE", "UNSURE"):
