@@ -425,11 +425,10 @@ def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
     if dataset_items is None:
         dataset_items = DatasetItem.objects.filter(pk__in=pks)
 
-    print("DEBUG", include_tags, exclude_tags)
     if include_tags:
-        dataset_items.filter(tag_sets_to_query(include_tags))
+        dataset_items = dataset_items.filter(tag_sets_to_query(include_tags))
     if exclude_tags:
-        dataset_items.exclude(tag_sets_to_query(exclude_tags))
+        dataset_items = dataset_items.exclude(tag_sets_to_query(exclude_tags))
 
     filtered = list(dataset_items.values_list("pk", flat=True))
     return filtered
