@@ -152,8 +152,6 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RenameField("Dataset", "directory", "train_directory"),
-        migrations.RunPython(delete_google),
-        migrations.RemoveField("DatasetItem", "google"),
         migrations.DeleteModel("EmbeddingSet"),
         migrations.AlterField(
             "DNNModel",
@@ -165,7 +163,6 @@ class Migration(migrations.Migration):
             "output_path",
             models.CharField(max_length=LONG_STRING_LENGTH, null=True),
         ),
-        migrations.RunPython(remove_deprecated_annotations),
         migrations.CreateModel(
             "User",
             fields=[
@@ -193,7 +190,6 @@ class Migration(migrations.Migration):
                 ),
             ],
         ),
-        migrations.RunPython(populate_user_category_and_mode),
         migrations.AddField(
             "Annotation",
             "user",
@@ -226,34 +222,8 @@ class Migration(migrations.Migration):
         migrations.AddField("Annotation", "bbox_x2", models.FloatField(null=True)),
         migrations.AddField("Annotation", "bbox_y2", models.FloatField(null=True)),
         migrations.AddField("Annotation", "misc_data", models.JSONField(default=dict)),
+        migrations.RunPython(delete_google),
+        migrations.RunPython(remove_deprecated_annotations),
+        migrations.RunPython(populate_user_category_and_mode),
         migrations.RunPython(populate_new_annotation_fields),
-        migrations.RemoveField("Annotation", "label_function"),
-        migrations.RemoveField("Annotation", "label_category"),
-        migrations.RemoveField("Annotation", "label_type"),
-        migrations.RemoveField("Annotation", "label_data"),
-        migrations.RemoveField("Annotation", "last_updated"),
-        migrations.AlterField(
-            "Annotation",
-            "user",
-            models.ForeignKey(
-                on_delete=models.deletion.CASCADE,
-                to=f"{APP_NAME}.user",
-            ),
-        ),
-        migrations.AlterField(
-            "Annotation",
-            "category",
-            models.ForeignKey(
-                on_delete=models.deletion.CASCADE,
-                to=f"{APP_NAME}.category",
-            ),
-        ),
-        migrations.AlterField(
-            "Annotation",
-            "mode",
-            models.ForeignKey(
-                on_delete=models.deletion.CASCADE,
-                to=f"{APP_NAME}.mode",
-            ),
-        ),
     ]
