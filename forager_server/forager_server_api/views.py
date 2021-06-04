@@ -478,7 +478,7 @@ def get_results_v2(request, dataset_name):
     index_id = request.GET["index_id"]
     result_set_id = request.GET["result_set_id"]
     offset_to_return = int(request.GET.get("offset", 0))
-    num_to_return = int(request.GET.get("num", 500))
+    num_to_return = int(request.GET.get("num", 1000))
 
     result_set = current_result_sets[result_set_id]
     pks = result_set.ranking[offset_to_return : offset_to_return + num_to_return]

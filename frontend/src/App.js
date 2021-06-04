@@ -62,7 +62,7 @@ import {
 
 var disjointSet = require("disjoint-set");
 
-const PAGE_SIZE = 500;
+const PAGE_SIZE = 1000;
 
 const splits = [
   {id: "train", label: "Training set"},
