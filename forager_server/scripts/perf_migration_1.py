@@ -160,7 +160,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AlterField(
             "DNNModel",
-            "output_path",
+            "output_directory",
             models.CharField(max_length=LONG_STRING_LENGTH, null=True),
         ),
         migrations.CreateModel(
