@@ -271,7 +271,15 @@ function ClusteringControls(props) {
   let clusteringStrength = props.clusteringStrength;
   let setClusteringStrength = props.setClusteringStrength;
   let recluster = props.recluster;
+  let clusteringModel = props.clusteringModel;
+  let setClusteringModel = props.setClusteringModel;
   let username = props.username;
+  let modelInfo = props.modelInfo;
+
+  let clusteringModels = (
+    ["imagenet", "clip", "imagenet_early",
+     "imagenet_full", "imagenet_full_early"]).concat(
+       modelInfo.filter(m => m.with_output).map(m => m.name));
   return (
     <div className="d-flex flex-row align-items-center">
       <div className="custom-switch custom-control mr-4">
@@ -288,9 +296,18 @@ function ClusteringControls(props) {
         Clustering strength:
       </label>
       <Slider
+        className="mr-4"
         value={clusteringStrength}
         onChange={setClusteringStrength}
         onAfterChange={recluster}
+      />
+      <FeatureInput
+        id="clustering-feature-bar"
+        className="clustering-feature-bar mr-2"
+        placeholder="Features to cluster by"
+        features={clusteringModels}
+        selected={clusteringModel}
+        setSelected={setClusteringModel}
       />
       <Button
         color="light"
@@ -338,6 +355,8 @@ function QueryBar(p) {
   let clusteringStrength = props.clusteringStrength;
   let setClusteringStrength = props.setClusteringStrength;
   let recluster = props.recluster;
+
+  let modelInfo = props.modelInfo;
   return (
     <div className="query-container sticky">
       <Container fluid>
@@ -389,8 +408,11 @@ function QueryBar(p) {
             clusteringStrength={props.clusteringStrength}
             setClusteringStrength={props.setClusteringStrength}
             recluster={props.recluster}
+            clusteringModel={props.clusteringModel}
+            setClusteringModel={props.setClusteringModel}
             toggleBulkTag={props.toggleBulkTag}
             username={props.username}
+            modelInfo={props.modelInfo}
           />
           {(queryResultSet.type === "svm" || queryResultSet.type === "ranking") && <div className="d-flex flex-row align-items-center">
             <label className="mb-0 mr-2 text-nowrap">Score range:</label>
@@ -626,6 +648,8 @@ function ImageClusterViewer(props) {
             images={images}
             showLabel={clusteringStrength > 0}
             key={i}
+            showDistance={images[0].distance >= 0}
+            distanceText={images[0].distance}
           />
         )}
       </Col>
@@ -807,6 +831,7 @@ const App = () => {
   const [orderingMode, setOrderingMode] = useState(orderingModes[0].id);
   const [orderByClusterSize, setOrderByClusterSize] = useState(true);
   const [clusteringStrength, setClusteringStrength] = useState(20);
+  const [clusteringModel, setClusteringModel] = useState("imagenet");
 
   const [scoreRange, setScoreRange] = useState([0, 100]);
 
@@ -923,12 +948,16 @@ const App = () => {
     };
 
     let url = new URL(`${endpoints.getResults}/${datasetName}`);
-    url.search = new URLSearchParams({
+    let params =  {
       index_id: datasetInfo.index_id,
       result_set_id: queryResultSet.id,
       offset: page * PAGE_SIZE,
       num: PAGE_SIZE,
-    }).toString();
+    }
+    if (clusteringModel) {
+      params.clustering_model = clusteringModel
+    }
+    url.search = new URLSearchParams(params).toString();
     const results = await fetch(url, {
       method: "GET",
     }).then(r => r.json());
@@ -941,6 +970,7 @@ const App = () => {
         src: path,
         id: results.identifiers[i],
         thumb: `https://storage.googleapis.com/foragerml/thumbnails/${datasetInfo.index_id}/${id}.jpg`,
+        distance: results.distances[i],
       };
     });
 
@@ -965,7 +995,7 @@ const App = () => {
   useEffect(() => {
     setPageIsLoading(true);
     getPage().finally(() => setPageIsLoading(false));
-  }, [page, queryResultSet]);
+  }, [page, queryResultSet, clusteringModel]);
 
   const setSubset = (subset) => {
     setSubset_(subset);
@@ -1069,10 +1099,13 @@ const App = () => {
     setOrderByClusterSize: setOrderByClusterSize,
     clusteringStrength: clusteringStrength,
     setClusteringStrength: setClusteringStrength,
+    clusteringModel: clusteringModel,
+    setClusteringModel: setClusteringModel,
     recluster: recluster,
     bulkTagModalIsOpen: bulkTagModalIsOpen,
     toggleBulkTag: toggleBulkTag,
     username: username,
+    modelInfo: modelInfo,
   };
   let orderingModeProps = {
     datasetInfo: datasetInfo,

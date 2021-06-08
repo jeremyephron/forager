@@ -100,6 +100,10 @@ html, body, #root, .main {
   .rc-slider {
     width: 10rem;
   }
+
+  .clustering-feature-bar {
+    width: 10rem;
+  }
 }
 
 .mode-container {
@@ -136,16 +140,31 @@ html, body, #root, .main {
   cursor: pointer;
   position: relative;
 
-  .thumb {
+  .thumb-container {
     @extend .border;
     border-radius: 4px;
-    max-width: 200px;
-    max-height: 134px;
     position: absolute;
   }
 
+  .thumb {
+    max-width: 200px;
+    max-height: 134px;
+  }
+
+  .thumb-distance {
+    position: absolute;
+    bottom: 1px;
+    right: 1px;
+    background-color: rgba(255, 255, 210, 0.8);
+    border-radius: 2px;
+    border-style: solid;
+    border-width: 1px;
+    padding-left: 3px;
+    padding-right: 3px;
+  }
+
   @for $i from 1 through 4 {
-    .thumb:nth-child(#{$i}) {
+    .thumb-container:nth-child(#{$i}) {
       left: ($i - 1) * 5px;
       top: (4 - $i) * 5px;
       z-index: 5 - $i;

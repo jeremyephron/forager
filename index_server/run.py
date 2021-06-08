@@ -361,7 +361,7 @@ class LabeledIndex:
         inds = self.identifiers_to_inds(identifiers)
         end_time = time.perf_counter()
         print(
-            f"get_local_flat_index took {middle_time - start_time}; identifiers_to_inds took {end_time - middle_time}"
+            f"get_local_flat_index ({model}) took {middle_time - start_time}; identifiers_to_inds took {end_time - middle_time}"
         )
         return local_flat_index.index[inds]
 

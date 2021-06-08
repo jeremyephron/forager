@@ -10,6 +10,8 @@ import os
 import random
 import uuid
 import shutil
+import logging
+import time
 
 from typing import List, Dict, NamedTuple, Optional
 
@@ -24,6 +26,26 @@ import requests
 from expiringdict import ExpiringDict
 
 from .models import Dataset, DatasetItem, Category, Mode, User, Annotation, DNNModel
+
+logger = logging.getLogger("django_server")
+logger.setLevel(logging.DEBUG)
+
+# Create a file handler for the log
+log_fh = logging.FileHandler("django_server.log")
+log_fh.setLevel(logging.DEBUG)
+
+# Create a console handler to print errors to console
+log_ch = logging.StreamHandler()
+log_ch.setLevel(logging.DEBUG)
+
+# create formatter and add it to the handlers
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+log_fh.setFormatter(formatter)
+log_ch.setFormatter(formatter)
+
+# Attach handlers
+logger.addHandler(log_fh)
+logger.addHandler(log_ch)
 
 
 @api_view(["POST"])
@@ -479,6 +501,7 @@ def get_results_v2(request, dataset_name):
     result_set_id = request.GET["result_set_id"]
     offset_to_return = int(request.GET.get("offset", 0))
     num_to_return = int(request.GET.get("num", 500))
+    clustering_model = request.GET.get("clustering_model", None)
 
     result_set = current_result_sets[result_set_id]
     pks = result_set.ranking[offset_to_return : offset_to_return + num_to_return]
@@ -497,8 +520,8 @@ def get_results_v2(request, dataset_name):
         "index_id": index_id,
         "identifiers": internal_identifiers,
     }
-    if False and result_set.model:
-        params["model"] = result_set.model
+    if clustering_model:
+        params["model"] = clustering_model
 
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/perform_clustering",
@@ -569,6 +592,7 @@ def query_knn_v2(request, dataset_name):
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
+    query_knn_start = time.time()
     params = {
         "index_id": index_id,
         "embeddings": embeddings,
@@ -581,6 +605,8 @@ def query_knn_v2(request, dataset_name):
         json=params,
     )
     response_data = r.json()
+    query_knn_end = time.time()
+    logger.debug('query_knn_v2 time: {:f}'.format(query_knn_end - query_knn_start))
 
     results = process_image_query_results_v2(
         request,

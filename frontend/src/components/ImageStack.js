@@ -1,12 +1,16 @@
 import React from "react";
 import times from "lodash/times";
 
-const ImageStack = ({ id, onClick, images, showLabel, labelText }) => {
+const ImageStack = ({ id, onClick, images, showLabel, labelText, showDistance, distanceText }) => {
   const shouldShowLabel = showLabel || !!(labelText);
+  const shouldShowDistance = showDistance;
   return (
     <a className={`stack ${shouldShowLabel ? "" : "nolabel"}`} onClick={onClick}>
       {times(Math.min(4, images.length), (i) =>
-        <img key={`stack-${i}`} className="thumb" src={images[i].thumb}></img>
+        <div className="thumb-container">
+          <img key={`stack-${i}`} className="thumb" src={images[i].thumb}></img>
+          {shouldShowDistance && i == 0 && <div className="thumb-distance">{distanceText.toFixed(3)}</div>}
+        </div>
       )}
       {shouldShowLabel && <div className="label">
         {labelText || <>
