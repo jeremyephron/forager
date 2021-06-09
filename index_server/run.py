@@ -856,9 +856,12 @@ class LabeledIndex:
                 (self.index_dir / self.VAL_IDENTIFIERS_FILENAME).open()
             )
             for model, dim in config.EMBEDDING_DIMS_BY_MODEL.items():
-                self.local_flat_indexes[model] = LocalFlatIndex.load(
-                    self.index_dir / "local" / model, len(self.labels), dim
-                )
+                try:
+                    self.local_flat_indexes[model] = LocalFlatIndex.load(
+                        self.index_dir / "local" / model, len(self.labels), dim
+                    )
+                except Exception as e:
+                    self.logger.warning(f"Error loading local flat index from {self.index_dir}: {e}")
         except Exception as e:
             self.logger.warning(f"Error loading index from {self.index_dir}: {e}")
         try:

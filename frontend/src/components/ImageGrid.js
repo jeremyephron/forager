@@ -25,11 +25,14 @@ const ImageGrid = ({ images, onClick, minRowHeight, imageAspectRatio, selectedPr
         <a href="#" key={i} onClick={(e) => handleClick(e, i)}
           style={{width: imageWidth, marginBottom: MARGIN, marginRight: MARGIN}}
         >
-          <LazyLoad scrollContainer=".modal" height={imageHeight}>
-            <img src={imageHeight > THUMBNAIL_HEIGHT ? im.src : im.thumb}
-              className={selectedPred(i) ? "selected" : ""}
-            />
-          </LazyLoad>
+          <div className="image-container">
+            <LazyLoad scrollContainer=".modal" height={imageHeight}>
+              <img src={imageHeight > THUMBNAIL_HEIGHT ? im.src : im.thumb}
+                className={selectedPred(i) ? "selected" : ""}
+              />
+            </LazyLoad>
+            {im.distance >= 0 && <div className="image-distance">{im.distance.toFixed(3)}</div>}
+          </div>
         </a>
       )}
     </div>

@@ -9,7 +9,7 @@ const ImageStack = ({ id, onClick, images, showLabel, labelText, showDistance, d
       {times(Math.min(4, images.length), (i) =>
         <div className="thumb-container">
           <img key={`stack-${i}`} className="thumb" src={images[i].thumb}></img>
-          {shouldShowDistance && i == 0 && <div className="thumb-distance">{distanceText.toFixed(3)}</div>}
+          {shouldShowDistance && i == 0 && <div className="image-distance">{distanceText.toFixed(3)}</div>}
         </div>
       )}
       {shouldShowLabel && <div className="label">

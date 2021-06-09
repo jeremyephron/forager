@@ -151,18 +151,6 @@ html, body, #root, .main {
     max-height: 134px;
   }
 
-  .thumb-distance {
-    position: absolute;
-    bottom: 1px;
-    right: 1px;
-    background-color: rgba(255, 255, 210, 0.8);
-    border-radius: 2px;
-    border-style: solid;
-    border-width: 1px;
-    padding-left: 3px;
-    padding-right: 3px;
-  }
-
   @for $i from 1 through 4 {
     .thumb-container:nth-child(#{$i}) {
       left: ($i - 1) * 5px;
@@ -188,6 +176,25 @@ html, body, #root, .main {
     transform: translateY(-0.5rem);
   }
 }
+
+.image-container {
+  position: relative;
+  width: fit-content;
+  margin: auto;
+}
+
+.image-distance {
+  position: absolute;
+  bottom: 1px;
+  right: 1px;
+  background-color: rgba(255, 255, 210, 0.8);
+  border-radius: 2px;
+  border-style: solid;
+  border-width: 1px;
+  padding-left: 3px;
+  padding-right: 3px;
+}
+
 
 $semi-transparent-white: rgba(255, 255, 255, 0.92);
 
