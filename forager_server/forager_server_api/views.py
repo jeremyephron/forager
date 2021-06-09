@@ -1205,9 +1205,9 @@ def bulk_add_annotations_v2(payload, images):
     mode_name = payload["mode"]
     created_by = payload.get("mode", "tag" if len(images) == 1 else "tag-bulk")
 
-    user = User.objects.get_or_create(email=user_email)
-    category = Category.objects.get_or_create(name=category_name)
-    mode = Mode.objects.get_or_create(name=mode_name)
+    user, _ = User.objects.get_or_create(email=user_email)
+    category, _ = Category.objects.get_or_create(name=category_name)
+    mode, _ = Mode.objects.get_or_create(name=mode_name)
 
     Annotation.objects.filter(dataset_item__in=images, category=category).delete()
 
