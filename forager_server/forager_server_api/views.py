@@ -606,7 +606,7 @@ def query_knn_v2(request, dataset_name):
     )
     response_data = r.json()
     query_knn_end = time.time()
-    logger.debug('query_knn_v2 time: {:f}'.format(query_knn_end - query_knn_start))
+    logger.debug("query_knn_v2 time: {:f}".format(query_knn_end - query_knn_start))
 
     results = process_image_query_results_v2(
         request,
@@ -1004,6 +1004,8 @@ def get_dataset_info_v2(request, dataset_name):
     time_b = time.perf_counter()
     print(f"QUERY: {time_b - time_a}s")
 
+    print(len(categories_and_modes))
+
     # TODO: Don't return categories here; use get_category_counts_v2
     categories_and_custom_values = {}
     for c in categories_and_modes:
@@ -1013,6 +1015,9 @@ def get_dataset_info_v2(request, dataset_name):
         custom_value_set = categories_and_custom_values.setdefault(category, set())
         if mode not in ("POSITIVE", "NEGATIVE", "HARD_NEGATIVE", "UNSURE"):
             custom_value_set.add(mode)
+
+    print(len(categories_and_custom_values))
+
     categories_and_custom_values = {
         k: sorted(v) for k, v in categories_and_custom_values.items()
     }
