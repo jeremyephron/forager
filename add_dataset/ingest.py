@@ -44,6 +44,7 @@ def resize_image(input_path, output_dir):
 @click.option("--resnet_batch_size", type=int, default=16)
 @click.option("--resnet_resize_size", type=int, default=256)
 @click.option("--resnet_crop_size", type=int, default=224)
+@click.option("--use_proxy", is_flag=True)
 @unasync
 async def main(
     name,
@@ -53,9 +54,15 @@ async def main(
     resnet_batch_size,
     resnet_resize_size,
     resnet_crop_size,
+    use_proxy
 ):
+    if not use_proxy and ('http_proxy' in os.environ or
+                          'https_proxy' in os.environ):
+        print('WARNING: http_proxy/https_proxy env variables set, but '
+              '--use_proxy flag not specified. Will not use proxy.')
+
     # Make sure that a dataset with this name doesn't already exist
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(trust_env=use_proxy) as session:
         async with session.get(
             os.path.join(SERVER_URL, GET_DATASET_ENDPOINT, name)
         ) as response:
@@ -251,7 +258,7 @@ async def main(
     }
     add_db_start = time.time()
     if True:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(trust_env=use_proxy) as session:
             async with session.post(
                 os.path.join(SERVER_URL, CREATE_DATASET_ENDPOINT), json=params
             ) as response:

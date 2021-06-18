@@ -36,8 +36,14 @@ def parse_labels(labels):
 @click.argument("name")
 @click.argument("label_json", type=click.File("r"))
 @click.option("--user")
+@click.option("--use_proxy", is_flag=True)
 @unasync
-async def main(name, label_json, user):
+async def main(name, label_json, user, use_proxy):
+    if not use_proxy and ('http_proxy' in os.environ or
+                          'https_proxy' in os.environ):
+        print('WARNING: http_proxy/https_proxy env variables set, but '
+              '--use_proxy flag not specified. Will not use proxy.')
+
     _, email = parseaddr(user)
     if "@" not in email:
         raise ValueError(f"Invalid email address {user}")
@@ -57,7 +63,7 @@ async def main(name, label_json, user):
             identifiers_by_label[label].append(identifier)
 
     # For each unique label (category, mode tuple), add annotations
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(trust_env=use_proxy) as session:
         for (category, value), identifiers in identifiers_by_label.items():
             params = {
                 "mode": "ingest",

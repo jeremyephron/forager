@@ -110,6 +110,9 @@ BRUTE_FORCE_QUERY_CHUNK_SIZE = 512
 DEFAULT_QUERY_MODEL = "imagenet"
 EMBEDDING_DIMS_BY_MODEL = {
     "imagenet": 2048,
+    "imagenet_early": 1024,
+    "imagenet_full": 2048,
+    "imagenet_full_early": 1024,
     "clip": 512,
 }
 BGSPLIT_EMBEDDING_DIM = 2048
