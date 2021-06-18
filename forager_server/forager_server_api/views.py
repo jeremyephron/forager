@@ -969,11 +969,14 @@ def get_datasets_v2(request):
 def get_dataset_info_v2(request, dataset_name):
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
+    time_a = time.perf_counter()
     categories_and_modes = (
         Annotation.objects.filter(dataset_item__in=dataset.datasetitem_set.filter())
         .values("category__name", "mode__name")
         .distinct()
     )
+    time_b = time.perf_counter()
+    print(f"QUERY: {time_b - time_a}s")
 
     # TODO: Don't return categories here; use get_category_counts_v2
     categories_and_custom_values = {}
@@ -987,13 +990,20 @@ def get_dataset_info_v2(request, dataset_name):
     categories_and_custom_values = {
         k: sorted(v) for k, v in categories_and_custom_values.items()
     }
+    time_c = time.perf_counter()
+    print(f"FILTERING: {time_c - time_b}s")
+
+    num_train = dataset.datasetitem_set.filter(is_val=False).count()
+    num_val = dataset.datasetitem_set.filter(is_val=True).count()
+    time_d = time.perf_counter()
+    print(f"TRAIN/VAL COUNTING: {time_d - time_c}s")
 
     return JsonResponse(
         {
             "categories": categories_and_custom_values,
             "index_id": dataset.index_id,
-            "num_train": dataset.datasetitem_set.filter(is_val=False).count(),
-            "num_val": dataset.datasetitem_set.filter(is_val=True).count(),
+            "num_train": num_train,
+            "num_val": num_val,
         }
     )
 
