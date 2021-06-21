@@ -393,6 +393,8 @@ def parse_tag_set_from_query_v2(s):
 
 def tag_sets_to_query(*tagsets):
     merged = set().union(*tagsets)
+    if not merged:
+        return Q()
     return functools.reduce(
         operator.or_,
         [
