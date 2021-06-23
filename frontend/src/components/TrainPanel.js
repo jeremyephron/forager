@@ -409,19 +409,25 @@ const TrainPanel = ({
   return (
     <>
       <div className="d-flex flex-row align-items-center justify-content-between mb-1">
-        {requestDnnTraining ? <>
+        {requestDnnTraining || dnnIsInferring ? <>
           <div className="d-flex flex-row align-items-center">
             <Spinner color="dark" className="my-1 mr-2" />
             {clusterReady ?
-              <div>
-                Training model <b>{modelName} </b> &mdash;{" "}
-                time left for training {dnnKwargs["epochs_to_run"] > 1 ? "epochs " + trainingEpoch + "-" + (trainingEpoch + dnnKwargs["epochs_to_run"]) : "epoch " + trainingEpoch}: {timeLeftToString(trainingTimeLeft)}
-                {inferenceJobId && <span>, time left for inference epoch {inferenceEpoch}: {timeLeftToString(inferenceTimeLeft)}</span>}
-                <br />
-                TensorBoard:{" "}
-                {trainingTensorboardUrl ? <a href={trainingTensorboardUrl} target="_blank">link</a> : "loading..."}
-              </div> :
-              <b>Starting cluster</b>
+             <div>
+               <div style={{verticalAlign: "top", display: "inline-block"}}>
+                 Training model <b>{modelName} </b> &mdash;{" "}
+               </div>
+               <div style={{verticalAlign: "top", display: "inline-block"}}>
+                 <div>
+                   {requestDnnTraining ? "time left for training " + (dnnKwargs["epochs_to_run"] > 1 ? "epochs " + trainingEpoch + "-" + (trainingEpoch + dnnKwargs["epochs_to_run"]) : "epoch " + trainingEpoch) + ": " + timeLeftToString(trainingTimeLeft) : "training complete, waiting for inference"}
+                 </div>
+                 <div>
+                   {dnnIsInferring && <span>time left for inference epoch {inferenceEpoch}: {timeLeftToString(inferenceTimeLeft)}</span>}
+                 </div>
+               </div>
+               <br /> TensorBoard:{" "} {trainingTensorboardUrl ? <a href={trainingTensorboardUrl} target="_blank">link</a> : "loading..."}
+             </div> :
+             <b>Starting cluster</b>
             }
           </div>
           <Button
