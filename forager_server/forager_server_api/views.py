@@ -112,12 +112,11 @@ def create_model(request, dataset_name, dataset=None):
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
     eligible_images = DatasetItem.objects.filter(dataset=dataset, is_val=False)
+    categories = Category.objects.filter(
+        tag_sets_to_query(pos_tags, neg_tags, val_pos_tags, val_neg_tags))
     annotations = Annotation.objects.filter(
         dataset_item__in=eligible_images,
-        label_category__in=tag_sets_to_category_list_v2(
-            pos_tags, neg_tags, val_pos_tags, val_neg_tags
-        ),
-        label_type="klabel_frame",
+        category__in=categories,
     )
     tags_by_pk = get_tags_from_annotations_v2(annotations)
 
@@ -142,7 +141,9 @@ def create_model(request, dataset_name, dataset=None):
     if augment_negs and num_extra_negs > 0:
         # Uses "include" and "exclude" category sets from request
         all_eligible_pks = filtered_images_v2(
-            request, dataset, exclude_pks=pos_dataset_item_pks + neg_dataset_item_pks
+            request, dataset, exclude_pks=(
+                pos_dataset_item_pks + neg_dataset_item_pks +
+                val_pos_dataset_item_pks + val_neg_dataset_item_pks)
         )
         sampled_pks = random.sample(
             all_eligible_pks, min(len(all_eligible_pks), num_extra_negs)
@@ -1259,7 +1260,7 @@ def get_category_counts_v2(request, dataset_name):
     for c in counts:
         category = c["category__name"]
         mode = c["mode__name"]
-        if mode not in BUILTIN_MODES:
+        if not mode in BUILTIN_MODES:
             mode = "CUSTOM"
         n_labeled[category][mode] += c["n"]
 
