@@ -27,6 +27,9 @@ from expiringdict import ExpiringDict
 
 from .models import Dataset, DatasetItem, Category, Mode, User, Annotation, DNNModel
 
+
+BUILTIN_MODES = ["POSITIVE", "NEGATIVE", "HARD_NEGATIVE", "UNSURE"]
+
 logger = logging.getLogger("django_server")
 logger.setLevel(logging.DEBUG)
 
@@ -1187,7 +1190,7 @@ def bulk_add_annotations_v2(payload, images):
     user_email = payload["user"]
     category_name = payload["category"]
     mode_name = payload["mode"]
-    created_by = payload.get("mode", "tag" if len(images) == 1 else "tag-bulk")
+    created_by = payload.get("created_by", "tag" if len(images) == 1 else "tag-bulk")
 
     user, _ = User.objects.get_or_create(email=user_email)
     category, _ = Category.objects.get_or_create(name=category_name)
@@ -1252,10 +1255,12 @@ def get_category_counts_v2(request, dataset_name):
         .annotate(n=Count("pk"))
     )
 
-    n_labeled = defaultdict(dict)
+    n_labeled = defaultdict(lambda: defaultdict(int))
     for c in counts:
         category = c["category__name"]
         mode = c["mode__name"]
-        n_labeled[category][mode] = c["n"]
+        if mode not in BUILTIN_MODES:
+            mode = "CUSTOM"
+        n_labeled[category][mode] += c["n"]
 
     return JsonResponse(n_labeled)

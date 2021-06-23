@@ -2,6 +2,7 @@ from collections import defaultdict
 from email.utils import parseaddr
 import os
 import json
+from tqdm import tqdm
 
 import aiohttp
 import click
@@ -64,19 +65,19 @@ async def main(name, label_json, user, use_proxy):
 
     # For each unique label (category, mode tuple), add annotations
     async with aiohttp.ClientSession(trust_env=use_proxy) as session:
-        for (category, value), identifiers in identifiers_by_label.items():
+        for (category, value), identifiers in tqdm(identifiers_by_label.items()):
             params = {
-                "mode": "ingest",
+                "mode": value,
                 "identifiers": identifiers,
                 "user": email,
                 "category": category,
-                "value": value,
+                "created_by": "ingest"
             }
             async with session.post(
                 os.path.join(SERVER_URL, ADD_ANNOTATIONS_ENDPOINT, name), json=params
             ) as response:
                 j = await response.json()
-                print(f"Created {j['created']} ({category}, {value}) labels")
+                tqdm.write(f"Created {j['created']} ({category}, {value}) labels")
 
 
 if __name__ == "__main__":
