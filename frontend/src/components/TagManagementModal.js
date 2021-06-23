@@ -184,10 +184,9 @@ const TagManagementModal = ({
       user: username,
       categories: categoryList,
     };
+    url.search = new URLSearchParams(body).toString();
     const res = await fetch(url, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(body),
+      method: "GET",
     }).then(res => res.json());
 
     if (res['numLabeled'] !== undefined) {
