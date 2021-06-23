@@ -25,7 +25,9 @@ from rest_framework.decorators import api_view
 import requests
 from expiringdict import ExpiringDict
 
-from .models import Dataset, DatasetItem, Category, Mode, User, Annotation, DNNModel
+from .models import (
+    Dataset, DatasetItem, Category, Mode, User, Annotation, DNNModel,
+    CategoryCount)
 
 
 BUILTIN_MODES = ["POSITIVE", "NEGATIVE", "HARD_NEGATIVE", "UNSURE"]
@@ -1214,6 +1216,14 @@ def bulk_add_annotations_v2(payload, images):
                 for di in images
             )
         )
+        category_count, _ = CategoryCount.objects.get_or_create(
+            dataset=sender.dataset_item.dataset,
+            category=category,
+            mode=mode
+        )
+        category_count.count += len(images)
+        category_count.save()
+
 
     return len(images)
 
@@ -1250,18 +1260,26 @@ def update_category_v2(request):
 def get_category_counts_v2(request, dataset_name):
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
-    counts = (
-        Annotation.objects.filter(dataset_item__in=dataset.datasetitem_set.filter())
-        .values("category__name", "mode__name")
-        .annotate(n=Count("pk"))
-    )
+    cat_count_query_start = time.time()
+    counts = CategoryCount.objects.filter(dataset=dataset)
+    counts = [c for c in counts]
+    category_names = {cat.pk: cat.name for cat in Category.objects.filter(
+        pk__in=set([c.category_id for c in counts]))}
+    mode_names = {m.pk: m.name for m in Mode.objects.filter(
+        pk__in=set([c.mode_id for c in counts]))}
+    cat_count_query_end = time.time()
 
+    cat_count_start = time.time()
     n_labeled = defaultdict(lambda: defaultdict(int))
     for c in counts:
-        category = c["category__name"]
-        mode = c["mode__name"]
+        category = category_names[c.category_id]
+        mode = mode_names[c.mode_id]
         if not mode in BUILTIN_MODES:
             mode = "CUSTOM"
-        n_labeled[category][mode] += c["n"]
+        n_labeled[category][mode] = c.count
+    cat_count_end = time.time()
+    #print(f'get_category_counts: query time: '
+    #      f'{cat_count_query_end - cat_count_query_start}, '
+    #      f'{cat_count_end - cat_count_start}')
 
     return JsonResponse(n_labeled)

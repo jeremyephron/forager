@@ -125,6 +125,7 @@ function MainHeader(props) {
 
   let datasetName = props.datasetName;
   let datasetInfo = props.datasetInfo;
+  let datasetCategories = props.datasetCategories;
   let setCategories = props.setCategories;
 
   let modelInfo = props.modelInfo;
@@ -158,7 +159,7 @@ function MainHeader(props) {
       isOpen={tagManagementIsOpen}
       toggle={toggleTagManagement}
       datasetName={datasetName}
-      datasetCategories={datasetInfo.categories}
+      datasetCategories={datasetCategories}
       setDatasetCategories={setCategories}
       username={username}
       isReadOnly={!!!(username)}
@@ -176,7 +177,7 @@ function MainHeader(props) {
       isOpen={props.bulkTagModalIsOpen}
       toggle={props.toggleBulkTag}
       resultSet={props.queryResultSet}
-      categories={datasetInfo.categories}
+      categories={datasetCategories}
       setCategories={setCategories}
       username={username}
     />
@@ -200,7 +201,7 @@ function MainHeader(props) {
         setSelection({});
         generateEmbedding({image_id: image.id}, uuid);
       }}
-      tags={datasetInfo.categories}
+      tags={datasetCategories}
       setCategories={setCategories}
       username={username}
       setSubset={setSubset}
@@ -329,6 +330,7 @@ function ClusteringControls(props) {
 function QueryBar(p) {
   let props = p;
   let datasetInfo = props.datasetInfo;
+  let datasetCategories = props.datasetCategories;
   let setCategories = props.setCategories;
   let split = props.split;
   let setSplit = props.setSplit;
@@ -371,7 +373,7 @@ function QueryBar(p) {
             id="dataset-include-bar"
             className="mr-2"
             placeholder="Tags to include"
-            categories={datasetInfo.categories}
+            categories={datasetCategories}
             setCategories={setCategories}
             selected={datasetIncludeTags}
             setSelected={setDatasetIncludeTags}
@@ -379,7 +381,7 @@ function QueryBar(p) {
           <CategoryInput
             id="dataset-exclude-bar"
             placeholder="Tags to exclude"
-            categories={datasetInfo.categories}
+            categories={datasetCategories}
             setCategories={setCategories}
             selected={datasetExcludeTags}
             setSelected={setDatasetExcludeTags}
@@ -439,6 +441,7 @@ function QueryBar(p) {
 
 function OrderingModeSelector(p) {
   let datasetInfo = p.datasetInfo;
+  let datasetCategories = p.categories;
   let setCategories = p.setCategories;
   let svmPopoverRepositionFunc = p.svmPopoverRepositionFunc;
   let svmPosTags = p.svmPosTags;
@@ -485,7 +488,7 @@ function OrderingModeSelector(p) {
             id="svm-pos-bar"
             className="mt-1"
             placeholder="Positive example tags"
-            categories={datasetInfo.categories}
+            categories={datasetCategories}
             setCategories={setCategories}
             selected={svmPosTags}
             disabled={svmIsTraining}
@@ -498,7 +501,7 @@ function OrderingModeSelector(p) {
             id="svm-neg-bar"
             className="mt-2 mb-3"
             placeholder="Negative example tags"
-            categories={datasetInfo.categories}
+            categories={datasetCategories}
             setCategories={setCategories}
             selected={svmNegTags}
             disabled={svmIsTraining}
@@ -540,7 +543,7 @@ function OrderingModeSelector(p) {
               id="svm-augment-negs-include-bar"
               className="mt-2"
               placeholder="Tags to include in auto-negative pool"
-              categories={datasetInfo.categories}
+              categories={datasetCategories}
               setCategories={setCategories}
               selected={svmAugmentIncludeTags}
               disabled={svmIsTraining}
@@ -553,7 +556,7 @@ function OrderingModeSelector(p) {
               id="svm-augment-negs-exclude-bar"
               className="mt-2 mb-1"
               placeholder="Tags to exclude from auto-negative pool"
-              categories={datasetInfo.categories}
+              categories={datasetCategories}
               setCategories={setCategories}
               selected={svmAugmentExcludeTags}
               disabled={svmIsTraining}
@@ -766,7 +769,7 @@ const App = () => {
 
   useEffect(getDatasetInfo, [datasetName]);
 
-  const setCategories = (categories) => setDatasetInfo({...datasetInfo, categories});
+  const [datasetCategories, setCategories] = useState({});
 
   // KNN queries
   const generateEmbedding = async (req, uuid) => {
@@ -1053,6 +1056,7 @@ const App = () => {
     setUsername: setUsername,
     datasetName: datasetName,
     datasetInfo: datasetInfo,
+    datasetCategories: datasetCategories,
     setCategories: setCategories,
     modelInfo: modelInfo,
     setModelInfo: setModelInfo,
@@ -1075,6 +1079,7 @@ const App = () => {
   };
   let queryBarProps = {
     datasetInfo: datasetInfo,
+    datasetCategories: datasetCategories,
     setCategories: setCategories,
     split: split,
     setSplit: setSplit,
@@ -1109,6 +1114,7 @@ const App = () => {
   };
   let orderingModeProps = {
     datasetInfo: datasetInfo,
+    datasetCategories: datasetCategories,
     setCategories: setCategories,
     svmPopoverRepositionFunc: svmPopoverRepositionFunc,
     svmPosTags: svmPosTags,
@@ -1156,7 +1162,7 @@ const App = () => {
         style={{display: mode !== "explore" ? "block" : "none"}}>
         <Container fluid>
           <LabelPanel
-            categories={datasetInfo.categories}
+            categories={datasetCategories}
             setCategories={setCategories}
             category={labelModeCategory}
             setCategory={setLabelModeCategory}
@@ -1170,7 +1176,7 @@ const App = () => {
             isVisible={mode === "train"}
             username={username}
             disabled={!!!(username)}
-            categories={datasetInfo.categories}
+            categories={datasetCategories}
           />
           <ValidatePanel
             datasetName={datasetName}

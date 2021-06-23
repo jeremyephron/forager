@@ -182,7 +182,6 @@ const TagManagementModal = ({
     const url = new URL(endpoints.getCategoryCounts + `/${datasetName}`);
     const body = {
       user: username,
-      categories: categoryList,
     };
     url.search = new URLSearchParams(body).toString();
     const res = await fetch(url, {

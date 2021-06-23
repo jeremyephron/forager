@@ -80,6 +80,13 @@ class Annotation(models.Model):
         ]
 
 
+class CategoryCount(models.Model):
+    dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE)
+    mode = models.ForeignKey(Mode, on_delete=models.CASCADE)
+    count = models.IntegerField(default=0)
+
+
 class DNNModel(models.Model):
     dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE)
     name = models.SlugField()
