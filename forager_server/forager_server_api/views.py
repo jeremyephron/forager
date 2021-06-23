@@ -996,44 +996,11 @@ def get_datasets_v2(request):
 @csrf_exempt
 def get_dataset_info_v2(request, dataset_name):
     dataset = get_object_or_404(Dataset, name=dataset_name)
-
-    time_a = time.perf_counter()
-    categories_and_modes = (
-        Annotation.objects.filter(dataset_item__in=dataset.datasetitem_set.filter())
-        .values("category__name", "mode__name")
-        .distinct()
-    )
-    time_b = time.perf_counter()
-    print(f"QUERY: {time_b - time_a}s")
-
-    print(len(categories_and_modes))
-
-    # TODO: Don't return categories here; use get_category_counts_v2
-    categories_and_custom_values = {}
-    for c in categories_and_modes:
-        category = c["category__name"]
-        mode = c["mode__name"]
-
-        custom_value_set = categories_and_custom_values.setdefault(category, set())
-        if mode not in ("POSITIVE", "NEGATIVE", "HARD_NEGATIVE", "UNSURE"):
-            custom_value_set.add(mode)
-
-    print(len(categories_and_custom_values))
-
-    categories_and_custom_values = {
-        k: sorted(v) for k, v in categories_and_custom_values.items()
-    }
-    time_c = time.perf_counter()
-    print(f"FILTERING: {time_c - time_b}s")
-
     num_train = dataset.datasetitem_set.filter(is_val=False).count()
     num_val = dataset.datasetitem_set.filter(is_val=True).count()
-    time_d = time.perf_counter()
-    print(f"TRAIN/VAL COUNTING: {time_d - time_c}s")
 
     return JsonResponse(
         {
-            "categories": categories_and_custom_values,
             "index_id": dataset.index_id,
             "num_train": num_train,
             "num_val": num_val,
@@ -1274,18 +1241,13 @@ def update_category_v2(request):
     return JsonResponse({"status": "success"})
 
 
-@api_view(["POST"])
+@api_view(["GET"])
 @csrf_exempt
 def get_category_counts_v2(request, dataset_name):
     dataset = get_object_or_404(Dataset, name=dataset_name)
-    payload = json.loads(request.body)
-    category_names = payload["categories"]
 
-    categories = Category.objects.filter(name__in=category_names)
     counts = (
-        Annotation.objects.filter(
-            dataset_item__in=dataset.datasetitem_set.filter(), category__in=categories
-        )
+        Annotation.objects.filter(dataset_item__in=dataset.datasetitem_set.filter())
         .values("category__name", "mode__name")
         .annotate(n=Count("pk"))
     )
@@ -1296,4 +1258,4 @@ def get_category_counts_v2(request, dataset_name):
         mode = c["mode__name"]
         n_labeled[category][mode] = c["n"]
 
-    return JsonResponse({"numLabeled": n_labeled})
+    return JsonResponse(n_labeled)
