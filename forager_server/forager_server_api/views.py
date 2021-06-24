@@ -429,21 +429,29 @@ def get_tags_from_annotations_v2(annotations):
 
 
 def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
+    filt_start = time.time()
     if request.method == "POST":
         payload = json.loads(request.body)
         include_tags = parse_tag_set_from_query_v2(payload.get("include"))
         exclude_tags = parse_tag_set_from_query_v2(payload.get("exclude"))
         pks = [i for i in payload.get("subset", []) if i]
         split = payload.get("split", "train")
+        offset_to_return = int(payload.get("offset", 0))
+        num_to_return = int(payload.get("num", -1))
     else:
         include_tags = parse_tag_set_from_query_v2(request.GET.get("include"))
         exclude_tags = parse_tag_set_from_query_v2(request.GET.get("exclude"))
         pks = [i for i in request.GET.get("subset", "").split(",") if i]
         split = request.GET.get("split", "train")
+        offset_to_return = int(request.GET.get("offset", 0))
+        num_to_return = int(request.GET.get("num", None))
+
+    num_to_return = None if num_to_return == -1 else num_to_return
 
     dataset_items = None
     is_val = split == "val"
 
+    db_start = time.time()
     if pks and exclude_pks:
         exclude_pks = set(exclude_pks)
         pks = [pk for pk in pks if pk not in exclude_pks]
@@ -451,21 +459,31 @@ def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
         dataset_items = DatasetItem.objects.filter(dataset=dataset, is_val=is_val)
         if exclude_pks:
             dataset_items = dataset_items.exclude(pk__in=exclude_pks)
-        pks = list(dataset_items.values_list("pk", flat=True))
+        pks = dataset_items.values_list(
+            "pk", flat=True)
+    db_end = time.time()
 
+    result = None
+    db_tag_start = time.time()
     if not include_tags and not exclude_tags:
-        return pks
+        result = pks
+    else:
+        if dataset_items is None:
+            dataset_items = DatasetItem.objects.filter(pk__in=pks)
 
-    if dataset_items is None:
-        dataset_items = DatasetItem.objects.filter(pk__in=pks)
+        if include_tags:
+            dataset_items = dataset_items.filter(tag_sets_to_query(include_tags))
+        if exclude_tags:
+            dataset_items = dataset_items.exclude(tag_sets_to_query(exclude_tags))
 
-    if include_tags:
-        dataset_items = dataset_items.filter(tag_sets_to_query(include_tags))
-    if exclude_tags:
-        dataset_items = dataset_items.exclude(tag_sets_to_query(exclude_tags))
+        result = dataset_items.values_list("pk", flat=True)
 
-    filtered = list(dataset_items.values_list("pk", flat=True))
-    return filtered
+    db_tag_end = time.time()
+    result = list(result[offset_to_return:num_to_return])
+    filt_end = time.time()
+    print(f'filtered_images_v2: tot: {filt_end-filt_start}, '
+          f'db ({len(result)} items): {db_end-db_start}, db tag: {db_tag_end-db_tag_start}')
+    return result
 
 
 def process_image_query_results_v2(request, dataset, query_response):
@@ -762,17 +780,27 @@ def query_ranking_v2(request, dataset_name):
 @api_view(["POST"])
 @csrf_exempt
 def query_images_v2(request, dataset_name):
+    query_start = time.time()
+
     dataset = get_object_or_404(Dataset, name=dataset_name)
     payload = json.loads(request.body)
     order = payload.get("order", "id")
 
+    filter_start = time.time()
     result_pks = filtered_images_v2(request, dataset)
+    filter_end = time.time()
+
     if order == "random":
         random.shuffle(result_pks)
     elif order == "id":
         result_pks.sort()
     results = {"pks": result_pks, "distances": [-1 for _ in result_pks]}
-    return JsonResponse(create_result_set_v2(results, "query"))
+    resp = JsonResponse(create_result_set_v2(results, "query"))
+
+    query_end = time.time()
+    print(f'query_images_v2: tot: {query_end-query_start}, '
+          f'filter: {filter_end-filter_start}')
+    return resp
 
 
 #
@@ -1125,10 +1153,11 @@ def create_dataset_v2(request):
     return JsonResponse({"status": "success"})
 
 
-@api_view(["GET"])
+@api_view(["POST"])
 @csrf_exempt
 def get_annotations_v2(request):
-    image_pks = [i for i in request.GET["identifiers"].split(",") if i]
+    payload = json.loads(request.body)
+    image_pks = [i for i in payload["identifiers"] if i]
     if not image_pks:
         return JsonResponse({})
 

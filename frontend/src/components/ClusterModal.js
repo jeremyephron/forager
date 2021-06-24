@@ -89,11 +89,13 @@ const ClusterModal = ({
   useEffect(async () => {
     if (clusters.length === 0) return;
     let annotationsUrl = new URL(endpoints.getAnnotations);
-    annotationsUrl.search = new URLSearchParams({
+    let body = {
       identifiers: clusters.map(cl => cl.map(im => im.id)).flat()
-    }).toString();
+    }
     setAnnotations(await fetch(annotationsUrl, {
-      method: "GET",
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body),
     }).then(r => r.json()));
   }, [clusters]);
 

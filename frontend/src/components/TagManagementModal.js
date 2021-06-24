@@ -188,9 +188,8 @@ const TagManagementModal = ({
       method: "GET",
     }).then(res => res.json());
 
-    if (res['numLabeled'] !== undefined) {
-      setCategoryCounts(res['numLabeled']);
-    }
+    let cats = Object.fromEntries(Object.entries(res).map(([key, val]) => [key, Object.keys(val)]))
+    setCategoryCounts(res);
   }, [categoryList]);
 
   useEffect(() => {

@@ -87,6 +87,7 @@ const modes = [
 
 const endpoints = fromPairs(toPairs({
   getDatasetInfo: "get_dataset_info_v2",
+  getCategoryCounts: 'get_category_counts_v2',
   getResults: "get_results_v2",
   trainSvm: "train_svm_v2",
   queryImages: "query_images_v2",
@@ -771,6 +772,22 @@ const App = () => {
 
   const [datasetCategories, setCategories] = useState({});
 
+  const getCategories = async () => {
+    const url = new URL(endpoints.getCategoryCounts + `/${datasetName}`);
+    const body = {
+      user: username,
+    };
+    url.search = new URLSearchParams(body).toString();
+    const res = await fetch(url, {
+      method: "GET",
+    }).then(res => res.json());
+
+    let cats = Object.fromEntries(Object.entries(res).map(([key, val]) => [key, Object.keys(val)]))
+    setCategories(cats);
+  }
+
+  useEffect(getCategories, []);
+
   // KNN queries
   const generateEmbedding = async (req, uuid) => {
     const url = new URL(endpoints.generateEmbedding);
@@ -856,6 +873,7 @@ const App = () => {
 
   const [subset, setSubset_] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const isFirstLoad = useRef(true);
   const [queryResultSet, setQueryResultSet] = useState({
     id: null,
     num_results: 0,
@@ -903,6 +921,11 @@ const App = () => {
       score_min: scoreRange[0] / 100,
       score_max: scoreRange[1] / 100,
     };
+
+    if (isFirstLoad.current) {
+      body.num = PAGE_SIZE;
+
+    }
 
     if (orderingMode === "id" || orderingMode === "random") {
       url = new URL(`${endpoints.queryImages}/${datasetName}`);
@@ -992,7 +1015,20 @@ const App = () => {
   };
 
   useEffect(() => {
-    if (isLoading) runQuery().finally(() => setIsLoading(false));
+    if (isLoading) runQuery().finally(() => {
+      setIsLoading(false);
+
+      // NOTE(fpoms): the first query on page load is optimized to be fast by
+      // querying for only the first page of results. This code is meant to
+      // re-run the query so that we get the full pagination results after
+      // initial image load (500ms)
+      if (isFirstLoad.current) {
+        isFirstLoad.current = false;
+        setTimeout(()=> {      // SET A TIMEOUT
+          setIsLoading(true);
+        }, 500);
+      }
+    });
   }, [isLoading]);
 
   useEffect(() => {
