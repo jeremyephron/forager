@@ -1245,13 +1245,15 @@ def bulk_add_annotations_v2(payload, images):
                 for di in images
             )
         )
-        category_count, _ = CategoryCount.objects.get_or_create(
-            dataset=sender.dataset_item.dataset,
-            category=category,
-            mode=mode
-        )
-        category_count.count += len(images)
-        category_count.save()
+        if len(images) > 0:
+            dataset = images[0].dataset
+            category_count, _ = CategoryCount.objects.get_or_create(
+                dataset=dataset,
+                category=category,
+                mode=mode
+            )
+            category_count.count += len(images)
+            category_count.save()
 
 
     return len(images)

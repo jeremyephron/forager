@@ -153,9 +153,9 @@ const ClusterModal = ({
     const url = new URL(endpoints.addAnnotations);
     const body = {
       user: username,
-      category,
-      value,
-      identifiers
+      category: category,
+      mode: value,
+      identifiers: identifiers
     };
     return fetch(url, {
       method: "POST",

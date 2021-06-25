@@ -3,22 +3,22 @@ from django.dispatch import receiver
 from .models import Category, Mode, Annotation, CategoryCount
 
 @receiver(post_save, sender=Annotation)
-def increment_category_count(sender, **kwargs):
+def increment_category_count(sender, instance, **kwargs):
     category_count, _ = CategoryCount.objects.get_or_create(
-        dataset=sender.dataset_item.dataset,
-        category=sender.category,
-        mode=sender.mode
+        dataset=instance.dataset_item.dataset,
+        category=instance.category,
+        mode=instance.mode
     )
     category_count.count += 1
     category_count.save()
 
 
 @receiver(post_delete, sender=Annotation)
-def decrement_category_count(sender, **kwargs):
+def decrement_category_count(sender, instance, **kwargs):
     category_count, _ = CategoryCount.objects.get_or_create(
-        dataset=sender.dataset_item.dataset,
-        category=sender.category,
-        mode=sender.mode
+        dataset=instance.dataset_item.dataset,
+        category=instance.category,
+        mode=instance.mode
     )
     category_count.count -= 1
     category_count.save()
