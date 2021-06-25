@@ -442,7 +442,7 @@ function QueryBar(p) {
 
 function OrderingModeSelector(p) {
   let datasetInfo = p.datasetInfo;
-  let datasetCategories = p.categories;
+  let datasetCategories = p.datasetCategories;
   let setCategories = p.setCategories;
   let svmPopoverRepositionFunc = p.svmPopoverRepositionFunc;
   let svmPosTags = p.svmPosTags;
@@ -684,6 +684,7 @@ function ImageClusterViewer(props) {
 
 const App = () => {
   let { datasetName } = useParams();
+  const [sessionId] = useState(uuidv4();
 
   //
   // PERIODICALLY SEND KEEP ALIVE TO KEEP CLOUD RUN ENDPOINTS FAST
@@ -691,8 +692,11 @@ const App = () => {
 
   const sendKeepAlive = () => {
     const url = new URL(endpoints.keepAlive);
+    const body = { sessionId };
     fetch(url, {
       method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body),
     });
   };
   useEffect(sendKeepAlive, []);
