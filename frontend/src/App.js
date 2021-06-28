@@ -823,7 +823,8 @@ const App = () => {
     return new Map(sortedCategories.map(([category, counts]) => {
       let customModes = [];
       for (const mode of Object.keys(counts)) {
-        if (BUILT_IN_MODES.some(([m]) => m === mode)) customModes.push(mode);
+        const isCustom = !BUILT_IN_MODES.some(([m]) => m === mode);
+        if (isCustom) customModes.push(mode);
       }
       customModes.sort();
       return [category, customModes];
