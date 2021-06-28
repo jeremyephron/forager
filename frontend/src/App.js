@@ -1,4 +1,4 @@
-import React, { useState, useEffect,  useReducer, useRef } from "react";
+import React, { useState, useEffect, useMemo, useReducer, useRef } from "react";
 import useInterval from "react-useinterval";
 import {
   Container,
@@ -33,9 +33,11 @@ import ReactPaginate from "react-paginate";
 
 import { useParams } from "react-router-dom";
 
+import cloneDeep from "lodash/cloneDeep";
 import fromPairs from "lodash/fromPairs";
+import merge from "lodash/merge";
 import size from "lodash/size";
-import some from "lodash/some";
+import sortBy from "lodash/sortBy";
 import toPairs from "lodash/toPairs";
 
 import "react-bootstrap-typeahead/css/Typeahead.css";
@@ -87,7 +89,7 @@ const modes = [
 
 const endpoints = fromPairs(toPairs({
   getDatasetInfo: "get_dataset_info_v2",
-  getCategoryCounts: 'get_category_counts_v2',
+  getCategoryCounts: "get_category_counts_v2",
   getResults: "get_results_v2",
   trainSvm: "train_svm_v2",
   queryImages: "query_images_v2",
@@ -99,6 +101,14 @@ const endpoints = fromPairs(toPairs({
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
 const KEEP_ALIVE_INTERVAL = 60000; // ms
+
+// TODO(mihirg): Combine with this same constant in other places
+const BUILT_IN_MODES = [
+  ["POSITIVE", "Positive"],
+  ["NEGATIVE", "Negative"],
+  ["HARD_NEGATIVE", "Hard Negative"],
+  ["UNSURE", "Unsure"],
+];
 
 function MainHeader(props) {
   const [loginIsOpen, setLoginIsOpen] = useState(false);
@@ -126,8 +136,9 @@ function MainHeader(props) {
 
   let datasetName = props.datasetName;
   let datasetInfo = props.datasetInfo;
-  let datasetCategories = props.datasetCategories;
-  let setCategories = props.setCategories;
+  let categoryCounts = props.categoryCounts;
+  let customModesByCategory = props.customModesByCategory;
+  let categoryDispatch = props.categoryDispatch;
 
   let modelInfo = props.modelInfo;
   let setModelInfo = props.setModelInfo;
@@ -160,8 +171,8 @@ function MainHeader(props) {
       isOpen={tagManagementIsOpen}
       toggle={toggleTagManagement}
       datasetName={datasetName}
-      datasetCategories={datasetCategories}
-      setDatasetCategories={setCategories}
+      categoryCounts={categoryCounts}
+      categoryDispatch={categoryDispatch}
       username={username}
       isReadOnly={!!!(username)}
     />
@@ -178,8 +189,8 @@ function MainHeader(props) {
       isOpen={props.bulkTagModalIsOpen}
       toggle={props.toggleBulkTag}
       resultSet={props.queryResultSet}
-      categories={datasetCategories}
-      setCategories={setCategories}
+      customModesByCategory={customModesByCategory}
+      categoryDispatch={categoryDispatch}
       username={username}
     />
     <ClusterModal
@@ -202,8 +213,8 @@ function MainHeader(props) {
         setSelection({});
         generateEmbedding({image_id: image.id}, uuid);
       }}
-      tags={datasetCategories}
-      setCategories={setCategories}
+      customModesByCategory={customModesByCategory}
+      categoryDispatch={categoryDispatch}
       username={username}
       setSubset={setSubset}
       mode={mode}
@@ -331,8 +342,8 @@ function ClusteringControls(props) {
 function QueryBar(p) {
   let props = p;
   let datasetInfo = props.datasetInfo;
-  let datasetCategories = props.datasetCategories;
-  let setCategories = props.setCategories;
+  let customModesByCategory = props.customModesByCategory;
+  let categoryDispatch = props.categoryDispatch;
   let split = props.split;
   let setSplit = props.setSplit;
   let datasetIncludeTags = props.datasetIncludeTags;
@@ -374,16 +385,16 @@ function QueryBar(p) {
             id="dataset-include-bar"
             className="mr-2"
             placeholder="Tags to include"
-            categories={datasetCategories}
-            setCategories={setCategories}
+            customModesByCategory={customModesByCategory}
+            categoryDispatch={categoryDispatch}
             selected={datasetIncludeTags}
             setSelected={setDatasetIncludeTags}
           />
           <CategoryInput
             id="dataset-exclude-bar"
             placeholder="Tags to exclude"
-            categories={datasetCategories}
-            setCategories={setCategories}
+            customModesByCategory={customModesByCategory}
+            categoryDispatch={categoryDispatch}
             selected={datasetExcludeTags}
             setSelected={setDatasetExcludeTags}
           />
@@ -398,7 +409,7 @@ function QueryBar(p) {
             onClick={() => setIsLoading(true)}
             disabled={
             (orderingMode === "svm" && !!!(trainedSvmData)) ||
-            (orderingMode === "knn" && (size(knnImages) === 0 || some(Object.values(knnImages).map(i => !(i.embedding))))) ||
+            (orderingMode === "knn" && (size(knnImages) === 0 || Object.values(knnImages).some(i => !(i.embedding)))) ||
             (orderingMode === "dnn" && !!!(rankingModel)) ||
             (orderingMode === "clip" && !!!(captionQueryEmbedding))
             }
@@ -442,8 +453,8 @@ function QueryBar(p) {
 
 function OrderingModeSelector(p) {
   let datasetInfo = p.datasetInfo;
-  let datasetCategories = p.datasetCategories;
-  let setCategories = p.setCategories;
+  let customModesByCategory = p.customModesByCategory;
+  let categoryDispatch = p.categoryDispatch;
   let svmPopoverRepositionFunc = p.svmPopoverRepositionFunc;
   let svmPosTags = p.svmPosTags;
   let setSvmPosTags = p.setSvmPosTags;
@@ -489,8 +500,8 @@ function OrderingModeSelector(p) {
             id="svm-pos-bar"
             className="mt-1"
             placeholder="Positive example tags"
-            categories={datasetCategories}
-            setCategories={setCategories}
+            customModesByCategory={customModesByCategory}
+            categoryDispatch={categoryDispatch}
             selected={svmPosTags}
             disabled={svmIsTraining}
             setSelected={selected => {
@@ -502,8 +513,8 @@ function OrderingModeSelector(p) {
             id="svm-neg-bar"
             className="mt-2 mb-3"
             placeholder="Negative example tags"
-            categories={datasetCategories}
-            setCategories={setCategories}
+            customModesByCategory={customModesByCategory}
+            categoryDispatch={categoryDispatch}
             selected={svmNegTags}
             disabled={svmIsTraining}
             setSelected={selected => {
@@ -544,8 +555,8 @@ function OrderingModeSelector(p) {
               id="svm-augment-negs-include-bar"
               className="mt-2"
               placeholder="Tags to include in auto-negative pool"
-              categories={datasetCategories}
-              setCategories={setCategories}
+              customModesByCategory={customModesByCategory}
+              categoryDispatch={categoryDispatch}
               selected={svmAugmentIncludeTags}
               disabled={svmIsTraining}
               setSelected={selected => {
@@ -557,8 +568,8 @@ function OrderingModeSelector(p) {
               id="svm-augment-negs-exclude-bar"
               className="mt-2 mb-1"
               placeholder="Tags to exclude from auto-negative pool"
-              categories={datasetCategories}
-              setCategories={setCategories}
+              customModesByCategory={customModesByCategory}
+              categoryDispatch={categoryDispatch}
               selected={svmAugmentExcludeTags}
               disabled={svmIsTraining}
               setSelected={selected => {
@@ -684,7 +695,7 @@ function ImageClusterViewer(props) {
 
 const App = () => {
   let { datasetName } = useParams();
-  const [sessionId] = useState(uuidv4();
+  const [sessionId] = useState(uuidv4());
 
   //
   // PERIODICALLY SEND KEEP ALIVE TO KEEP CLOUD RUN ENDPOINTS FAST
@@ -754,14 +765,70 @@ const App = () => {
   const [selection, setSelection] = useState({});
   const [clusterIsOpen, setClusterIsOpen] = useState(false);
 
+  const categoryReducer = (oldCategoryCounts, action) => {
+    switch (action.type) {
+      case "UPDATE_COUNTS": {
+        // Merge new category counts in; necessary to preserve new categoryCounts/modes that
+        // were just added on the frontend but don't actually have any associated
+        // annotations
+        let newCategoryCounts = cloneDeep(oldCategoryCounts);
+        merge(newCategoryCounts, action.data);  // order matters! new counts override
+        return newCategoryCounts;
+      }
+      case "ADD_CATEGORY": {
+        const newCategory = action.category.trim();
+        if (newCategory === "") return oldCategoryCounts;
+        let newCategoryCounts = {...oldCategoryCounts};
+        newCategoryCounts[newCategory] = {};
+        return newCategoryCounts;
+      }
+      case "DELETE_CATEGORY": {
+        let newCategoryCounts = {...oldCategoryCounts};
+        delete newCategoryCounts[action.category];
+        return newCategoryCounts;
+      }
+      case "RENAME_CATEGORY": {
+        const newCategory = action.newCategory.trim();
+        if (newCategory === "") return oldCategoryCounts;
+        let newCategoryCounts = {...oldCategoryCounts};
+        newCategoryCounts[newCategory] = newCategoryCounts[action.oldCategory];
+        delete newCategoryCounts[action.oldCategory];
+        return newCategoryCounts;
+      }
+      case "ADD_MODE": {
+        const newMode = action.mode.trim().toLowerCase();
+        if (newMode === "") return oldCategoryCounts;
+        let newCategoryCounts = {...oldCategoryCounts};
+        newCategoryCounts[action.category] = {...newCategoryCounts[action.category]};
+        newCategoryCounts[action.category][newMode] = 0 ||
+          newCategoryCounts[action.category][newMode];
+        return newCategoryCounts;
+      }
+      default:
+        throw new Error();
+    }
+  };
+
   // Load dataset info on initial page load
   const [datasetInfo, setDatasetInfo] = useState({
     isNotLoaded: true,
-    categories: [],
     index_id: null,
     num_train: 0,
     num_val: 0,
   });
+
+  const [categoryCounts, categoryDispatch] = useReducer(categoryReducer, {});
+  const customModesByCategory = useMemo(() => {
+    const sortedCategories = sortBy(Object.entries(categoryCounts), ([c]) => c.toLowerCase());
+    return new Map(sortedCategories.map(([category, counts]) => {
+      let customModes = [];
+      for (const mode of Object.keys(counts)) {
+        if (BUILT_IN_MODES.some(([m]) => m === mode)) customModes.push(mode);
+      }
+      customModes.sort();
+      return [category, customModes];
+    }));
+  }, [categoryCounts]);
 
   const getDatasetInfo = async () => {
     const url = new URL(`${endpoints.getDatasetInfo}/${datasetName}`);
@@ -774,23 +841,17 @@ const App = () => {
 
   useEffect(getDatasetInfo, [datasetName]);
 
-  const [datasetCategories, setCategories] = useState({});
-
-  const getCategories = async () => {
-    const url = new URL(endpoints.getCategoryCounts + `/${datasetName}`);
-    const body = {
-      user: username,
-    };
-    url.search = new URLSearchParams(body).toString();
-    const res = await fetch(url, {
+  const refreshCategoryCounts = async () => {
+    const url = new URL(`${endpoints.getCategoryCounts}/${datasetName}`);
+    let data = await fetch(url, {
       method: "GET",
-    }).then(res => res.json());
-
-    let cats = Object.fromEntries(Object.entries(res).map(([key, val]) => [key, Object.keys(val)]))
-    setCategories(cats);
+    }).then(r => r.json());
+    categoryDispatch({
+      type: "UPDATE_COUNTS",
+      data,
+    });
   }
-
-  useEffect(getCategories, []);
+  useEffect(refreshCategoryCounts, []);  // TODO(mihirg): figure out when to refresh!
 
   // KNN queries
   const generateEmbedding = async (req, uuid) => {
@@ -1096,8 +1157,9 @@ const App = () => {
     setUsername: setUsername,
     datasetName: datasetName,
     datasetInfo: datasetInfo,
-    datasetCategories: datasetCategories,
-    setCategories: setCategories,
+    categoryCounts: categoryCounts,
+    customModesByCategory: customModesByCategory,
+    categoryDispatch: categoryDispatch,
     modelInfo: modelInfo,
     setModelInfo: setModelInfo,
     clusterIsOpen: clusterIsOpen,
@@ -1119,8 +1181,8 @@ const App = () => {
   };
   let queryBarProps = {
     datasetInfo: datasetInfo,
-    datasetCategories: datasetCategories,
-    setCategories: setCategories,
+    customModesByCategory: customModesByCategory,
+    categoryDispatch: categoryDispatch,
     split: split,
     setSplit: setSplit,
     datasetIncludeTags: datasetIncludeTags,
@@ -1154,8 +1216,8 @@ const App = () => {
   };
   let orderingModeProps = {
     datasetInfo: datasetInfo,
-    datasetCategories: datasetCategories,
-    setCategories: setCategories,
+    customModesByCategory: customModesByCategory,
+    categoryDispatch: categoryDispatch,
     svmPopoverRepositionFunc: svmPopoverRepositionFunc,
     svmPosTags: svmPosTags,
     setSvmPosTags: setSvmPosTags,
@@ -1202,8 +1264,8 @@ const App = () => {
         style={{display: mode !== "explore" ? "block" : "none"}}>
         <Container fluid>
           <LabelPanel
-            categories={datasetCategories}
-            setCategories={setCategories}
+            customModesByCategory={customModesByCategory}
+            categoryDispatch={categoryDispatch}
             category={labelModeCategory}
             setCategory={setLabelModeCategory}
             isVisible={mode === "label"}
@@ -1216,7 +1278,7 @@ const App = () => {
             isVisible={mode === "train"}
             username={username}
             disabled={!!!(username)}
-            categories={datasetCategories}
+            customModesByCategory={customModesByCategory}
           />
           <ValidatePanel
             datasetName={datasetName}

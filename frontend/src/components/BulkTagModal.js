@@ -32,8 +32,8 @@ const BulkTagModal = ({
   isOpen,
   toggle,
   resultSet,
-  categories,
-  setCategories,
+  customModesByCategory,
+  categoryDispatch,
   username,
 }) => {
   const [category, setCategory] = useState("");
@@ -43,7 +43,7 @@ const BulkTagModal = ({
 
   const trimmedCategory = category.trim();
   const numImages = Math.floor(resultSet.num_results * (selectedRange[1] - selectedRange[0]) / 100);
-  const isNew = !categories.hasOwnProperty(trimmedCategory);
+  const isNew = !customModesByCategory.has(trimmedCategory);
 
   // Default values (clear every time form is opened)
   useEffect(() => {
@@ -76,9 +76,10 @@ const BulkTagModal = ({
     }
     if (res.created > 0) {
       if (isNew) {
-        let newCategories = {...categories};
-        newCategories[trimmedCategory] = [];  // no custom values to start
-        setCategories(newCategories);
+        categoryDispatch({
+          type: "ADD_CATEGORY",
+          category: trimmedCategory,
+        })
       }
       toggle();
     }

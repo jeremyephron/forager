@@ -21,6 +21,7 @@ import {
 import styled from "styled-components";
 
 import fromPairs from "lodash/fromPairs";
+import sortBy from "lodash/sortBy";
 import toPairs from "lodash/toPairs";
 
 import { ConfirmModal } from "../components";
@@ -28,16 +29,14 @@ import { ConfirmModal } from "../components";
 const endpoints = fromPairs(toPairs({
   updateCategory: 'update_category_v2',
   deleteCategory: 'delete_category_v2',
-  getCategoryCounts: 'get_category_counts_v2',
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
 // TODO(mihirg): Combine with this same constant in other places
-const LABEL_VALUES = [
+const BUILT_IN_MODES = [
   ["POSITIVE", "Positive"],
   ["NEGATIVE", "Negative"],
   ["HARD_NEGATIVE", "Hard Negative"],
   ["UNSURE", "Unsure"],
-  ["CUSTOM", "Other"],
 ];
 
 const TableContainer = styled.div`
@@ -49,20 +48,33 @@ const TagManagementModal = ({
   isOpen,
   toggle,
   datasetName,
-  datasetCategories,
-  setDatasetCategories,
+  categoryCounts,
+  categoryDispatch,
   username,
   isReadOnly
 }) => {
-  const categoryList = useMemo(() => Object.keys(datasetCategories), [datasetCategories]);
+  // Aggregate all non-built-in modes into "other" count
+  const displayCounts = useMemo(() => {
+    let result = {};
+    for (const [category, counts] of Object.entries(categoryCounts)) {
+      let innerResult = {};
+      innerResult["OTHER"] = 0
+      for (const [mode, count] of Object.entries(counts)) {
+        if (BUILT_IN_MODES.some(([m]) => m === mode)) {
+          innerResult[mode] = count;
+        } else {
+          innerResult["OTHER"] += count;
+        }
+      }
+      result[category] = innerResult;
+    }
+    return result;
+  }, [categoryCounts]);
+  const categoryList = useMemo(() => sortBy(Object.keys(displayCounts), c => c.toLowerCase()), [displayCounts]);
 
-  // TODO: store with redux
   const [categories, setCategories] = useState([]);
-  const [categoryCounts, setCategoryCounts] = useState({});
-  const [preventCountReload, setPreventCountReload] = useState(false);
 
-  const kOrderBy = fromPairs(["name", 0].concat(LABEL_VALUES.map(([value], i) => [value, i + 1])));
-  const [orderBy, setOrderBy] = useState(kOrderBy.name);
+  const [orderBy, setOrderBy_] = useState("name");
   const [orderAscending, setOrderAscending] = useState(true);
 
   const [confirmIsOpen, setConfirmIsOpen] = useState(false);
@@ -73,26 +85,19 @@ const TagManagementModal = ({
   const sortCategories = (arr) => {
     const copy = arr.slice(0);
     const m = orderAscending ? 1 : -1;
-
-    if (orderBy === kOrderBy.name) {
+    if (orderBy === "name") {
       copy.sort((a, b) => m * (a.tag.toLowerCase() < b.tag.toLowerCase() ? -1 : 1));
     } else {
-      for (const [value] of LABEL_VALUES) {
-        if (orderBy === kOrderBy[value]) {
-          copy.sort((a, b) => m * (categoryCounts[a.tag][value] - categoryCounts[b.tag][value]));
-          break;
-        }
-      }
+      copy.sort((a, b) => m * (displayCounts[a.tag][orderBy] - displayCounts[b.tag][orderBy]));
     }
-
     return copy;
   };
 
-  const changeOrdering = (by) => {
+  const setOrderBy = (by) => {
     if (by === orderBy) {
       setOrderAscending(!orderAscending);
     } else {
-      setOrderBy(by);
+      setOrderBy_(by);
       setOrderAscending(true);
     }
   };
@@ -118,7 +123,7 @@ const TagManagementModal = ({
       e.target.reportValidity();
       categories[idx].tag = oldTag;
       setCategories(categories.slice(0));
-      return
+      return;
     }
 
     const url = new URL(endpoints.updateCategory);
@@ -134,14 +139,11 @@ const TagManagementModal = ({
       body: JSON.stringify(body),
     }).then(res => res.json());
 
-    setPreventCountReload(true);
-    const newDatasetCategories = {...datasetCategories};
-    newDatasetCategories[newTag] = newDatasetCategories[oldTag];
-    delete newDatasetCategories[oldTag];
-    setDatasetCategories(newDatasetCategories);
-
-    delete Object.assign(categoryCounts, {[newTag]: categoryCounts[oldTag]})[oldTag];
-    setCategoryCounts(categoryCounts);
+    categoryDispatch({
+      type: "RENAME_CATEGORY",
+      newCategory: newTag,
+      oldCategory: oldTag,
+    });
   };
 
   const deleteCategoryByIndex = async (idx) => {
@@ -160,37 +162,17 @@ const TagManagementModal = ({
       body: JSON.stringify(body),
     }).then(res => res.json());
 
-    delete categoryCounts[tag];
-    setCategoryCounts(categoryCounts);
-
-    setPreventCountReload(true);
-    let newDatasetCategories = {...datasetCategories};
-    delete newDatasetCategories[tag];
-    setDatasetCategories(newDatasetCategories);
+    categoryDispatch({
+      type: "DELETE_CATEGORY",
+      category: tag,
+    });
   };
 
-  useEffect(async () => {
+  useEffect(() => {
     setCategories(sortCategories(categoryList.map(
       (tag, i) => ({tag, srcIdx: i})
     )));
-
-    if (preventCountReload) {
-      setPreventCountReload(false);
-      return;
-    }
-
-    const url = new URL(endpoints.getCategoryCounts + `/${datasetName}`);
-    const body = {
-      user: username,
-    };
-    url.search = new URLSearchParams(body).toString();
-    const res = await fetch(url, {
-      method: "GET",
-    }).then(res => res.json());
-
-    let cats = Object.fromEntries(Object.entries(res).map(([key, val]) => [key, Object.keys(val)]))
-    setCategoryCounts(res);
-  }, [categoryList]);
+  }, [JSON.stringify(categoryList)]);
 
   useEffect(() => {
     setCategories(prev => sortCategories(prev))
@@ -200,7 +182,7 @@ const TagManagementModal = ({
     return (
       <tbody>
         {categories.map((obj, i) => {
-          const counts = categoryCounts[categoryList[obj.srcIdx]] || {};
+          const counts = displayCounts[categoryList[obj.srcIdx]] || {};
           return (
             <tr key={obj.srcIdx}>
               <td>
@@ -213,7 +195,8 @@ const TagManagementModal = ({
                   onBlur={(e) => updateCategoryByIndex(e, i, obj.srcIdx)}
                 />
               </td>
-              {LABEL_VALUES.map(([value]) => <td>{counts[value] || 0}</td>)}
+              {BUILT_IN_MODES.map(([mode]) => <td>{counts[mode] || 0}</td>)}
+              <td>{counts["OTHER"]}</td>
               <td>
                 <Button close disabled={isReadOnly} onClick={(e) => {
                     setConfirmCategory(obj.tag);
@@ -246,15 +229,15 @@ const TagManagementModal = ({
           <Table hover borderless size="sm">
             <thead>
               <tr>
-                <th style={{cursor: "pointer"}} onClick={() => changeOrdering(kOrderBy.name)}>
+                <th style={{cursor: "pointer"}} onClick={() => setOrderBy("name")}>
                   Tag Name <FontAwesomeIcon icon={
-                    orderBy !== kOrderBy.name ? faSort : (orderAscending ? faSortUp : faSortDown)
+                    orderBy !== "name" ? faSort : (orderAscending ? faSortUp : faSortDown)
                   } />
                 </th>
-                {LABEL_VALUES.map(([value, name]) => (
-                  <th style={{cursor: "pointer"}} onClick={() => changeOrdering(kOrderBy[value])}>
-                    # {name} <FontAwesomeIcon icon={
-                      orderBy !== kOrderBy[value] ? faSort : (orderAscending ? faSortUp : faSortDown)
+                {BUILT_IN_MODES.concat([["OTHER", "Other"]]).map(([mode, name]) => (
+                  <th style={{cursor: "pointer"}} onClick={() => setOrderBy(mode)}>
+                    {name} <FontAwesomeIcon icon={
+                      orderBy !== mode ? faSort : (orderAscending ? faSortUp : faSortDown)
                     } />
                   </th>
                 ))}

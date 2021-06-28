@@ -15,7 +15,7 @@ import remove from "lodash/remove";
 import uniq from "lodash/uniq";
 
 // TODO(mihirg): Combine with this same constant in other places
-const LABEL_VALUES = [
+const BUILT_IN_MODES = [
   ["POSITIVE", "Positive"],
   ["NEGATIVE", "Negative"],
   ["HARD_NEGATIVE", "Hard Negative"],
@@ -152,7 +152,7 @@ const ActiveValidationModal = ({
             <b>Positive labels:</b> &nbsp;
             {model.pos_tags.map((t, i) => {
               const { category, value } = t;
-              const isCustom = !LABEL_VALUES.some(([v]) => v === value);
+              const isCustom = !BUILT_IN_MODES.some(([v]) => v === value);
               const isSelected = thisImageLabels.some(l => isEqual(l, t));
               return (
                 <>
@@ -174,7 +174,7 @@ const ActiveValidationModal = ({
             <b>Negative labels:</b> &nbsp;
             {model.neg_tags.map((t, i) => {
               const { category, value } = t;
-              const isCustom = !LABEL_VALUES.some(([v]) => v === value);
+              const isCustom = !BUILT_IN_MODES.some(([v]) => v === value);
               const isSelected = thisImageLabels.some(l => isEqual(l, t));
               const j = i + model.pos_tags.length;
               return (

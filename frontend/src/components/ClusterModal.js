@@ -35,7 +35,7 @@ const imageGridSizes = [
 ];
 
 // TODO(mihirg): Combine with this same constant in other places
-const LABEL_VALUES = [
+const BUILT_IN_MODES = [
   ["POSITIVE", "Positive"],
   ["NEGATIVE", "Negative"],
   ["HARD_NEGATIVE", "Hard Negative"],
@@ -51,8 +51,8 @@ const ClusterModal = ({
   setSelection,
   clusters,
   findSimilar,
-  tags,
-  setCategories,
+  customModesByCategory,
+  categoryDispatch,
   username,
   setSubset,
   labelCategory,
@@ -239,12 +239,12 @@ const ClusterModal = ({
     } else if (mode === "label" && !!(labelCategory) && !isNaN(keyAsNumber)) {
       // Label mode
       let boundValue;
-      if (keyAsNumber >= 1 && keyAsNumber <= LABEL_VALUES.length) {
-        boundValue = LABEL_VALUES[keyAsNumber - 1][0];
+      if (keyAsNumber >= 1 && keyAsNumber <= BUILT_IN_MODES.length) {
+        boundValue = BUILT_IN_MODES[keyAsNumber - 1][0];
         caught = true;
       } else {
-        const customIndex = (keyAsNumber === 0 ? 10 : keyAsNumber) - LABEL_VALUES.length - 1;
-        boundValue = (tags[labelCategory] || [])[customIndex];
+        const customIndex = (keyAsNumber === 0 ? 10 : keyAsNumber) - BUILT_IN_MODES.length - 1;
+        boundValue = (customModesByCategory.get(labelCategory) || [])[customIndex];
       }
       if (boundValue !== undefined) {
         onTagsChanged([...selectedTags, {category: labelCategory, value: boundValue}]);
@@ -331,18 +331,18 @@ const ClusterModal = ({
           </p>
           {mode === "label" && (labelCategory ? <p>
             <b>Label mode:</b> &nbsp;
-            {LABEL_VALUES.map(([value], i) =>
+            {BUILT_IN_MODES.map(([value], i) =>
               <>
                 <kbd>{i + 1}</kbd> <span className={`rbt-token ${value}`}>{labelCategory}</span>{" "}
               </>)}
-            {(tags[labelCategory] || []).map((name, i) =>
+            {(customModesByCategory.get(labelCategory) || []).map((name, i) =>
               <>
-                <kbd>{(LABEL_VALUES.length + i + 1) % 10}</kbd> <span className="rbt-token CUSTOM">{labelCategory} ({name})</span>{" "}
+                <kbd>{(BUILT_IN_MODES.length + i + 1) % 10}</kbd> <span className="rbt-token CUSTOM">{labelCategory} ({name})</span>{" "}
               </>)}
             <NewModeInput
               category={labelCategory}
-              categories={tags}
-              setCategories={setCategories}
+              customModesByCategory={customModesByCategory}
+              categoryDispatch={categoryDispatch}
             />
           </p> : <p><b>Label mode:</b> No category specified</p>)}
           <Form>
@@ -353,8 +353,8 @@ const ClusterModal = ({
                 id="image-tag-bar"
                 placeholder="Image tags"
                 disabled={isReadOnly || (isClusterView && selectedCluster.length === Object.values(excludedImageIndexes).filter(Boolean).length)}
-                categories={tags}
-                setCategories={setCategories}
+                customModesByCategory={customModesByCategory}
+                categoryDispatch={categoryDispatch}
                 selected={selectedTags}
                 setSelected={onTagsChanged}
                 innerRef={typeaheadRef}

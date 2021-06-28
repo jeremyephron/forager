@@ -45,7 +45,7 @@ const TrainPanel = ({
   isVisible,
   username,
   disabled,
-  categories,
+  customModesByCategory,
 }) => {
   const [dnnAdvancedIsOpen, setDnnAdvancedIsOpen] = useState(false);
 
@@ -453,7 +453,7 @@ const TrainPanel = ({
             className="mr-2"
             placeholder="Positive example tags"
             disabled={requestDnnTraining}
-            categories={categories}
+            customModesByCategory={customModesByCategory}
             selected={dnnPosTags}
             setSelected={setDnnPosTags}
           />
@@ -462,7 +462,7 @@ const TrainPanel = ({
             className="mr-2"
             placeholder="Negative example tags"
             disabled={requestDnnTraining}
-            categories={categories}
+            customModesByCategory={customModesByCategory}
             selected={dnnNegTags}
             setSelected={setDnnNegTags}
           />
@@ -500,7 +500,7 @@ const TrainPanel = ({
             id="dnn-augment-negs-include-bar"
             className="ml-2"
             placeholder="Tags to include in auto-negative pool"
-            categories={categories}
+            customModesByCategory={customModesByCategory}
             selected={dnnAugmentIncludeTags}
             setSelected={setDnnAugmentIncludeTags}
           />
@@ -508,7 +508,7 @@ const TrainPanel = ({
             id="dnn-augment-negs-exclude-bar"
             className="ml-2"
             placeholder="Tags to exclude from auto-negative pool"
-            categories={categories}
+            customModesByCategory={customModesByCategory}
             selected={dnnAugmentExcludeTags}
             setSelected={setDnnAugmentExcludeTags}
           />
@@ -532,7 +532,7 @@ const TrainPanel = ({
             className="mr-2"
             placeholder="Validation positive example tags"
             disabled={requestDnnTraining}
-            categories={categories}
+            customModesByCategory={customModesByCategory}
             selected={dnnValPosTags}
             setSelected={setDnnValPosTags}
           />
@@ -541,7 +541,7 @@ const TrainPanel = ({
             className="mr-2"
             placeholder="Validation negative example tags"
             disabled={requestDnnTraining}
-            categories={categories}
+            customModesByCategory={customModesByCategory}
             selected={dnnValNegTags}
             setSelected={setDnnValNegTags}
           />

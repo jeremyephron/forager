@@ -7,23 +7,22 @@ import uniq from "lodash/uniq";
 
 const MAX_CUSTOM_CATEGORIES = 6;
 
-const NewModeInput = ({category, categories, setCategories}) => {
+const NewModeInput = ({category, customModesByCategory, categoryDispatch}) => {
   const [value, setValue] = useState("");
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
-      const newValue = value.trim().toLowerCase();
-      if (newValue !== "") {
-        let newCategories = {...categories};
-        newCategories[category] = uniq([...newCategories[category], newValue]);
-        setCategories(newCategories);
-      }
+      categoryDispatch({
+        type: "ADD_MODE",
+        category,
+        mode: value,
+      });
       setValue("");
     }
     e.stopPropagation();
   };
 
-  return categories[category].length < MAX_CUSTOM_CATEGORIES ? (
+  return customModesByCategory.get(category).length < MAX_CUSTOM_CATEGORIES ? (
     <Input
       bsSize="sm"
       placeholder="New mode"

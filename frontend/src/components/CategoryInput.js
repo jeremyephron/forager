@@ -15,7 +15,7 @@ import union from "lodash/union";
 import NewModeInput from "./NewModeInput";
 
 // TODO(mihirg): Combine with this same constant in other places
-const LABEL_VALUES = [
+const BUILT_IN_MODES = [
   ["POSITIVE", "Positive"],
   ["NEGATIVE", "Negative"],
   ["HARD_NEGATIVE", "Hard Negative"],
@@ -75,8 +75,8 @@ const MyToken = forwardRef((props, ref) => {
     index,
     customValues,
     category,
-    categories,
-    setCategories,
+    customModesByCategory,
+    categoryDispatch,
     allowNewModes,
     deduplicateByCategory,
     populateAll,
@@ -98,7 +98,7 @@ const MyToken = forwardRef((props, ref) => {
         fade={false}
       >
         <PopoverBody onClick={e => e.stopPropagation()}>
-          {LABEL_VALUES.map(([value, name]) =>
+          {BUILT_IN_MODES.map(([value, name]) =>
             <div>
               <a
                 href="#"
@@ -121,8 +121,8 @@ const MyToken = forwardRef((props, ref) => {
           {allowNewModes && <div>
             <NewModeInput
               category={category}
-              categories={categories}
-              setCategories={setCategories}
+              customModesByCategory={customModesByCategory}
+              categoryDispatch={categoryDispatch}
             />
           </div>}
           {!deduplicateByCategory && <div>
@@ -140,33 +140,45 @@ const MyToken = forwardRef((props, ref) => {
   );
 });
 
-const CategoryInput = ({ id, categories, className, selected, setSelected, setCategories, innerRef, deduplicateByCategory, allowNewModes, ...props }) => {
-  let options;
-
-  const sortedCategories = useMemo(() => sortBy(Object.entries(categories), ([c]) => c.toLowerCase()), [categories]);
-
+const CategoryInput = ({
+  id,
+  customModesByCategory,
+  categoryDispatch,
+  className,
+  selected,
+  setSelected,
+  innerRef,
+  deduplicateByCategory,
+  allowNewModes,
+  ...props
+}) => {
+  let options = [];
   if (deduplicateByCategory) {
-    options = sortedCategories.flatMap(([category]) =>
-      selected.some(s => s.category === category) ?
-      [] : [{category, value: LABEL_VALUES[0][0]}]);
-  } else {
-    options = sortedCategories.flatMap(([category, custom_values]) => {
-      for (const value of [...LABEL_VALUES, ...custom_values]) {
-        const proposal = {category, value: Array.isArray(value) ? value[0] : value};
-        if (!selected.some(s => isEqual(s, proposal))) return [proposal];
+    for (const category of customModesByCategory.keys()) {
+      if (!selected.some(s => s.category === category)) {
+        options.push({category, value: BUILT_IN_MODES[0][0]});
       }
-      return [];
-    });
+    }
+  } else {
+    for (const [category, custom_values] of customModesByCategory) {
+      for (const value of [...BUILT_IN_MODES, ...custom_values]) {
+        const proposal = {category, value: Array.isArray(value) ? value[0] : value};
+        if (!selected.some(s => isEqual(s, proposal))) {
+          options.push(proposal);
+          break;
+        }
+      }
+    }
   }
 
   const onChange = (selected) => {
     let newSelected = selected.map(s => {
       if (s.customOption) {  // added
-        let newCategories = {...categories};
-        newCategories[s.category] = [];  // no custom values to start
-        setCategories(newCategories);
-
-        return {category: s.category, value: LABEL_VALUES[0][0]};
+        categoryDispatch({
+          type: "ADD_CATEGORY",
+          category: s.category,
+        });
+        return {category: s.category, value: BUILT_IN_MODES[0][0]};
       }
       return s;
     });
@@ -185,15 +197,15 @@ const CategoryInput = ({ id, categories, className, selected, setSelected, setCa
   const populateAll = (index, e) => {
     const category = selected[index].category;
     const before = selected.slice(0, index);
-    const standard = LABEL_VALUES.map(([value]) => {return {category, value};});
-    const custom = (categories[category]).map(value => {return {category, value};});
+    const standard = BUILT_IN_MODES.map(([value]) => {return {category, value};});
+    const custom = customModesByCategory.get(category).map(value => {return {category, value};});
     const after = selected.slice(index + 1);
     onChange([...before, ...standard, ...custom, ...after]);
     e.preventDefault();
   };
 
   const renderToken = (option, { onRemove, disabled, key }, index) => {
-    const isCustom = !LABEL_VALUES.some(([value]) => value === option.value);
+    const isCustom = !BUILT_IN_MODES.some(([value]) => value === option.value);
     return (
       <MyToken
         key={key}
@@ -205,10 +217,10 @@ const CategoryInput = ({ id, categories, className, selected, setSelected, setCa
         index={index}
         onValueClick={onValueClick}
         populateAll={populateAll}
-        customValues={categories[option.category] || []}
+        customValues={customModesByCategory.get(option.category) || []}
         category={option.category}
-        categories={categories}
-        setCategories={setCategories}
+        customModesByCategory={customModesByCategory}
+        categoryDispatch={categoryDispatch}
         allowNewModes={allowNewModes}
         deduplicateByCategory={deduplicateByCategory}>
         {option.category}{isCustom ? ` (${option.value})` : ""}
