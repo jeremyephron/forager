@@ -43,7 +43,7 @@ const LabelPanel = ({
         multiple
         id="label-mode-bar"
         className="typeahead-bar mr-2"
-        options={customModesByCategory.keys()}
+        options={Array.from(customModesByCategory.keys())}
         placeholder="Category to label"
         selected={category ? [category] : []}
         onChange={setSelected}
