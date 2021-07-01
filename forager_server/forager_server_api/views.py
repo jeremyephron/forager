@@ -402,16 +402,15 @@ def tag_sets_to_query(*tagsets):
     merged = set().union(*tagsets)
     if not merged:
         return Q()
-    return functools.reduce(
-        operator.or_,
-        [
-            Q(
-                annotation__category__name=t.category,
-                annotation__mode__name=t.value,
-            )
-            for t in merged
-        ],
-    )
+
+    return Q(annotation__in=Annotation.objects.filter(
+        functools.reduce(
+            operator.or_,
+            [Q(category__name=t.category,
+               mode__name=t.value)
+             for t in merged]
+        )
+    ))
 
 
 def serialize_tag_set_for_client_v2(ts):
