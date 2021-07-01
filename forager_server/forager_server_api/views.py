@@ -464,7 +464,7 @@ def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
         pks = [i for i in request.GET.get("subset", "").split(",") if i]
         split = request.GET.get("split", "train")
         offset_to_return = int(request.GET.get("offset", 0))
-        num_to_return = int(request.GET.get("num", None))
+        num_to_return = int(request.GET.get("num", -1))
 
     num_to_return = None if num_to_return == -1 else num_to_return
 
