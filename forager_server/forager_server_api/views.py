@@ -406,8 +406,8 @@ def tag_sets_to_query(*tagsets):
         operator.or_,
         [
             Q(
-                annotation__category__name=t.category,
-                annotation__mode__name=t.value,
+                category__name=t.category,
+                mode__name=t.value,
             )
             for t in merged
         ],
@@ -492,12 +492,13 @@ def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
         if dataset_items is None:
             dataset_items = DatasetItem.objects.filter(pk__in=pks)
 
+        anns = Annotation.objects.filter(dataset_item__in=dataset_items)
         if include_tags:
-            dataset_items = dataset_items.filter(tag_sets_to_query(include_tags))
+            anns = anns.filter(tag_sets_to_query(include_tags))
         if exclude_tags:
-            dataset_items = dataset_items.exclude(tag_sets_to_query(exclude_tags))
+            anns = anns.exclude(tag_sets_to_query(exclude_tags))
 
-        result = dataset_items.values_list("pk", flat=True)
+        result = anns.values_list("dataset_item__pk", flat=True)
 
     db_tag_end = time.time()
     result = list(result[offset_to_return:num_to_return])
