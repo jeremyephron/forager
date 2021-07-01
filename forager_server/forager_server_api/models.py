@@ -68,6 +68,7 @@ class Annotation(models.Model):
     category = models.ForeignKey(Category, on_delete=models.CASCADE)
     mode = models.ForeignKey(Mode, on_delete=models.CASCADE)
     created = models.DateTimeField(auto_now_add=True)
+    is_box = models.BooleanField(default=False)
     bbox_x1 = models.FloatField(null=True)
     bbox_y1 = models.FloatField(null=True)
     bbox_x2 = models.FloatField(null=True)

@@ -67,10 +67,20 @@ html, body, #root, .main {
 .image-grid a {
   display: inline-block;
   text-align: center;
+  vertical-align: middle;
 }
 
 .image-grid a, a.selectable-image {
   img {
+    border-radius: 3px;
+    border: 5px solid white;
+
+    &.selected {
+      border-color: mix($warning, $white, 50%);
+    }
+  }
+
+  .image {
     border-radius: 3px;
     border: 5px solid white;
 
@@ -179,7 +189,7 @@ html, body, #root, .main {
 
 .image-container {
   position: relative;
-  width: fit-content;
+  width: 100%;
   margin: auto;
 }
 

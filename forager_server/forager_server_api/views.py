@@ -362,6 +362,7 @@ def stop_model_inference(request, job_id):
 
 
 Tag = namedtuple("Tag", "category value")  # type: NamedTuple[str, str]
+Box = namedtuple("Box", "category value x1 y1 x2 y2")  # type: NamedTuple[str, str, float, float, float, float]
 PkType = int
 
 
@@ -417,6 +418,12 @@ def serialize_tag_set_for_client_v2(ts):
     return [{"category": t.category, "value": t.value} for t in sorted(list(ts))]
 
 
+def serialize_boxes_for_client_v2(bs):
+    return [{"category": b.category, "value": b.value,
+             "x1": b.x1, "y1": b.y1, "x2": b.x2, "y2": b.y2}
+            for b in sorted(list(bs))]
+
+
 def get_tags_from_annotations_v2(annotations):
     tags_by_pk = defaultdict(list)
     ann_dicts = annotations.values("dataset_item__pk", "category__name", "mode__name")
@@ -426,6 +433,20 @@ def get_tags_from_annotations_v2(annotations):
         mode = ann["mode__name"]
         tags_by_pk[pk].append(Tag(category, mode))
     return tags_by_pk
+
+
+def get_boxes_from_annotations_v2(annotations):
+    boxes_by_pk = defaultdict(list)
+    annotations = annotations.filter(is_box=True)
+    ann_dicts = annotations.values("dataset_item__pk", "category__name", "mode__name",
+                                   "bbox_x1", "bbox_y1", "bbox_x2", "bbox_y2")
+    for ann in ann_dicts:
+        pk = ann["dataset_item__pk"]
+        category = ann["category__name"]
+        mode = ann["mode__name"]
+        box = (ann["bbox_x1"], ann["bbox_y1"], ann["bbox_x2"], ann["bbox_y2"])
+        boxes_by_pk[pk].append(Box(category, mode, *box))
+    return boxes_by_pk
 
 
 def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
@@ -831,12 +852,12 @@ def get_val_examples_v2(dataset, model_id):
     )
 
     # Get positives and negatives matching these categories
+    categories = Category.objects.filter(
+        tag_sets_to_query(pos_tags, neg_tags, augment_negs_include)
+    )
     annotations = Annotation.objects.filter(
         dataset_item__in=eligible_dataset_items,
-        label_category__in=tag_sets_to_category_list_v2(
-            pos_tags, neg_tags, augment_negs_include
-        ),
-        label_type="klabel_frame",
+        category__in=categories,
     )
     tags_by_pk = get_tags_from_annotations_v2(annotations)
 
@@ -917,7 +938,8 @@ def query_active_validation_v2(request, dataset_name):
     if current_f1 is None:
         current_f1 = 0.5
 
-    pos_dataset_item_pks, neg_dataset_item_pks = get_val_examples_v2(dataset, model_id)
+    pos_dataset_item_pks, neg_dataset_item_pks = \
+        get_val_examples_v2(dataset, model_id)
 
     # Construct paths, identifiers, and labels
     dataset_items_by_pk = DatasetItem.objects.in_bulk(
@@ -976,42 +998,44 @@ def query_active_validation_v2(request, dataset_name):
 def add_val_annotations_v2(request):
     payload = json.loads(request.body)
     annotations = payload["annotations"]
-    user = payload["user"]
+    user_email = payload["user"]
     model = payload["model"]
 
     anns = []
+    cat_modes = defaultdict(int)
+    dataset = None
     for ann_payload in annotations:
         image_pk = ann_payload["identifier"]
         is_other_negative = ann_payload.get("is_other_negative", False)
-        value_str = "NEGATIVE" if is_other_negative else ann_payload["value"]
-        category = model if is_other_negative else ann_payload["category"]
-        try:
-            value, custom_value = int(LabelValue[value_str]), None
-        except KeyError:
-            value, custom_value = LabelValue.CUSTOM, value_str
+        mode_str = "NEGATIVE" if is_other_negative else ann_payload["mode"]
+        category_name = 'active:' + model if is_other_negative else ann_payload["category"]
 
-        annotation_data = {
-            "type": 0,  # full-frame
-            "value": value,
-            "mode": "val",
-            "version": ANN_VERSION,
-        }
-        if custom_value:
-            annotation_data["custom_value"] = custom_value
-        annotation = json.dumps(annotation_data)
+        user, _ = User.objects.get_or_create(email=user_email)
+        category, _ = Category.objects.get_or_create(name=category_name)
+        mode, _ = Mode.objects.get_or_create(name=mode_str)
 
         di = DatasetItem.objects.get(pk=image_pk)
-        assert not di.google and di.is_val
+        dataset = di.dataset
+        assert di.is_val
         ann = Annotation(
             dataset_item=di,
-            label_function=user,
-            label_category=category,
-            label_type=VAL_NEGATIVE_TYPE if is_other_negative else "klabel_frame",
-            label_data=annotation,
+            user=user,
+            category=category,
+            mode=mode,
+            misc_data={"created_by": "active_val"}
         )
+        cat_modes[(category, mode)] += 1
         anns.append(ann)
 
     Annotation.objects.bulk_create(anns)
+    for (cat, mode), c in cat_modes.items():
+        category_count, _ = CategoryCount.objects.get_or_create(
+            dataset=dataset,
+            category=cat,
+            mode=mode
+        )
+        category_count.count += c
+        category_count.save()
     return JsonResponse({"created": len(anns)})
 
 
@@ -1165,9 +1189,12 @@ def get_annotations_v2(request):
         dataset_item__in=DatasetItem.objects.filter(pk__in=image_pks),
     )
     tags_by_pk = get_tags_from_annotations_v2(annotations)
-    annotations_by_pk = {
-        pk: serialize_tag_set_for_client_v2(tags) for pk, tags in tags_by_pk.items()
-    }
+    boxes_by_pk = get_boxes_from_annotations_v2(annotations)
+    annotations_by_pk = defaultdict(lambda: {'tags': [], 'boxes': []})
+    for pk, tags in tags_by_pk.items():
+        annotations_by_pk[pk]['tags'] = serialize_tag_set_for_client_v2(tags)
+    for pk, boxes in boxes_by_pk.items():
+        annotations_by_pk[pk]['boxes'] = serialize_boxes_for_client_v2(boxes)
     return JsonResponse(annotations_by_pk)
 
 

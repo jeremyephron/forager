@@ -22,6 +22,7 @@ import uniqWith from "lodash/uniqWith";
 import ImageGrid from "./ImageGrid";
 import NewModeInput from "./NewModeInput";
 import CategoryInput from "./CategoryInput";
+import AnnotatedImage from "./AnnotatedImage";
 
 const endpoints = fromPairs(toPairs({
   getAnnotations: 'get_annotations_v2',
@@ -139,10 +140,13 @@ const ClusterModal = ({
 
   const [isLoading, setIsLoading] = useState(false);
 
-  const getImageTags = im => (annotations[im.id] || []);
+  const getImageTags = im => ((annotations[im.id] && annotations[im.id]['tags']) || []);
+  const getImageBoxes = im => ((annotations[im.id] && annotations[im.id]['boxes']) || []);
   let selectedTags = [];
+  let selectedBoxes = [];
   if (selectedImage !== undefined) {
     selectedTags = getImageTags(selectedImage);
+    selectedBoxes = getImageBoxes(selectedImage);
   } else if (selectedCluster !== undefined) {
     selectedTags = intersectionWith(...(selectedCluster.flatMap((im, i) =>
       excludedImageIndexes[i] ? [] : [getImageTags(im)])), isEqual);
@@ -382,7 +386,9 @@ const ClusterModal = ({
                   const selected = !!!(excludedImageIndexes[selection.image]);
                   return (
                     <a href="#" onClick={(e) => toggleImageSelection(selection.image, e)} className="selectable-image">
-                      <img className="w-100" src={src} className={selected ? "selected" : ""} />
+                      <div className={"image " + (selected ? "selected" : "")}>
+                        <AnnotatedImage url={src} boxes={selectedBoxes}/>
+                      </div>
                     </a>);
                 } else {
                   return <img className="main w-100" src={src} />;
@@ -401,6 +407,7 @@ const ClusterModal = ({
               </div>
               <ImageGrid
                 images={selectedCluster}
+                annotations={annotations}
                 onClick={handleGalleryClick}
                 selectedPred={i => !!!(excludedImageIndexes[i])}
                 minRowHeight={imageGridSize.size}
