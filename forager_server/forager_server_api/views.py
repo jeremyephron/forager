@@ -466,16 +466,19 @@ def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
         offset_to_return = int(request.GET.get("offset", 0))
         num_to_return = int(request.GET.get("num", -1))
 
-    num_to_return = None if num_to_return == -1 else num_to_return
+    end_to_return = None if num_to_return == -1 else offset_to_return + num_to_return
 
     dataset_items = None
     is_val = split == "val"
 
     db_start = time.time()
+    # Get pks for dataset items of interest
     if pks and exclude_pks:
+        # Get specific pks - excluded pks if requested
         exclude_pks = set(exclude_pks)
         pks = [pk for pk in pks if pk not in exclude_pks]
     elif not pks:
+        # Otherwise get all dataset items - exclude pks
         dataset_items = DatasetItem.objects.filter(dataset=dataset, is_val=is_val)
         if exclude_pks:
             dataset_items = dataset_items.exclude(pk__in=exclude_pks)
@@ -486,8 +489,10 @@ def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
     result = None
     db_tag_start = time.time()
     if not include_tags and not exclude_tags:
+        # If no tags specified, just return retrieved pks
         result = pks
     else:
+        # Otherwise, filter using include and exclude tags
         if dataset_items is None:
             dataset_items = DatasetItem.objects.filter(pk__in=pks)
 
@@ -499,7 +504,7 @@ def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
         result = dataset_items.values_list("pk", flat=True)
 
     db_tag_end = time.time()
-    result = list(result[offset_to_return:num_to_return])
+    result = list(result[offset_to_return:end_to_return])
     filt_end = time.time()
     print(f'filtered_images_v2: tot: {filt_end-filt_start}, '
           f'db ({len(result)} items): {db_end-db_start}, db tag: {db_tag_end-db_tag_start}')
