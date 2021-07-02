@@ -26,8 +26,15 @@ import requests
 from expiringdict import ExpiringDict
 
 from .models import (
-    Dataset, DatasetItem, Category, Mode, User, Annotation, DNNModel,
-    CategoryCount)
+    Dataset,
+    DatasetItem,
+    Category,
+    Mode,
+    User,
+    Annotation,
+    DNNModel,
+    CategoryCount,
+)
 
 
 BUILTIN_MODES = ["POSITIVE", "NEGATIVE", "HARD_NEGATIVE", "UNSURE"]
@@ -115,7 +122,8 @@ def create_model(request, dataset_name, dataset=None):
     dataset = get_object_or_404(Dataset, name=dataset_name)
     eligible_images = DatasetItem.objects.filter(dataset=dataset, is_val=False)
     categories = Category.objects.filter(
-        tag_sets_to_query(pos_tags, neg_tags, val_pos_tags, val_neg_tags))
+        tag_sets_to_query(pos_tags, neg_tags, val_pos_tags, val_neg_tags)
+    )
     annotations = Annotation.objects.filter(
         dataset_item__in=eligible_images,
         category__in=categories,
@@ -143,9 +151,14 @@ def create_model(request, dataset_name, dataset=None):
     if augment_negs and num_extra_negs > 0:
         # Uses "include" and "exclude" category sets from request
         all_eligible_pks = filtered_images_v2(
-            request, dataset, exclude_pks=(
-                pos_dataset_item_pks + neg_dataset_item_pks +
-                val_pos_dataset_item_pks + val_neg_dataset_item_pks)
+            request,
+            dataset,
+            exclude_pks=(
+                pos_dataset_item_pks
+                + neg_dataset_item_pks
+                + val_pos_dataset_item_pks
+                + val_neg_dataset_item_pks
+            ),
         )
         sampled_pks = random.sample(
             all_eligible_pks, min(len(all_eligible_pks), num_extra_negs)
@@ -362,7 +375,9 @@ def stop_model_inference(request, job_id):
 
 
 Tag = namedtuple("Tag", "category value")  # type: NamedTuple[str, str]
-Box = namedtuple("Box", "category value x1 y1 x2 y2")  # type: NamedTuple[str, str, float, float, float, float]
+Box = namedtuple(
+    "Box", "category value x1 y1 x2 y2"
+)  # type: NamedTuple[str, str, float, float, float, float]
 PkType = int
 
 
@@ -403,14 +418,14 @@ def tag_sets_to_query(*tagsets):
     if not merged:
         return Q()
 
-    return Q(annotation__in=Annotation.objects.filter(
-        functools.reduce(
-            operator.or_,
-            [Q(category__name=t.category,
-               mode__name=t.value)
-             for t in merged]
+    return Q(
+        annotation__in=Annotation.objects.filter(
+            functools.reduce(
+                operator.or_,
+                [Q(category__name=t.category, mode__name=t.value) for t in merged],
+            )
         )
-    ))
+    )
 
 
 def serialize_tag_set_for_client_v2(ts):
@@ -418,9 +433,17 @@ def serialize_tag_set_for_client_v2(ts):
 
 
 def serialize_boxes_for_client_v2(bs):
-    return [{"category": b.category, "value": b.value,
-             "x1": b.x1, "y1": b.y1, "x2": b.x2, "y2": b.y2}
-            for b in sorted(list(bs))]
+    return [
+        {
+            "category": b.category,
+            "value": b.value,
+            "x1": b.x1,
+            "y1": b.y1,
+            "x2": b.x2,
+            "y2": b.y2,
+        }
+        for b in sorted(list(bs))
+    ]
 
 
 def get_tags_from_annotations_v2(annotations):
@@ -437,8 +460,15 @@ def get_tags_from_annotations_v2(annotations):
 def get_boxes_from_annotations_v2(annotations):
     boxes_by_pk = defaultdict(list)
     annotations = annotations.filter(is_box=True)
-    ann_dicts = annotations.values("dataset_item__pk", "category__name", "mode__name",
-                                   "bbox_x1", "bbox_y1", "bbox_x2", "bbox_y2")
+    ann_dicts = annotations.values(
+        "dataset_item__pk",
+        "category__name",
+        "mode__name",
+        "bbox_x1",
+        "bbox_y1",
+        "bbox_x2",
+        "bbox_y2",
+    )
     for ann in ann_dicts:
         pk = ann["dataset_item__pk"]
         category = ann["category__name"]
@@ -482,8 +512,7 @@ def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
         dataset_items = DatasetItem.objects.filter(dataset=dataset, is_val=is_val)
         if exclude_pks:
             dataset_items = dataset_items.exclude(pk__in=exclude_pks)
-        pks = dataset_items.values_list(
-            "pk", flat=True)
+        pks = dataset_items.values_list("pk", flat=True)
     db_end = time.time()
 
     result = None
@@ -506,8 +535,10 @@ def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
     db_tag_end = time.time()
     result = list(result[offset_to_return:end_to_return])
     filt_end = time.time()
-    print(f'filtered_images_v2: tot: {filt_end-filt_start}, '
-          f'db ({len(result)} items): {db_end-db_start}, db tag: {db_tag_end-db_tag_start}')
+    print(
+        f"filtered_images_v2: tot: {filt_end-filt_start}, "
+        f"db ({len(result)} items): {db_end-db_start}, db tag: {db_tag_end-db_tag_start}"
+    )
     return result
 
 
@@ -823,8 +854,10 @@ def query_images_v2(request, dataset_name):
     resp = JsonResponse(create_result_set_v2(results, "query"))
 
     query_end = time.time()
-    print(f'query_images_v2: tot: {query_end-query_start}, '
-          f'filter: {filter_end-filter_start}')
+    print(
+        f"query_images_v2: tot: {query_end-query_start}, "
+        f"filter: {filter_end-filter_start}"
+    )
     return resp
 
 
@@ -942,8 +975,7 @@ def query_active_validation_v2(request, dataset_name):
     if current_f1 is None:
         current_f1 = 0.5
 
-    pos_dataset_item_pks, neg_dataset_item_pks = \
-        get_val_examples_v2(dataset, model_id)
+    pos_dataset_item_pks, neg_dataset_item_pks = get_val_examples_v2(dataset, model_id)
 
     # Construct paths, identifiers, and labels
     dataset_items_by_pk = DatasetItem.objects.in_bulk(
@@ -1012,7 +1044,9 @@ def add_val_annotations_v2(request):
         image_pk = ann_payload["identifier"]
         is_other_negative = ann_payload.get("is_other_negative", False)
         mode_str = "NEGATIVE" if is_other_negative else ann_payload["mode"]
-        category_name = 'active:' + model if is_other_negative else ann_payload["category"]
+        category_name = (
+            "active:" + model if is_other_negative else ann_payload["category"]
+        )
 
         user, _ = User.objects.get_or_create(email=user_email)
         category, _ = Category.objects.get_or_create(name=category_name)
@@ -1026,7 +1060,7 @@ def add_val_annotations_v2(request):
             user=user,
             category=category,
             mode=mode,
-            misc_data={"created_by": "active_val"}
+            misc_data={"created_by": "active_val"},
         )
         cat_modes[(category, mode)] += 1
         anns.append(ann)
@@ -1034,9 +1068,7 @@ def add_val_annotations_v2(request):
     Annotation.objects.bulk_create(anns)
     for (cat, mode), c in cat_modes.items():
         category_count, _ = CategoryCount.objects.get_or_create(
-            dataset=dataset,
-            category=cat,
-            mode=mode
+            dataset=dataset, category=cat, mode=mode
         )
         category_count.count += c
         category_count.save()
@@ -1194,11 +1226,11 @@ def get_annotations_v2(request):
     )
     tags_by_pk = get_tags_from_annotations_v2(annotations)
     boxes_by_pk = get_boxes_from_annotations_v2(annotations)
-    annotations_by_pk = defaultdict(lambda: {'tags': [], 'boxes': []})
+    annotations_by_pk = defaultdict(lambda: {"tags": [], "boxes": []})
     for pk, tags in tags_by_pk.items():
-        annotations_by_pk[pk]['tags'] = serialize_tag_set_for_client_v2(tags)
+        annotations_by_pk[pk]["tags"] = serialize_tag_set_for_client_v2(tags)
     for pk, boxes in boxes_by_pk.items():
-        annotations_by_pk[pk]['boxes'] = serialize_boxes_for_client_v2(boxes)
+        annotations_by_pk[pk]["boxes"] = serialize_boxes_for_client_v2(boxes)
     return JsonResponse(annotations_by_pk)
 
 
@@ -1279,13 +1311,10 @@ def bulk_add_annotations_v2(payload, images):
         if len(images) > 0:
             dataset = images[0].dataset
             category_count, _ = CategoryCount.objects.get_or_create(
-                dataset=dataset,
-                category=category,
-                mode=mode
+                dataset=dataset, category=category, mode=mode
             )
             category_count.count += len(images)
             category_count.save()
-
 
     return len(images)
 
