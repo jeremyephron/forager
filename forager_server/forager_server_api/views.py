@@ -716,14 +716,17 @@ def train_svm_v2(request, dataset_name):
         dataset=dataset,
         is_val=False,
     )
-    neg_dataset_items = DatasetItem.objects.filter(
-        tag_sets_to_query(neg_tags),
-        dataset=dataset,
-        is_val=False,
-    ).difference(pos_dataset_items)
-
     pos_dataset_item_pks = list(pos_dataset_items.values_list("pk", flat=True))
-    neg_dataset_item_pks = list(neg_dataset_items.values_list("pk", flat=True))
+
+    if neg_tags:
+        neg_dataset_items = DatasetItem.objects.filter(
+            tag_sets_to_query(neg_tags),
+            dataset=dataset,
+            is_val=False,
+        ).difference(pos_dataset_items)
+        neg_dataset_item_pks = list(neg_dataset_items.values_list("pk", flat=True))
+    else:
+        neg_dataset_item_pks = []
 
     # Augment with randomly sampled negatives if requested
     num_extra_negs = settings.SVM_NUM_NEGS_MULTIPLIER * len(pos_dataset_item_pks) - len(
