@@ -1,5 +1,9 @@
 import asyncio
 from collections import defaultdict
+import hashlib
+import os
+from pathlib import Path
+import shutil
 import time
 import uuid
 
@@ -14,6 +18,8 @@ from typing import (
     Optional,
     MutableMapping,
 )
+
+import requests
 
 
 KT = TypeVar("KT")
@@ -100,3 +106,23 @@ class CleanupDict(MutableMapping[KT, VT]):
         await asyncio.gather(*map(self.cleanup_key, keys_to_delete))
 
         self.schedule_func(self.sleep_and_cleanup())
+
+
+def sha_encode(x: str):
+    hash_object = hashlib.sha256(x.encode("utf-8"))
+    hex_dig = hash_object.hexdigest()
+    return str(hex_dig)
+
+
+def make_identifier(path):
+    return os.path.splitext(os.path.basename(path))[0]
+
+
+def load_remote_file(url):
+    filename = os.path.basename(url)
+    path = Path(filename)
+    if not path.exists():
+        print(f"Downloading {filename}...")
+        with requests.get(url, stream=True) as r, path.open("wb") as f:
+            shutil.copyfileobj(r.raw, f)
+    return filename
