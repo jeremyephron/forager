@@ -1,8 +1,0 @@
-backoff
-click
-faiss-gpu
-flask
-numpy
-PyYAML
-requests
-scikit-learn

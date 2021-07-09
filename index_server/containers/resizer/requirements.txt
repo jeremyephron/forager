@@ -1,6 +1,0 @@
-aiohttp[speedups]
-gcloud-aio-storage
-Pillow
-sanic
-uvicorn
-sanic_compress
