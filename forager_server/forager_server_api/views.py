@@ -26,32 +26,20 @@ import requests
 from expiringdict import ExpiringDict
 
 from .models import (
-    Dataset, DatasetItem, Category, Mode, User, Annotation, DNNModel,
-    CategoryCount)
+    Dataset,
+    DatasetItem,
+    Category,
+    Mode,
+    User,
+    Annotation,
+    DNNModel,
+    CategoryCount,
+)
 
 
 BUILTIN_MODES = ["POSITIVE", "NEGATIVE", "HARD_NEGATIVE", "UNSURE"]
 
-logger = logging.getLogger("django_server")
-logger.setLevel(logging.DEBUG)
-
-# Create a file handler for the log
-log_fh = logging.FileHandler("django_server.log")
-log_fh.setLevel(logging.DEBUG)
-
-# Create a console handler to print errors to console
-log_ch = logging.StreamHandler()
-log_ch.setLevel(logging.DEBUG)
-
-# create formatter and add it to the handlers
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-log_fh.setFormatter(formatter)
-log_ch.setFormatter(formatter)
-
-# Attach handlers
-logger.addHandler(log_fh)
-logger.addHandler(log_ch)
-
+logger = logging.getLogger(__name__)
 
 @api_view(["POST"])
 @csrf_exempt
@@ -115,7 +103,8 @@ def create_model(request, dataset_name, dataset=None):
     dataset = get_object_or_404(Dataset, name=dataset_name)
     eligible_images = DatasetItem.objects.filter(dataset=dataset, is_val=False)
     categories = Category.objects.filter(
-        tag_sets_to_query(pos_tags, neg_tags, val_pos_tags, val_neg_tags))
+        tag_sets_to_query(pos_tags, neg_tags, val_pos_tags, val_neg_tags)
+    )
     annotations = Annotation.objects.filter(
         dataset_item__in=eligible_images,
         category__in=categories,
@@ -143,9 +132,14 @@ def create_model(request, dataset_name, dataset=None):
     if augment_negs and num_extra_negs > 0:
         # Uses "include" and "exclude" category sets from request
         all_eligible_pks = filtered_images_v2(
-            request, dataset, exclude_pks=(
-                pos_dataset_item_pks + neg_dataset_item_pks +
-                val_pos_dataset_item_pks + val_neg_dataset_item_pks)
+            request,
+            dataset,
+            exclude_pks=(
+                pos_dataset_item_pks
+                + neg_dataset_item_pks
+                + val_pos_dataset_item_pks
+                + val_neg_dataset_item_pks
+            ),
         )
         sampled_pks = random.sample(
             all_eligible_pks, min(len(all_eligible_pks), num_extra_negs)
@@ -362,6 +356,9 @@ def stop_model_inference(request, job_id):
 
 
 Tag = namedtuple("Tag", "category value")  # type: NamedTuple[str, str]
+Box = namedtuple(
+    "Box", "category value x1 y1 x2 y2"
+)  # type: NamedTuple[str, str, float, float, float, float]
 PkType = int
 
 
@@ -401,15 +398,14 @@ def tag_sets_to_query(*tagsets):
     merged = set().union(*tagsets)
     if not merged:
         return Q()
-    return functools.reduce(
-        operator.or_,
-        [
-            Q(
-                annotation__category__name=t.category,
-                annotation__mode__name=t.value,
+
+    return Q(
+        annotation__in=Annotation.objects.filter(
+            functools.reduce(
+                operator.or_,
+                [Q(category__name=t.category, mode__name=t.value) for t in merged],
             )
-            for t in merged
-        ],
+        )
     )
 
 
@@ -417,8 +413,23 @@ def serialize_tag_set_for_client_v2(ts):
     return [{"category": t.category, "value": t.value} for t in sorted(list(ts))]
 
 
+def serialize_boxes_for_client_v2(bs):
+    return [
+        {
+            "category": b.category,
+            "value": b.value,
+            "x1": b.x1,
+            "y1": b.y1,
+            "x2": b.x2,
+            "y2": b.y2,
+        }
+        for b in sorted(list(bs))
+    ]
+
+
 def get_tags_from_annotations_v2(annotations):
     tags_by_pk = defaultdict(list)
+    annotations = annotations.filter(is_box=False)
     ann_dicts = annotations.values("dataset_item__pk", "category__name", "mode__name")
     for ann in ann_dicts:
         pk = ann["dataset_item__pk"]
@@ -426,6 +437,27 @@ def get_tags_from_annotations_v2(annotations):
         mode = ann["mode__name"]
         tags_by_pk[pk].append(Tag(category, mode))
     return tags_by_pk
+
+
+def get_boxes_from_annotations_v2(annotations):
+    boxes_by_pk = defaultdict(list)
+    annotations = annotations.filter(is_box=True)
+    ann_dicts = annotations.values(
+        "dataset_item__pk",
+        "category__name",
+        "mode__name",
+        "bbox_x1",
+        "bbox_y1",
+        "bbox_x2",
+        "bbox_y2",
+    )
+    for ann in ann_dicts:
+        pk = ann["dataset_item__pk"]
+        category = ann["category__name"]
+        mode = ann["mode__name"]
+        box = (ann["bbox_x1"], ann["bbox_y1"], ann["bbox_x2"], ann["bbox_y2"])
+        boxes_by_pk[pk].append(Box(category, mode, *box))
+    return boxes_by_pk
 
 
 def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
@@ -444,30 +476,34 @@ def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
         pks = [i for i in request.GET.get("subset", "").split(",") if i]
         split = request.GET.get("split", "train")
         offset_to_return = int(request.GET.get("offset", 0))
-        num_to_return = int(request.GET.get("num", None))
+        num_to_return = int(request.GET.get("num", -1))
 
-    num_to_return = None if num_to_return == -1 else num_to_return
+    end_to_return = None if num_to_return == -1 else offset_to_return + num_to_return
 
     dataset_items = None
     is_val = split == "val"
 
     db_start = time.time()
+    # Get pks for dataset items of interest
     if pks and exclude_pks:
+        # Get specific pks - excluded pks if requested
         exclude_pks = set(exclude_pks)
         pks = [pk for pk in pks if pk not in exclude_pks]
     elif not pks:
+        # Otherwise get all dataset items - exclude pks
         dataset_items = DatasetItem.objects.filter(dataset=dataset, is_val=is_val)
         if exclude_pks:
             dataset_items = dataset_items.exclude(pk__in=exclude_pks)
-        pks = dataset_items.values_list(
-            "pk", flat=True)
+        pks = dataset_items.values_list("pk", flat=True)
     db_end = time.time()
 
     result = None
     db_tag_start = time.time()
     if not include_tags and not exclude_tags:
+        # If no tags specified, just return retrieved pks
         result = pks
     else:
+        # Otherwise, filter using include and exclude tags
         if dataset_items is None:
             dataset_items = DatasetItem.objects.filter(pk__in=pks)
 
@@ -479,10 +515,12 @@ def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
         result = dataset_items.values_list("pk", flat=True)
 
     db_tag_end = time.time()
-    result = list(result[offset_to_return:num_to_return])
+    result = list(result[offset_to_return:end_to_return])
     filt_end = time.time()
-    print(f'filtered_images_v2: tot: {filt_end-filt_start}, '
-          f'db ({len(result)} items): {db_end-db_start}, db tag: {db_tag_end-db_tag_start}')
+    print(
+        f"filtered_images_v2: tot: {filt_end-filt_start}, "
+        f"db ({len(result)} items): {db_end-db_start}, db tag: {db_tag_end-db_tag_start}"
+    )
     return result
 
 
@@ -660,14 +698,17 @@ def train_svm_v2(request, dataset_name):
         dataset=dataset,
         is_val=False,
     )
-    neg_dataset_items = DatasetItem.objects.filter(
-        tag_sets_to_query(neg_tags),
-        dataset=dataset,
-        is_val=False,
-    ).difference(pos_dataset_items)
-
     pos_dataset_item_pks = list(pos_dataset_items.values_list("pk", flat=True))
-    neg_dataset_item_pks = list(neg_dataset_items.values_list("pk", flat=True))
+
+    if neg_tags:
+        neg_dataset_items = DatasetItem.objects.filter(
+            tag_sets_to_query(neg_tags),
+            dataset=dataset,
+            is_val=False,
+        ).difference(pos_dataset_items)
+        neg_dataset_item_pks = list(neg_dataset_items.values_list("pk", flat=True))
+    else:
+        neg_dataset_item_pks = []
 
     # Augment with randomly sampled negatives if requested
     num_extra_negs = settings.SVM_NUM_NEGS_MULTIPLIER * len(pos_dataset_item_pks) - len(
@@ -798,8 +839,10 @@ def query_images_v2(request, dataset_name):
     resp = JsonResponse(create_result_set_v2(results, "query"))
 
     query_end = time.time()
-    print(f'query_images_v2: tot: {query_end-query_start}, '
-          f'filter: {filter_end-filter_start}')
+    print(
+        f"query_images_v2: tot: {query_end-query_start}, "
+        f"filter: {filter_end-filter_start}"
+    )
     return resp
 
 
@@ -831,12 +874,12 @@ def get_val_examples_v2(dataset, model_id):
     )
 
     # Get positives and negatives matching these categories
+    categories = Category.objects.filter(
+        tag_sets_to_query(pos_tags, neg_tags, augment_negs_include)
+    )
     annotations = Annotation.objects.filter(
         dataset_item__in=eligible_dataset_items,
-        label_category__in=tag_sets_to_category_list_v2(
-            pos_tags, neg_tags, augment_negs_include
-        ),
-        label_type="klabel_frame",
+        category__in=categories,
     )
     tags_by_pk = get_tags_from_annotations_v2(annotations)
 
@@ -976,42 +1019,44 @@ def query_active_validation_v2(request, dataset_name):
 def add_val_annotations_v2(request):
     payload = json.loads(request.body)
     annotations = payload["annotations"]
-    user = payload["user"]
+    user_email = payload["user"]
     model = payload["model"]
 
     anns = []
+    cat_modes = defaultdict(int)
+    dataset = None
     for ann_payload in annotations:
         image_pk = ann_payload["identifier"]
         is_other_negative = ann_payload.get("is_other_negative", False)
-        value_str = "NEGATIVE" if is_other_negative else ann_payload["value"]
-        category = model if is_other_negative else ann_payload["category"]
-        try:
-            value, custom_value = int(LabelValue[value_str]), None
-        except KeyError:
-            value, custom_value = LabelValue.CUSTOM, value_str
+        mode_str = "NEGATIVE" if is_other_negative else ann_payload["mode"]
+        category_name = (
+            "active:" + model if is_other_negative else ann_payload["category"]
+        )
 
-        annotation_data = {
-            "type": 0,  # full-frame
-            "value": value,
-            "mode": "val",
-            "version": ANN_VERSION,
-        }
-        if custom_value:
-            annotation_data["custom_value"] = custom_value
-        annotation = json.dumps(annotation_data)
+        user, _ = User.objects.get_or_create(email=user_email)
+        category, _ = Category.objects.get_or_create(name=category_name)
+        mode, _ = Mode.objects.get_or_create(name=mode_str)
 
         di = DatasetItem.objects.get(pk=image_pk)
-        assert not di.google and di.is_val
+        dataset = di.dataset
+        assert di.is_val
         ann = Annotation(
             dataset_item=di,
-            label_function=user,
-            label_category=category,
-            label_type=VAL_NEGATIVE_TYPE if is_other_negative else "klabel_frame",
-            label_data=annotation,
+            user=user,
+            category=category,
+            mode=mode,
+            misc_data={"created_by": "active_val"},
         )
+        cat_modes[(category, mode)] += 1
         anns.append(ann)
 
     Annotation.objects.bulk_create(anns)
+    for (cat, mode), c in cat_modes.items():
+        category_count, _ = CategoryCount.objects.get_or_create(
+            dataset=dataset, category=cat, mode=mode
+        )
+        category_count.count += c
+        category_count.save()
     return JsonResponse({"created": len(anns)})
 
 
@@ -1165,9 +1210,12 @@ def get_annotations_v2(request):
         dataset_item__in=DatasetItem.objects.filter(pk__in=image_pks),
     )
     tags_by_pk = get_tags_from_annotations_v2(annotations)
-    annotations_by_pk = {
-        pk: serialize_tag_set_for_client_v2(tags) for pk, tags in tags_by_pk.items()
-    }
+    boxes_by_pk = get_boxes_from_annotations_v2(annotations)
+    annotations_by_pk = defaultdict(lambda: {"tags": [], "boxes": []})
+    for pk, tags in tags_by_pk.items():
+        annotations_by_pk[pk]["tags"] = serialize_tag_set_for_client_v2(tags)
+    for pk, boxes in boxes_by_pk.items():
+        annotations_by_pk[pk]["boxes"] = serialize_boxes_for_client_v2(boxes)
     return JsonResponse(annotations_by_pk)
 
 
@@ -1177,7 +1225,15 @@ def add_annotations_v2(request):
     payload = json.loads(request.body)
     image_pks = payload["identifiers"]
     images = DatasetItem.objects.filter(pk__in=image_pks)
-    num_created = bulk_add_annotations_v2(payload, images)
+    num_created = bulk_add_single_tag_annotations_v2(payload, images)
+    return JsonResponse({"created": num_created})
+
+
+@api_view(["POST"])
+@csrf_exempt
+def add_annotations_multi_v2(request):
+    payload = json.loads(request.body)
+    num_created = bulk_add_multi_annotations_v2(payload)
     return JsonResponse({"created": num_created})
 
 
@@ -1191,7 +1247,7 @@ def add_annotations_by_internal_identifiers_v2(request, dataset_name):
     images = DatasetItem.objects.filter(
         dataset=dataset, identifier__in=image_identifiers
     )
-    num_created = bulk_add_annotations_v2(payload, images)
+    num_created = bulk_add_single_tag_annotations_v2(payload, images)
     return JsonResponse({"created": num_created})
 
 
@@ -1211,52 +1267,135 @@ def add_annotations_to_result_set_v2(request):
     image_pks = result_ranking[start_index:end_index]
 
     images = DatasetItem.objects.filter(pk__in=image_pks)
-    num_created = bulk_add_annotations_v2(payload, images)
+    num_created = bulk_add_single_tag_annotations_v2(payload, images)
     return JsonResponse({"created": num_created})
 
 
-def bulk_add_annotations_v2(payload, images):
+def bulk_add_single_tag_annotations_v2(payload, images):
+    '''Adds annotations for a single tag to many dataset items'''
     if not images:
         return 0
 
     user_email = payload["user"]
     category_name = payload["category"]
     mode_name = payload["mode"]
-    created_by = payload.get("created_by", "tag" if len(images) == 1 else "tag-bulk")
+    created_by = payload.get("created_by",
+                             "tag" if len(images) == 1 else "tag-bulk")
+
+    dataset = None
+    if len(images) > 0:
+        dataset = images[0].dataset
 
     user, _ = User.objects.get_or_create(email=user_email)
     category, _ = Category.objects.get_or_create(name=category_name)
     mode, _ = Mode.objects.get_or_create(name=mode_name)
 
-    Annotation.objects.filter(dataset_item__in=images, category=category).delete()
+    Annotation.objects.filter(
+        dataset_item__in=images, category=category, is_box=False).delete()
 
     # TODO: Add an actual endpoint to delete annotations (probably by pk); don't rely
     # on this hacky "TOMBSTONE" string
-    if mode != "TOMBSTONE":
-        Annotation.objects.bulk_create(
-            (
-                Annotation(
-                    dataset_item=di,
-                    user=user,
-                    category=category,
-                    mode=mode,
-                    misc_data={"created_by": created_by},
-                )
-                for di in images
-            )
+    annotations = [
+        Annotation(
+            dataset_item=di,
+            user=user,
+            category=category,
+            mode=mode,
+            is_box=False,
+            misc_data={"created_by": created_by},
         )
-        if len(images) > 0:
-            dataset = images[0].dataset
-            category_count, _ = CategoryCount.objects.get_or_create(
-                dataset=dataset,
-                category=category,
-                mode=mode
-            )
-            category_count.count += len(images)
-            category_count.save()
+        for di in images
+    ]
+    bulk_add_annotations_v2(dataset, annotations)
+
+    return len(annotations)
 
 
-    return len(images)
+def bulk_add_multi_annotations_v2(payload : Dict):
+    '''Adds multiple annotations for the same dataset and user to the database
+    at once'''
+    dataset_name = payload["dataset"]
+    dataset = get_object_or_404(Dataset, name=dataset_name)
+    user_email = payload["user"]
+    user, _ = User.objects.get_or_create(email=user_email)
+    created_by = payload.get("created_by",
+                             "tag" if len(payload["annotations"]) == 1 else
+                             "tag-bulk")
+
+    # Get pks
+    idents = [ann['identifier'] for ann in payload["annotations"]
+              if 'identifier' in ann]
+    di_pks = list(DatasetItem.objects.filter(
+        dataset=dataset, identifier__in=idents
+    ).values_list("pk", "identifier"))
+    ident_to_pk = {ident: pk for pk, ident in di_pks}
+
+    cats = {}
+    modes = {}
+    to_delete = defaultdict(set)
+    annotations = []
+    for ann in payload["annotations"]:
+        db_ann = Annotation()
+        category_name = ann["category"]
+        mode_name = ann["mode"]
+
+        if category_name not in cats:
+            cats[category_name] = Category.objects.get_or_create(
+                name=category_name)[0]
+        if mode_name not in modes:
+            modes[mode_name] = Mode.objects.get_or_create(
+                name=mode_name)[0]
+
+        if "identifier" in ann:
+            pk = ident_to_pk[ann["identifier"]]
+        else:
+            pk = ann["pk"]
+
+        db_ann.dataset_item_id = pk
+        db_ann.user = user
+        db_ann.category = cats[category_name]
+        db_ann.mode = modes[mode_name]
+
+        db_ann.is_box = ann.get("is_box", False)
+        if db_ann.is_box:
+            db_ann.bbox_x1 = ann["x1"]
+            db_ann.bbox_y1 = ann["y1"]
+            db_ann.bbox_x2 = ann["x2"]
+            db_ann.bbox_y2 = ann["y2"]
+        else:
+            to_delete[db_ann.category].add(pk)
+
+        db_ann.misc_data={"created_by": created_by}
+        annotations.append(db_ann)
+
+    for cat, pks in to_delete.items():
+        # Delete per-frame annotations for the category if they exist since
+        # we should only have on mode per image
+        Annotation.objects.filter(
+            category=cat, dataset_item_id__in=pks, is_box=False).delete()
+
+    # TODO: Add an actual endpoint to delete annotations (probably by pk); don't rely
+    # on this hacky "TOMBSTONE" string
+    bulk_add_annotations_v2(dataset, annotations)
+
+    return len(annotations)
+
+
+def bulk_add_annotations_v2(dataset, annotations):
+    '''Handles book keeping for adding many annotations at once'''
+    Annotation.objects.bulk_create(annotations)
+    counts = defaultdict(int)
+    for ann in annotations:
+        counts[(ann.category, ann.mode)] += 1
+
+    for (cat, mode), count in counts.items():
+        category_count, _ = CategoryCount.objects.get_or_create(
+            dataset=dataset,
+            category=cat,
+            mode=mode
+        )
+        category_count.count += count
+        category_count.save()
 
 
 @api_view(["POST"])

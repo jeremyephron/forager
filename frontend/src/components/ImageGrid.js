@@ -2,10 +2,12 @@ import React, {useEffect} from "react";
 import useResizeObserver from "use-resize-observer/polyfilled";
 import LazyLoad, {forceCheck} from "react-lazyload";
 
+import AnnotatedImage from "./AnnotatedImage";
+
 const MARGIN = 3;
 const THUMBNAIL_HEIGHT = 200;
 
-const ImageGrid = ({ images, onClick, minRowHeight, imageAspectRatio, selectedPred }) => {
+const ImageGrid = ({ images, annotations, onClick, minRowHeight, imageAspectRatio, selectedPred }) => {
   const { width, height, ref } = useResizeObserver();
   const handleClick = (e, i) => {
     onClick(e, i);
@@ -21,20 +23,23 @@ const ImageGrid = ({ images, onClick, minRowHeight, imageAspectRatio, selectedPr
 
   return (
     <div className="image-grid" ref={ref}>
-      {(width > 0) && images.map((im, i) =>
-        <a href="#" key={i} onClick={(e) => handleClick(e, i)}
-          style={{width: imageWidth, marginBottom: MARGIN, marginRight: MARGIN}}
-        >
-          <div className="image-container">
-            <LazyLoad scrollContainer=".modal" height={imageHeight}>
-              <img src={imageHeight > THUMBNAIL_HEIGHT ? im.src : im.thumb}
-                className={selectedPred(i) ? "selected" : ""}
-              />
-            </LazyLoad>
-            {im.distance >= 0 && <div className="image-distance">{im.distance.toFixed(3)}</div>}
-          </div>
-        </a>
-      )}
+      {(width > 0) && images.map((im, i) => {
+        return (
+          <a href="#" key={i} onClick={(e) => handleClick(e, i)}
+            style={{width: imageWidth, marginBottom: MARGIN, marginRight: MARGIN}}
+          >
+            <div className="image-container">
+              <LazyLoad scrollContainer=".modal" height={imageHeight}>
+                <div className={"image " + (selectedPred(i) ? "selected" : "")}>
+                  <AnnotatedImage
+                    url={imageHeight > THUMBNAIL_HEIGHT ? im.src : im.thumb}
+                    boxes={(annotations[im.id] && annotations[im.id]["boxes"]) || []}/>
+                </div>
+              </LazyLoad>
+              {im.distance >= 0 && <div className="image-distance">{im.distance.toFixed(3)}</div>}
+            </div>
+          </a>);
+      })}
     </div>
   );
 }

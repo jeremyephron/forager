@@ -939,7 +939,7 @@ const App = () => {
 
   const [subset, setSubset_] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const isFirstLoad = useRef(true);
+  const isFirstLoad = useRef(false);
   const [queryResultSet, setQueryResultSet] = useState({
     id: null,
     num_results: 0,

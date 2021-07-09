@@ -104,6 +104,9 @@ const ValidatePanel = ({
 
   const submitLabels = async (labels) => {
     const url = new URL(endpoints.addValAnnotations);
+    for (const ann of labels) {
+      ann.mode = ann.value;
+    }
     let body = {
       user: username,
       model: modelId,

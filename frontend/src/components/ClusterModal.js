@@ -22,6 +22,7 @@ import uniqWith from "lodash/uniqWith";
 import ImageGrid from "./ImageGrid";
 import NewModeInput from "./NewModeInput";
 import CategoryInput from "./CategoryInput";
+import AnnotatedImage from "./AnnotatedImage";
 
 const endpoints = fromPairs(toPairs({
   getAnnotations: 'get_annotations_v2',
@@ -84,6 +85,11 @@ const ClusterModal = ({
   //
 
   const [annotations, setAnnotations] = useState({});
+  const [showBoxes, setShowBoxes] = useState(false);
+
+  const toggleShowBoxes = () => {
+    setShowBoxes(prev => !prev);
+  };
 
   // Reload annotations whenever there's a new result set
   useEffect(async () => {
@@ -139,10 +145,13 @@ const ClusterModal = ({
 
   const [isLoading, setIsLoading] = useState(false);
 
-  const getImageTags = im => (annotations[im.id] || []);
+  const getImageTags = im => ((annotations[im.id] && annotations[im.id]['tags']) || []);
+  const getImageBoxes = im => ((annotations[im.id] && annotations[im.id]['boxes']) || []);
   let selectedTags = [];
+  let selectedBoxes = [];
   if (selectedImage !== undefined) {
     selectedTags = getImageTags(selectedImage);
+    selectedBoxes = getImageBoxes(selectedImage);
   } else if (selectedCluster !== undefined) {
     selectedTags = intersectionWith(...(selectedCluster.flatMap((im, i) =>
       excludedImageIndexes[i] ? [] : [getImageTags(im)])), isEqual);
@@ -261,6 +270,8 @@ const ClusterModal = ({
     } else if (isClusterView && key === "d") {
       // Deselect all
       setExcludedImageIndexes(fromPairs(selectedCluster.map((_, i) => [i, true])));
+    } else if (key === "b") {
+      toggleShowBoxes();
     } else if (key === "ArrowDown") { } else {
       caught = false;
     }
@@ -273,7 +284,9 @@ const ClusterModal = ({
 
   const handleTypeaheadKeyDown = (e) => {
     const { key } = e;
-    if (key === "s" || key === "i" || key === "d") e.stopPropagation();
+    if (key === "s" || key === "i" || key === "d" || key === "b") {
+      e.stopPropagation();
+    }
   }
 
   useEffect(() => {
@@ -328,6 +341,7 @@ const ClusterModal = ({
               <kbd>s</kbd> or <FontAwesomeIcon icon={faMousePointer} /> to toggle image selection</>}
             {isSingletonCluster && <>,{" "}
               <kbd>&uarr;</kbd> to go back to query results</>}
+            {" "}<kbd>b</kbd> to show/hide bounding boxes
           </p>
           {mode === "label" && (labelCategory ? <p>
             <b>Label mode:</b> &nbsp;
@@ -382,10 +396,12 @@ const ClusterModal = ({
                   const selected = !!!(excludedImageIndexes[selection.image]);
                   return (
                     <a href="#" onClick={(e) => toggleImageSelection(selection.image, e)} className="selectable-image">
-                      <img className="w-100" src={src} className={selected ? "selected" : ""} />
+                      <div className={"image " + (selected ? "selected" : "")}>
+                        <AnnotatedImage url={src} boxes={showBoxes ? selectedBoxes : []}/>
+                      </div>
                     </a>);
                 } else {
-                  return <img className="main w-100" src={src} />;
+                  return <AnnotatedImage url={src} boxes={showBoxes ? selectedBoxes : []}/>;
                 }
               }}
             </ProgressiveImage> :
@@ -401,6 +417,7 @@ const ClusterModal = ({
               </div>
               <ImageGrid
                 images={selectedCluster}
+                annotations={showBoxes ? annotations : {}}
                 onClick={handleGalleryClick}
                 selectedPred={i => !!!(excludedImageIndexes[i])}
                 minRowHeight={imageGridSize.size}

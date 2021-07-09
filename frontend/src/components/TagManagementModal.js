@@ -75,6 +75,9 @@ const TagManagementModal = ({
   const [categories, setCategories] = useState([]);
 
   const [orderBy, setOrderBy_] = useState("name");
+  const [hideOthersTags, setHideOthersTags] = useState(false);
+  const [hideIngestTags, setHideIngestTags] = useState(false);
+
   const [orderAscending, setOrderAscending] = useState(true);
 
   const [confirmIsOpen, setConfirmIsOpen] = useState(false);
@@ -178,6 +181,25 @@ const TagManagementModal = ({
     setCategories(prev => sortCategories(prev))
   }, [categoryCounts, orderBy, orderAscending]);
 
+  /* useEffect(async () => {
+   *   const url = new URL(endpoints.getCategoryCounts + `/${datasetName}`);
+   *   const body = {
+   *     user: username,
+   *   };
+   *   url.search = new URLSearchParams(body).toString();
+   *   const res = await fetch(url, {
+   *     method: "GET",
+   *   }).then(res => res.json());
+
+   *   let cats = Object.fromEntries(Object.entries(res).map(([key, val]) => [key, Object.keys(val)]))
+
+   *   if (hideOthersTags) {
+   *   }
+   *   if (hideIngestTags) {
+   *   }
+   *   setCategories(prev => sortCategories(prev))
+   * }, [hideOthersTags, hideIngestTags]);
+   */
   const tableBodyFromTags = () => {
     return (
       <tbody>
@@ -225,6 +247,26 @@ const TagManagementModal = ({
         Manage Tags
       </ModalHeader>
       <ModalBody>
+        <div className="custom-switch custom-control mr-4">
+          <Input type="checkbox" className="custom-control-input"
+            id="hide-others-tags-switch"
+            checked={hideOthersTags}
+            onChange={(e) => setHideOthersTags(e.target.checked)}
+          />
+          <label className="custom-control-label text-nowrap" htmlFor="hide-others-tags-switch">
+            Hide tags from others
+          </label>
+        </div>
+        <div className="custom-switch custom-control mr-4">
+          <Input type="checkbox" className="custom-control-input"
+            id="hide-ingest-tags-switch"
+            checked={hideIngestTags}
+            onChange={(e) => setHideIngestTags(e.target.checked)}
+          />
+          <label className="custom-control-label text-nowrap" htmlFor="hide-ingest-tags-switch">
+            Hide tags from ingest
+          </label>
+        </div>
         <TableContainer className="pr-2">
           <Table hover borderless size="sm">
             <thead>

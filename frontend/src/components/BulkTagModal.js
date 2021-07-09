@@ -59,7 +59,7 @@ const BulkTagModal = ({
     const body = {
       user: username,
       category: trimmedCategory,
-      value: selectedValue,
+      mode: selectedValue,
       result_set_id: resultSet.id,
       from: selectedRange[0] / 100,
       to: selectedRange[1] / 100,
