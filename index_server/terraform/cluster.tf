@@ -25,56 +25,6 @@ resource "google_container_cluster" "cluster" {
   dynamic "node_pool" {
     for_each = var.create_node_pools_separately ? [] : [1]
     content {
-      name       = var.mapper_node_pool_name
-      node_count = var.mapper_num_nodes
-
-      node_config {
-        preemptible  = true
-        machine_type = var.mapper_node_type
-        disk_size_gb = local.trainer_disk_size_gb
-        oauth_scopes = local.node_pool_oauth_scopes
-      }
-    }
-  }
-
-  dynamic "node_pool" {
-    for_each = var.create_node_pools_separately ? [] : [1]
-    content {
-      name       = var.adder_node_pool_name
-      node_count = var.adder_num_nodes
-
-      node_config {
-        preemptible  = true
-        machine_type = var.adder_node_type
-        disk_size_gb = local.adder_disk_size_gb
-        oauth_scopes = local.node_pool_oauth_scopes
-      }
-    }
-  }
-
-  dynamic "node_pool" {
-    for_each = var.create_node_pools_separately ? [] : [1]
-    content {
-      name       = var.trainer_node_pool_name
-      node_count = var.trainer_num_nodes
-
-      node_config {
-        preemptible  = true
-        machine_type = var.trainer_node_type
-        disk_size_gb = local.trainer_disk_size_gb
-        oauth_scopes = local.node_pool_oauth_scopes
-
-        guest_accelerator {
-          type  = var.trainer_accelerator_type
-          count = var.trainer_accelerator_count
-        }
-      }
-    }
-  }
-
-  dynamic "node_pool" {
-    for_each = var.create_node_pools_separately ? [] : [1]
-    content {
       name       = var.bgsplit_trainer_node_pool_name
       node_count = var.bgsplit_trainer_num_nodes
 
@@ -117,21 +67,6 @@ resource "google_container_cluster" "cluster" {
         preemptible  = true
         machine_type = var.bgsplit_mapper_node_type
         disk_size_gb = local.bgsplit_mapper_disk_size_gb
-        oauth_scopes = local.node_pool_oauth_scopes
-      }
-    }
-  }
-
-  dynamic "node_pool" {
-    for_each = var.create_node_pools_separately ? [] : [1]
-    content {
-      name       = var.resizer_node_pool_name
-      node_count = var.resizer_num_nodes
-
-      node_config {
-        preemptible  = true
-        machine_type = var.resizer_node_type
-        disk_size_gb = local.trainer_disk_size_gb
         oauth_scopes = local.node_pool_oauth_scopes
       }
     }
