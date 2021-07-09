@@ -41,11 +41,14 @@ BUILTIN_MODES = ["POSITIVE", "NEGATIVE", "HARD_NEGATIVE", "UNSURE"]
 
 logger = logging.getLogger(__name__)
 
+#
+# CLUSTER
+#
+
+
 @api_view(["POST"])
 @csrf_exempt
 def start_cluster(request):
-    # TODO(mihirg): Remove this setting from Django; it's now managed by Terraform
-    # (or figure out how to set it from the frontend if we need that)
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/start_cluster",
     )
@@ -82,6 +85,13 @@ def stop_cluster(request, cluster_id):
             "status": "success",
         }
     )
+
+
+#
+# MODEL TRAINING
+# Note(mihirg): These functions are out of date as of 6/25 and may need to be
+# fixed/removed, along with their counterparts on the index server.
+#
 
 
 @api_view(["POST"])
@@ -350,8 +360,7 @@ def stop_model_inference(request, job_id):
 
 
 #
-# V2 ENDPOINTS
-# TODO(mihirg): Make these faster
+# FRONTEND ENDPOINTS
 #
 
 
@@ -1272,15 +1281,14 @@ def add_annotations_to_result_set_v2(request):
 
 
 def bulk_add_single_tag_annotations_v2(payload, images):
-    '''Adds annotations for a single tag to many dataset items'''
+    """Adds annotations for a single tag to many dataset items"""
     if not images:
         return 0
 
     user_email = payload["user"]
     category_name = payload["category"]
     mode_name = payload["mode"]
-    created_by = payload.get("created_by",
-                             "tag" if len(images) == 1 else "tag-bulk")
+    created_by = payload.get("created_by", "tag" if len(images) == 1 else "tag-bulk")
 
     dataset = None
     if len(images) > 0:
@@ -1291,7 +1299,8 @@ def bulk_add_single_tag_annotations_v2(payload, images):
     mode, _ = Mode.objects.get_or_create(name=mode_name)
 
     Annotation.objects.filter(
-        dataset_item__in=images, category=category, is_box=False).delete()
+        dataset_item__in=images, category=category, is_box=False
+    ).delete()
 
     # TODO: Add an actual endpoint to delete annotations (probably by pk); don't rely
     # on this hacky "TOMBSTONE" string
@@ -1311,23 +1320,26 @@ def bulk_add_single_tag_annotations_v2(payload, images):
     return len(annotations)
 
 
-def bulk_add_multi_annotations_v2(payload : Dict):
-    '''Adds multiple annotations for the same dataset and user to the database
-    at once'''
+def bulk_add_multi_annotations_v2(payload: Dict):
+    """Adds multiple annotations for the same dataset and user to the database
+    at once"""
     dataset_name = payload["dataset"]
     dataset = get_object_or_404(Dataset, name=dataset_name)
     user_email = payload["user"]
     user, _ = User.objects.get_or_create(email=user_email)
-    created_by = payload.get("created_by",
-                             "tag" if len(payload["annotations"]) == 1 else
-                             "tag-bulk")
+    created_by = payload.get(
+        "created_by", "tag" if len(payload["annotations"]) == 1 else "tag-bulk"
+    )
 
     # Get pks
-    idents = [ann['identifier'] for ann in payload["annotations"]
-              if 'identifier' in ann]
-    di_pks = list(DatasetItem.objects.filter(
-        dataset=dataset, identifier__in=idents
-    ).values_list("pk", "identifier"))
+    idents = [
+        ann["identifier"] for ann in payload["annotations"] if "identifier" in ann
+    ]
+    di_pks = list(
+        DatasetItem.objects.filter(dataset=dataset, identifier__in=idents).values_list(
+            "pk", "identifier"
+        )
+    )
     ident_to_pk = {ident: pk for pk, ident in di_pks}
 
     cats = {}
@@ -1340,11 +1352,9 @@ def bulk_add_multi_annotations_v2(payload : Dict):
         mode_name = ann["mode"]
 
         if category_name not in cats:
-            cats[category_name] = Category.objects.get_or_create(
-                name=category_name)[0]
+            cats[category_name] = Category.objects.get_or_create(name=category_name)[0]
         if mode_name not in modes:
-            modes[mode_name] = Mode.objects.get_or_create(
-                name=mode_name)[0]
+            modes[mode_name] = Mode.objects.get_or_create(name=mode_name)[0]
 
         if "identifier" in ann:
             pk = ident_to_pk[ann["identifier"]]
@@ -1365,14 +1375,15 @@ def bulk_add_multi_annotations_v2(payload : Dict):
         else:
             to_delete[db_ann.category].add(pk)
 
-        db_ann.misc_data={"created_by": created_by}
+        db_ann.misc_data = {"created_by": created_by}
         annotations.append(db_ann)
 
     for cat, pks in to_delete.items():
         # Delete per-frame annotations for the category if they exist since
         # we should only have on mode per image
         Annotation.objects.filter(
-            category=cat, dataset_item_id__in=pks, is_box=False).delete()
+            category=cat, dataset_item_id__in=pks, is_box=False
+        ).delete()
 
     # TODO: Add an actual endpoint to delete annotations (probably by pk); don't rely
     # on this hacky "TOMBSTONE" string
@@ -1382,7 +1393,7 @@ def bulk_add_multi_annotations_v2(payload : Dict):
 
 
 def bulk_add_annotations_v2(dataset, annotations):
-    '''Handles book keeping for adding many annotations at once'''
+    """Handles book keeping for adding many annotations at once"""
     Annotation.objects.bulk_create(annotations)
     counts = defaultdict(int)
     for ann in annotations:
@@ -1390,9 +1401,7 @@ def bulk_add_annotations_v2(dataset, annotations):
 
     for (cat, mode), count in counts.items():
         category_count, _ = CategoryCount.objects.get_or_create(
-            dataset=dataset,
-            category=cat,
-            mode=mode
+            dataset=dataset, category=cat, mode=mode
         )
         category_count.count += count
         category_count.save()
