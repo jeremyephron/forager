@@ -39,26 +39,7 @@ from .models import (
 
 BUILTIN_MODES = ["POSITIVE", "NEGATIVE", "HARD_NEGATIVE", "UNSURE"]
 
-logger = logging.getLogger("django_server")
-logger.setLevel(logging.DEBUG)
-
-# Create a file handler for the log
-log_fh = logging.FileHandler("django_server.log")
-log_fh.setLevel(logging.DEBUG)
-
-# Create a console handler to print errors to console
-log_ch = logging.StreamHandler()
-log_ch.setLevel(logging.DEBUG)
-
-# create formatter and add it to the handlers
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-log_fh.setFormatter(formatter)
-log_ch.setFormatter(formatter)
-
-# Attach handlers
-logger.addHandler(log_fh)
-logger.addHandler(log_ch)
-
+logger = logging.getLogger(__name__)
 
 @api_view(["POST"])
 @csrf_exempt
@@ -448,6 +429,7 @@ def serialize_boxes_for_client_v2(bs):
 
 def get_tags_from_annotations_v2(annotations):
     tags_by_pk = defaultdict(list)
+    annotations = annotations.filter(is_box=False)
     ann_dicts = annotations.values("dataset_item__pk", "category__name", "mode__name")
     for ann in ann_dicts:
         pk = ann["dataset_item__pk"]
@@ -1243,7 +1225,15 @@ def add_annotations_v2(request):
     payload = json.loads(request.body)
     image_pks = payload["identifiers"]
     images = DatasetItem.objects.filter(pk__in=image_pks)
-    num_created = bulk_add_annotations_v2(payload, images)
+    num_created = bulk_add_single_tag_annotations_v2(payload, images)
+    return JsonResponse({"created": num_created})
+
+
+@api_view(["POST"])
+@csrf_exempt
+def add_annotations_multi_v2(request):
+    payload = json.loads(request.body)
+    num_created = bulk_add_multi_annotations_v2(payload)
     return JsonResponse({"created": num_created})
 
 
@@ -1257,7 +1247,7 @@ def add_annotations_by_internal_identifiers_v2(request, dataset_name):
     images = DatasetItem.objects.filter(
         dataset=dataset, identifier__in=image_identifiers
     )
-    num_created = bulk_add_annotations_v2(payload, images)
+    num_created = bulk_add_single_tag_annotations_v2(payload, images)
     return JsonResponse({"created": num_created})
 
 
@@ -1277,49 +1267,135 @@ def add_annotations_to_result_set_v2(request):
     image_pks = result_ranking[start_index:end_index]
 
     images = DatasetItem.objects.filter(pk__in=image_pks)
-    num_created = bulk_add_annotations_v2(payload, images)
+    num_created = bulk_add_single_tag_annotations_v2(payload, images)
     return JsonResponse({"created": num_created})
 
 
-def bulk_add_annotations_v2(payload, images):
+def bulk_add_single_tag_annotations_v2(payload, images):
+    '''Adds annotations for a single tag to many dataset items'''
     if not images:
         return 0
 
     user_email = payload["user"]
     category_name = payload["category"]
     mode_name = payload["mode"]
-    created_by = payload.get("created_by", "tag" if len(images) == 1 else "tag-bulk")
+    created_by = payload.get("created_by",
+                             "tag" if len(images) == 1 else "tag-bulk")
+
+    dataset = None
+    if len(images) > 0:
+        dataset = images[0].dataset
 
     user, _ = User.objects.get_or_create(email=user_email)
     category, _ = Category.objects.get_or_create(name=category_name)
     mode, _ = Mode.objects.get_or_create(name=mode_name)
 
-    Annotation.objects.filter(dataset_item__in=images, category=category).delete()
+    Annotation.objects.filter(
+        dataset_item__in=images, category=category, is_box=False).delete()
 
     # TODO: Add an actual endpoint to delete annotations (probably by pk); don't rely
     # on this hacky "TOMBSTONE" string
-    if mode != "TOMBSTONE":
-        Annotation.objects.bulk_create(
-            (
-                Annotation(
-                    dataset_item=di,
-                    user=user,
-                    category=category,
-                    mode=mode,
-                    misc_data={"created_by": created_by},
-                )
-                for di in images
-            )
+    annotations = [
+        Annotation(
+            dataset_item=di,
+            user=user,
+            category=category,
+            mode=mode,
+            is_box=False,
+            misc_data={"created_by": created_by},
         )
-        if len(images) > 0:
-            dataset = images[0].dataset
-            category_count, _ = CategoryCount.objects.get_or_create(
-                dataset=dataset, category=category, mode=mode
-            )
-            category_count.count += len(images)
-            category_count.save()
+        for di in images
+    ]
+    bulk_add_annotations_v2(dataset, annotations)
 
-    return len(images)
+    return len(annotations)
+
+
+def bulk_add_multi_annotations_v2(payload : Dict):
+    '''Adds multiple annotations for the same dataset and user to the database
+    at once'''
+    dataset_name = payload["dataset"]
+    dataset = get_object_or_404(Dataset, name=dataset_name)
+    user_email = payload["user"]
+    user, _ = User.objects.get_or_create(email=user_email)
+    created_by = payload.get("created_by",
+                             "tag" if len(payload["annotations"]) == 1 else
+                             "tag-bulk")
+
+    # Get pks
+    idents = [ann['identifier'] for ann in payload["annotations"]
+              if 'identifier' in ann]
+    di_pks = list(DatasetItem.objects.filter(
+        dataset=dataset, identifier__in=idents
+    ).values_list("pk", "identifier"))
+    ident_to_pk = {ident: pk for pk, ident in di_pks}
+
+    cats = {}
+    modes = {}
+    to_delete = defaultdict(set)
+    annotations = []
+    for ann in payload["annotations"]:
+        db_ann = Annotation()
+        category_name = ann["category"]
+        mode_name = ann["mode"]
+
+        if category_name not in cats:
+            cats[category_name] = Category.objects.get_or_create(
+                name=category_name)[0]
+        if mode_name not in modes:
+            modes[mode_name] = Mode.objects.get_or_create(
+                name=mode_name)[0]
+
+        if "identifier" in ann:
+            pk = ident_to_pk[ann["identifier"]]
+        else:
+            pk = ann["pk"]
+
+        db_ann.dataset_item_id = pk
+        db_ann.user = user
+        db_ann.category = cats[category_name]
+        db_ann.mode = modes[mode_name]
+
+        db_ann.is_box = ann.get("is_box", False)
+        if db_ann.is_box:
+            db_ann.bbox_x1 = ann["x1"]
+            db_ann.bbox_y1 = ann["y1"]
+            db_ann.bbox_x2 = ann["x2"]
+            db_ann.bbox_y2 = ann["y2"]
+        else:
+            to_delete[db_ann.category].add(pk)
+
+        db_ann.misc_data={"created_by": created_by}
+        annotations.append(db_ann)
+
+    for cat, pks in to_delete.items():
+        # Delete per-frame annotations for the category if they exist since
+        # we should only have on mode per image
+        Annotation.objects.filter(
+            category=cat, dataset_item_id__in=pks, is_box=False).delete()
+
+    # TODO: Add an actual endpoint to delete annotations (probably by pk); don't rely
+    # on this hacky "TOMBSTONE" string
+    bulk_add_annotations_v2(dataset, annotations)
+
+    return len(annotations)
+
+
+def bulk_add_annotations_v2(dataset, annotations):
+    '''Handles book keeping for adding many annotations at once'''
+    Annotation.objects.bulk_create(annotations)
+    counts = defaultdict(int)
+    for ann in annotations:
+        counts[(ann.category, ann.mode)] += 1
+
+    for (cat, mode), count in counts.items():
+        category_count, _ = CategoryCount.objects.get_or_create(
+            dataset=dataset,
+            category=cat,
+            mode=mode
+        )
+        category_count.count += count
+        category_count.save()
 
 
 @api_view(["POST"])

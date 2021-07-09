@@ -85,6 +85,11 @@ const ClusterModal = ({
   //
 
   const [annotations, setAnnotations] = useState({});
+  const [showBoxes, setShowBoxes] = useState(false);
+
+  const toggleShowBoxes = () => {
+    setShowBoxes(prev => !prev);
+  };
 
   // Reload annotations whenever there's a new result set
   useEffect(async () => {
@@ -265,6 +270,8 @@ const ClusterModal = ({
     } else if (isClusterView && key === "d") {
       // Deselect all
       setExcludedImageIndexes(fromPairs(selectedCluster.map((_, i) => [i, true])));
+    } else if (key === "b") {
+      toggleShowBoxes();
     } else if (key === "ArrowDown") { } else {
       caught = false;
     }
@@ -277,7 +284,9 @@ const ClusterModal = ({
 
   const handleTypeaheadKeyDown = (e) => {
     const { key } = e;
-    if (key === "s" || key === "i" || key === "d") e.stopPropagation();
+    if (key === "s" || key === "i" || key === "d" || key === "b") {
+      e.stopPropagation();
+    }
   }
 
   useEffect(() => {
@@ -332,6 +341,7 @@ const ClusterModal = ({
               <kbd>s</kbd> or <FontAwesomeIcon icon={faMousePointer} /> to toggle image selection</>}
             {isSingletonCluster && <>,{" "}
               <kbd>&uarr;</kbd> to go back to query results</>}
+            {" "}<kbd>b</kbd> to show/hide bounding boxes
           </p>
           {mode === "label" && (labelCategory ? <p>
             <b>Label mode:</b> &nbsp;
@@ -387,11 +397,11 @@ const ClusterModal = ({
                   return (
                     <a href="#" onClick={(e) => toggleImageSelection(selection.image, e)} className="selectable-image">
                       <div className={"image " + (selected ? "selected" : "")}>
-                        <AnnotatedImage url={src} boxes={selectedBoxes}/>
+                        <AnnotatedImage url={src} boxes={showBoxes ? selectedBoxes : []}/>
                       </div>
                     </a>);
                 } else {
-                  return <img className="main w-100" src={src} />;
+                  return <AnnotatedImage url={src} boxes={showBoxes ? selectedBoxes : []}/>;
                 }
               }}
             </ProgressiveImage> :
@@ -407,7 +417,7 @@ const ClusterModal = ({
               </div>
               <ImageGrid
                 images={selectedCluster}
-                annotations={annotations}
+                annotations={showBoxes ? annotations : {}}
                 onClick={handleGalleryClick}
                 selectedPred={i => !!!(excludedImageIndexes[i])}
                 minRowHeight={imageGridSize.size}

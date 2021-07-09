@@ -1,36 +1,31 @@
 import React, {useEffect, useState} from "react";
 import Dimensions from "react-dimensions";
-import {Stage, Layer, Image, Line} from "react-konva";
+import {Stage, Layer, Image, Line, Text} from "react-konva";
+import Konva from "konva";
 import useImage from "use-image";
 
 
-
 const AnnotatedImage = ({ url, boxes, onClick, containerWidth, containerHeight }) => {
-  console.log(url);
-
   const [image] = useImage(url);
 
   const [width, setWidth] = useState(0);
   const [height, setHeight] = useState(0);
   const [scale, setScale] = useState(1);
 
-  console.log(url, width);
-
   useEffect(() => {
     if (!image) {
       return;
     }
-    console.log(url);
     const aspectRatio = image.width / image.height;
     //const scale = Math.min(width / image.width, height / image.height);
     const width = containerWidth;
     const height = width / aspectRatio;
-    const scale = width / image.width;
+    const newScale = width / image.width;
 
     setWidth(width);
     setHeight(height);
-    setScale(scale);
-  }, [image]);
+    setScale(newScale);
+  }, [image, containerWidth]);
 
 
   return (
@@ -40,18 +35,30 @@ const AnnotatedImage = ({ url, boxes, onClick, containerWidth, containerHeight }
       </Layer>
       <Layer>
         {boxes.map(box => {
-          const inv_s = 1.0 / scale;
-          const x1 = box.x1 * inv_s;
-          const y1 = box.y1 * inv_s;
-          const x2 = box.x2 * inv_s;
-          const y2 = box.y2 * inv_s;
-          return (
+          const x1 = Math.round(box.x1 * scale);
+          const y1 = Math.round(box.y1 * scale);
+          const x2 = Math.round(box.x2 * scale);
+          const y2 = Math.round(box.y2 * scale);
+
+          const label = new Konva.Text({
+            text: box.category, fontsize: 12
+          })
+          const {width: textWidth, height: textHeight} = label.measureSize()
+          return (<>
             <Line
-              points={[[x1, y1], [x2, y1], [x2, y2], [x1, y2]]}
+              points={[x1, y1, x2, y1, x2, y2, x1, y2]}
               stroke='red'
               strokeWidth={1}
               closed
             />
+            <Text
+              x={x2-textWidth*2}
+              y={y2-textHeight}
+              text={box.category}
+              fontsize={12}
+              fill='red'
+            />
+          </>
           );
         })}
       </Layer>
