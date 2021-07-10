@@ -18,6 +18,24 @@ class Dataset(models.Model):
         ]
 
 
+class ModelOutput(models.Model):
+    dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE)
+    name = models.CharField(max_length=MEDIUM_STRING_LENGTH)
+
+    embeddings_path = models.CharField(max_length=LONG_STRING_LENGTH, blank=True)
+    scores_path = models.CharField(max_length=LONG_STRING_LENGTH, blank=True)
+    image_list_path = models.CharField(max_length=LONG_STRING_LENGTH)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["dataset", "name"], name="unique_name"),
+        ]
+
+        indexes = [
+            models.Index(fields=["dataset", "name"]),
+        ]
+
+
 class User(models.Model):
     email = models.EmailField(unique=True)
 
@@ -93,7 +111,10 @@ class DNNModel(models.Model):
     name = models.SlugField()
     model_id = models.CharField(max_length=MEDIUM_STRING_LENGTH, unique=True)
     checkpoint_path = models.CharField(max_length=LONG_STRING_LENGTH, null=True)
+
+    # TODO: make this a ForeignKey to or from (decision: which is better?) ModelOutput
     output_directory = models.CharField(max_length=LONG_STRING_LENGTH, null=True)
+
     last_updated = models.DateTimeField(auto_now=True)
     category_spec = models.JSONField(default=dict)
     resume_model_id = models.CharField(max_length=MEDIUM_STRING_LENGTH, null=True)
