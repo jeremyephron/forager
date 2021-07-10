@@ -1296,14 +1296,18 @@ def bulk_add_single_tag_annotations_v2(payload, images):
 
     user, _ = User.objects.get_or_create(email=user_email)
     category, _ = Category.objects.get_or_create(name=category_name)
-    mode, _ = Mode.objects.get_or_create(name=mode_name)
 
     Annotation.objects.filter(
         dataset_item__in=images, category=category, is_box=False
     ).delete()
 
-    # TODO: Add an actual endpoint to delete annotations (probably by pk); don't rely
-    # on this hacky "TOMBSTONE" string
+    # HACK(mihirg): We don't have an actual endpoint to delete annotations, so deletion
+    # is currently signalled by the frontend sending an "add annotation" request with
+    # the mode "TOMBSTOME"
+    if mode_name == "TOMBSTONE":
+        return 0
+
+    mode, _ = Mode.objects.get_or_create(name=mode_name)
     annotations = [
         Annotation(
             dataset_item=di,
@@ -1350,30 +1354,34 @@ def bulk_add_multi_annotations_v2(payload: Dict):
         db_ann = Annotation()
         category_name = ann["category"]
         mode_name = ann["mode"]
+        is_box = ann.get("is_box", False)
+        pk = ident_to_pk[ann["identifier"]] if "identifier" in ann else ann["pk"]
 
         if category_name not in cats:
             cats[category_name] = Category.objects.get_or_create(name=category_name)[0]
+        if not is_box:
+            to_delete[cats[category_name]].add(pk)
+
+        # HACK(mihirg): We don't have an actual endpoint to delete annotations, so deletion
+        # is currently signalled by the frontend sending an "add annotation" request with
+        # the mode "TOMBSTOME"
+        if mode_name == "TOMBSTONE":
+            continue
+
         if mode_name not in modes:
             modes[mode_name] = Mode.objects.get_or_create(name=mode_name)[0]
 
-        if "identifier" in ann:
-            pk = ident_to_pk[ann["identifier"]]
-        else:
-            pk = ann["pk"]
-
-        db_ann.dataset_item_id = pk
-        db_ann.user = user
         db_ann.category = cats[category_name]
         db_ann.mode = modes[mode_name]
+        db_ann.dataset_item_id = pk
+        db_ann.user = user
+        db_ann.is_box = is_box
 
-        db_ann.is_box = ann.get("is_box", False)
         if db_ann.is_box:
             db_ann.bbox_x1 = ann["x1"]
             db_ann.bbox_y1 = ann["y1"]
             db_ann.bbox_x2 = ann["x2"]
             db_ann.bbox_y2 = ann["y2"]
-        else:
-            to_delete[db_ann.category].add(pk)
 
         db_ann.misc_data = {"created_by": created_by}
         annotations.append(db_ann)
@@ -1385,8 +1393,6 @@ def bulk_add_multi_annotations_v2(payload: Dict):
             category=cat, dataset_item_id__in=pks, is_box=False
         ).delete()
 
-    # TODO: Add an actual endpoint to delete annotations (probably by pk); don't rely
-    # on this hacky "TOMBSTONE" string
     bulk_add_annotations_v2(dataset, annotations)
 
     return len(annotations)
