@@ -2,7 +2,7 @@ import os.path
 from pathlib import Path
 from urllib.request import Request, urlopen
 
-from forager_index.utils import GIGABYTE
+GIGABYTE = 1024 * 1024 * 1024
 
 # Get instance IP (https://stackoverflow.com/q/23362887)
 if False:
