@@ -112,7 +112,7 @@ html, body, #root, .main {
   }
 
   .clustering-feature-bar {
-    width: 10rem;
+    width: 16rem;
   }
 }
 
@@ -364,12 +364,10 @@ $semi-transparent-white: rgba(255, 255, 255, 0.92);
   padding: 1rem !important;
 }
 
-// .panel {
-//   width: 40%;
-//   background: $primary-alt-darker;
-//   position: absolute;
-//   right: 0;
-//   top: 0;
-//   padding-top: 5rem;
-//   height: 600rem;
-// }
+.rbt-aux .rbt-close {
+  margin-top: 2px;
+}
+
+.rbt-token .rbt-token-remove-button {
+  top: 0;
+}
