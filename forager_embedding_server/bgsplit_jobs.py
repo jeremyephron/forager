@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import random
-import shutil
 import subprocess
 import time
 import urllib.parse
@@ -22,9 +20,26 @@ from forager_knn.reducers import Reducer
 from forager_knn.utils import JSONType
 
 import forager_embedding_server.config as config
-from forager_embedding_server.index_jobs import Trainer
+from forager_embedding_server.utils import sha_encode
 
 logger = logging.getLogger("index_server")
+
+
+class Trainer:
+    def __init__(self, url: str):
+        self.url = url
+        self.trainer_id = sha_encode(url)
+        self.lock = asyncio.Lock()
+
+    async def __aenter__(self) -> str:  # returns endpoint
+        await self.lock.acquire()
+        return self.url
+
+    async def __aexit__(self, type, value, traceback):
+        self.lock.release()
+
+    def locked(self) -> bool:
+        return self.lock.locked()
 
 
 class BGSplitTrainingJob:
@@ -42,7 +57,7 @@ class BGSplitTrainingJob:
         resume_from: Optional[str],
         trainers: List[Trainer],
         preferred_trainer: Optional[Trainer],
-        cluster: Cluster,
+        cluster: TerraformModule,
         session: aiohttp.ClientSession,
     ):
         self.model_name = model_name
@@ -161,11 +176,11 @@ class BGSplitTrainingJob:
 
     async def handle_result(self, result: JSONType):
         logger.debug(f"Train ({self.model_name}): recieved status update {result}")
-        if self.tensorboard_url is None and result.get("model_suffix"):
+        suffix = result.get("model_suffix")
+        if self.tensorboard_url is None and suffix:
             self.tensorboard_url = os.path.join(
                 self.cluster.output["bgsplit_trainer_tensorboard_urls"][0],
-                f"#scalars&regexInput="
-                + urllib.parse.quote_plus(result["model_suffix"]),
+                f"#scalars&regexInput={urllib.parse.quote_plus(suffix)}",
             )
 
         if result.get("success"):
@@ -373,7 +388,6 @@ class BGSplitInferenceJob:
         self.mapper_job = MapReduceJob(
             mapper=MapperSpec(
                 url=self.cluster.output["bgsplit_mapper_url"],
-                # url=config.BGSPLIT_MAPPER_CLOUD_RUN_URL,
                 n_mappers=n_mappers,
             ),
             reducer=reducer,
