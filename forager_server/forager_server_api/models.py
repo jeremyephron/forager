@@ -1,5 +1,5 @@
 from django.db import models
-
+from django.db.models import Q
 
 MEDIUM_STRING_LENGTH = 300
 LONG_STRING_LENGTH = 600
@@ -9,7 +9,6 @@ class Dataset(models.Model):
     name = models.SlugField(unique=True)
     train_directory = models.CharField(max_length=LONG_STRING_LENGTH)
     val_directory = models.CharField(max_length=LONG_STRING_LENGTH, blank=True)
-    index_id = models.CharField(max_length=MEDIUM_STRING_LENGTH)
     hidden = models.BooleanField(default=False)
 
     class Meta:
@@ -20,7 +19,7 @@ class Dataset(models.Model):
 
 class ModelOutput(models.Model):
     dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE)
-    name = models.CharField(max_length=MEDIUM_STRING_LENGTH)
+    name = models.SlugField()
 
     embeddings_path = models.CharField(max_length=LONG_STRING_LENGTH, blank=True)
     scores_path = models.CharField(max_length=LONG_STRING_LENGTH, blank=True)
@@ -29,6 +28,10 @@ class ModelOutput(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["dataset", "name"], name="unique_name"),
+            models.CheckConstraint(
+                check=Q(embeddings_path__isnull=False) | Q(scores_path__isnull=False),
+                name="not_empty",
+            ),
         ]
 
         indexes = [

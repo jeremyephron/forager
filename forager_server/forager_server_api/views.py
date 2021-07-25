@@ -1,41 +1,32 @@
-from collections import defaultdict, namedtuple
-from dataclasses import dataclass
 import distutils.util
 import functools
 import itertools
 import json
+import logging
 import math
 import operator
 import os
 import random
-import uuid
 import shutil
-import logging
 import time
+import uuid
+from collections import defaultdict, namedtuple
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, NamedTuple
 
-from typing import List, Dict, NamedTuple, Optional
-
+import requests
+from django.conf import settings
 from django.db.models import Q
 from django.http import JsonResponse
+from django.shortcuts import get_list_or_404, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
-from django.shortcuts import get_object_or_404, get_list_or_404
-from django.conf import settings
+from expiringdict import ExpiringDict
 from google.cloud import storage
 from rest_framework.decorators import api_view
-import requests
-from expiringdict import ExpiringDict
 
-from .models import (
-    Dataset,
-    DatasetItem,
-    Category,
-    Mode,
-    User,
-    Annotation,
-    DNNModel,
-    CategoryCount,
-)
-
+from .models import (Annotation, Category, CategoryCount, Dataset, DatasetItem,
+                     DNNModel, Mode, ModelOutput, User)
 
 BUILTIN_MODES = ["POSITIVE", "NEGATIVE", "HARD_NEGATIVE", "UNSURE"]
 
@@ -102,10 +93,10 @@ def create_model(request, dataset_name, dataset=None):
     cluster_id = payload["cluster_id"]
     bucket_name = payload["bucket"]
     index_id = payload["index_id"]
-    pos_tags = parse_tag_set_from_query_v2(payload["pos_tags"])
-    neg_tags = parse_tag_set_from_query_v2(payload["neg_tags"])
-    val_pos_tags = parse_tag_set_from_query_v2(payload["val_pos_tags"])
-    val_neg_tags = parse_tag_set_from_query_v2(payload["val_neg_tags"])
+    pos_tags = parse_tag_set_from_query(payload["pos_tags"])
+    neg_tags = parse_tag_set_from_query(payload["neg_tags"])
+    val_pos_tags = parse_tag_set_from_query(payload["val_pos_tags"])
+    val_neg_tags = parse_tag_set_from_query(payload["val_neg_tags"])
     augment_negs = bool(payload["augment_negs"])
     model_kwargs = payload["model_kwargs"]
     resume_model_id = payload.get("resume", None)
@@ -119,7 +110,7 @@ def create_model(request, dataset_name, dataset=None):
         dataset_item__in=eligible_images,
         category__in=categories,
     )
-    tags_by_pk = get_tags_from_annotations_v2(annotations)
+    tags_by_pk = get_tags_from_annotations(annotations)
 
     pos_dataset_item_pks = []
     neg_dataset_item_pks = []
@@ -141,7 +132,7 @@ def create_model(request, dataset_name, dataset=None):
     ) - len(neg_dataset_item_pks)
     if augment_negs and num_extra_negs > 0:
         # Uses "include" and "exclude" category sets from request
-        all_eligible_pks = filtered_images_v2(
+        all_eligible_pks = filtered_images(
             request,
             dataset,
             exclude_pks=(
@@ -256,7 +247,7 @@ def get_model_status(request, model_id):
 
 @api_view(["POST"])
 @csrf_exempt
-def update_model_v2(request):
+def update_model(request):
     payload = json.loads(request.body)
     # user = payload["user"]
     old_model_name = payload["old_model_name"]
@@ -272,7 +263,7 @@ def update_model_v2(request):
 
 @api_view(["POST"])
 @csrf_exempt
-def delete_model_v2(request):
+def delete_model(request):
     payload = json.loads(request.body)
     model_name = payload["model_name"]
     # cluster_id = payload['cluster_id']
@@ -376,7 +367,6 @@ class ResultSet:
     type: str
     ranking: List[PkType]
     distances: List[float]
-    model: Optional[str]
 
 
 # TODO(fpoms): this needs to be wrapped in a lock so that
@@ -387,7 +377,7 @@ current_result_sets = ExpiringDict(
 )  # type: Dict[str, ResultSet]
 
 
-def parse_tag_set_from_query_v2(s):
+def parse_tag_set_from_query(s):
     if isinstance(s, list):
         parts = s
     elif isinstance(s, str) and s:
@@ -406,7 +396,7 @@ def parse_tag_set_from_query_v2(s):
 def tag_sets_to_query(*tagsets):
     merged = set().union(*tagsets)
     if not merged:
-        return Q()
+        return Q(pk__in=[])
 
     return Q(
         annotation__in=Annotation.objects.filter(
@@ -418,11 +408,11 @@ def tag_sets_to_query(*tagsets):
     )
 
 
-def serialize_tag_set_for_client_v2(ts):
+def serialize_tag_set_for_client(ts):
     return [{"category": t.category, "value": t.value} for t in sorted(list(ts))]
 
 
-def serialize_boxes_for_client_v2(bs):
+def serialize_boxes_for_client(bs):
     return [
         {
             "category": b.category,
@@ -436,7 +426,7 @@ def serialize_boxes_for_client_v2(bs):
     ]
 
 
-def get_tags_from_annotations_v2(annotations):
+def get_tags_from_annotations(annotations):
     tags_by_pk = defaultdict(list)
     annotations = annotations.filter(is_box=False)
     ann_dicts = annotations.values("dataset_item__pk", "category__name", "mode__name")
@@ -448,7 +438,7 @@ def get_tags_from_annotations_v2(annotations):
     return tags_by_pk
 
 
-def get_boxes_from_annotations_v2(annotations):
+def get_boxes_from_annotations(annotations):
     boxes_by_pk = defaultdict(list)
     annotations = annotations.filter(is_box=True)
     ann_dicts = annotations.values(
@@ -469,19 +459,19 @@ def get_boxes_from_annotations_v2(annotations):
     return boxes_by_pk
 
 
-def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
+def filtered_images(request, dataset, exclude_pks=None) -> List[PkType]:
     filt_start = time.time()
     if request.method == "POST":
         payload = json.loads(request.body)
-        include_tags = parse_tag_set_from_query_v2(payload.get("include"))
-        exclude_tags = parse_tag_set_from_query_v2(payload.get("exclude"))
+        include_tags = parse_tag_set_from_query(payload.get("include"))
+        exclude_tags = parse_tag_set_from_query(payload.get("exclude"))
         pks = [i for i in payload.get("subset", []) if i]
         split = payload.get("split", "train")
         offset_to_return = int(payload.get("offset", 0))
         num_to_return = int(payload.get("num", -1))
     else:
-        include_tags = parse_tag_set_from_query_v2(request.GET.get("include"))
-        exclude_tags = parse_tag_set_from_query_v2(request.GET.get("exclude"))
+        include_tags = parse_tag_set_from_query(request.GET.get("include"))
+        exclude_tags = parse_tag_set_from_query(request.GET.get("exclude"))
         pks = [i for i in request.GET.get("subset", "").split(",") if i]
         split = request.GET.get("split", "train")
         offset_to_return = int(request.GET.get("offset", 0))
@@ -518,8 +508,7 @@ def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
 
         if include_tags:
             dataset_items = dataset_items.filter(tag_sets_to_query(include_tags))
-        if exclude_tags:
-            dataset_items = dataset_items.exclude(tag_sets_to_query(exclude_tags))
+        dataset_items = dataset_items.exclude(tag_sets_to_query(exclude_tags))
 
         result = dataset_items.values_list("pk", flat=True)
 
@@ -527,14 +516,14 @@ def filtered_images_v2(request, dataset, exclude_pks=None) -> List[PkType]:
     result = list(result[offset_to_return:end_to_return])
     filt_end = time.time()
     print(
-        f"filtered_images_v2: tot: {filt_end-filt_start}, "
+        f"filtered_images: tot: {filt_end-filt_start}, "
         f"db ({len(result)} items): {db_end-db_start}, db tag: {db_tag_end-db_tag_start}"
     )
     return result
 
 
-def process_image_query_results_v2(request, dataset, query_response):
-    filtered_pks = filtered_images_v2(request, dataset)
+def process_image_query_results(request, dataset, query_response):
+    filtered_pks = filtered_images(request, dataset)
     # TODO(mihirg): Eliminate this database call by directly returning pks from backend
     dataset_items = DatasetItem.objects.filter(pk__in=filtered_pks)
     dataset_items_by_path = {di.path: di for di in dataset_items}
@@ -551,12 +540,12 @@ def process_image_query_results_v2(request, dataset, query_response):
     )
 
 
-def create_result_set_v2(results, type, model=None):
+def create_result_set(results, type):
     pks = results["pks"]
     distances = results["distances"]
     result_set_id = str(uuid.uuid4())
     current_result_sets[result_set_id] = ResultSet(
-        type=type, ranking=pks, distances=distances, model=model
+        type=type, ranking=pks, distances=distances
     )
     return {
         "id": result_set_id,
@@ -567,46 +556,56 @@ def create_result_set_v2(results, type, model=None):
 
 @api_view(["GET"])
 @csrf_exempt
-def get_results_v2(request, dataset_name):
+def get_results(request, dataset_name):
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
-    index_id = request.GET["index_id"]
+    clustering_model_output_id = request.GET["clustering_model_output_id"]
     result_set_id = request.GET["result_set_id"]
     offset_to_return = int(request.GET.get("offset", 0))
     num_to_return = int(request.GET.get("num", 500))
-    clustering_model = request.GET.get("clustering_model", None)
 
+    # Retrieve slice of pks from result set
     result_set = current_result_sets[result_set_id]
     pks = result_set.ranking[offset_to_return : offset_to_return + num_to_return]
     distances = result_set.distances[
         offset_to_return : offset_to_return + num_to_return
     ]
 
+    # Query full DatasetItem objects
     dataset_items_by_pk = DatasetItem.objects.in_bulk(pks)
     dataset_items = [dataset_items_by_pk[pk] for pk in pks]  # preserve order
 
-    bucket_name = dataset.train_directory[len("gs://") :].split("/")[0]
-    path_template = "https://storage.googleapis.com/{:s}/".format(bucket_name) + "{:s}"
+    # Parse paths
+    dataset_item_identifiers = []
+    internal_identifiers = []
+    dataset_item_paths = []
+    for di in dataset_items:
+        dataset_item_identifiers.append(di.pk)
+        internal_identifiers.append(di.identifier)
+        directory = dataset.val_directory if di.is_val else dataset.train_directory
+        if directory.startswith("gs://"):
+            bucket_name = dataset.train_directory[len("gs://") :].split("/")[0]
+            path = f"https://storage.googleapis.com/{bucket_name}/{di.path}"
+        elif directory.startswith("http"):
+            path = di.path
+        else:  # local path
+            path = (Path(directory) / di.path).as_uri()
+        dataset_item_paths.append(path)
 
-    internal_identifiers = [di.identifier for di in dataset_items]
+    # Perform clustering
+    clustering_model_output = ModelOutput.objects.get(
+        pk=clustering_model_output_id, embeddings_path__isnull=False
+    )
     params = {
-        "index_id": index_id,
+        "embeddings_path": clustering_model_output.embeddings_path,
+        "image_list_path": clustering_model_output.image_list_path,
         "identifiers": internal_identifiers,
     }
-    if clustering_model:
-        params["model"] = clustering_model
-
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/perform_clustering",
         json=params,
     )
     clustering_data = r.json()
-
-    dataset_item_paths = [
-        (di.path if di.path.find("http") != -1 else path_template.format(di.path))
-        for di in dataset_items
-    ]
-    dataset_item_identifiers = [di.pk for di in dataset_items]
 
     return JsonResponse(
         {
@@ -620,7 +619,7 @@ def get_results_v2(request, dataset_name):
 
 @api_view(["POST"])
 @csrf_exempt
-def keep_alive_v2(request):
+def keep_alive(request):
     requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/keep_alive",
     )
@@ -629,7 +628,7 @@ def keep_alive_v2(request):
 
 @api_view(["POST"])
 @csrf_exempt
-def generate_embedding_v2(request):
+def generate_embedding(request):
     payload = json.loads(request.body)
     image_id = payload.get("image_id")
     if image_id:
@@ -644,7 +643,7 @@ def generate_embedding_v2(request):
 
 @api_view(["POST"])
 @csrf_exempt
-def generate_text_embedding_v2(request):
+def generate_text_embedding(request):
     payload = json.loads(request.body)
     r = requests.post(
         settings.EMBEDDING_SERVER_ADDRESS + "/generate_text_embedding",
@@ -655,69 +654,70 @@ def generate_text_embedding_v2(request):
 
 @api_view(["POST"])
 @csrf_exempt
-def query_knn_v2(request, dataset_name):
+def query_knn(request, dataset_name):
     payload = json.loads(request.body)
-    index_id = payload["index_id"]
+    model_output_id = payload["model_output_id"]
     embeddings = payload["embeddings"]
     use_full_image = bool(payload.get("use_full_image", True))
     use_dot_product = bool(payload.get("use_dot_product", False))
-    model = payload.get("model", "imagenet")
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
+    model_output = ModelOutput.objects.get(
+        pk=model_output_id, embeddings_path__isnull=False
+    )
 
     query_knn_start = time.time()
     params = {
-        "index_id": index_id,
+        "embeddings_path": model_output.embeddings_path,
+        "image_list_path": model_output.image_list_path,
         "embeddings": embeddings,
         "use_full_image": use_full_image,
         "use_dot_product": use_dot_product,
-        "model": model,
     }
     r = requests.post(
-        settings.EMBEDDING_SERVER_ADDRESS + "/query_knn_v2",
+        settings.EMBEDDING_SERVER_ADDRESS + "/query_knn",
         json=params,
     )
     response_data = r.json()
     query_knn_end = time.time()
-    logger.debug("query_knn_v2 time: {:f}".format(query_knn_end - query_knn_start))
+    logger.debug("query_knn time: {:f}".format(query_knn_end - query_knn_start))
 
-    results = process_image_query_results_v2(
+    results = process_image_query_results(
         request,
         dataset,
         response_data,
     )
-    return JsonResponse(create_result_set_v2(results, "knn", model=model))
+    return JsonResponse(create_result_set(results, "knn"))
 
 
 @api_view(["GET"])
 @csrf_exempt
-def train_svm_v2(request, dataset_name):
-    index_id = request.GET["index_id"]
-    model = request.GET.get("model", "imagenet")
-    pos_tags = parse_tag_set_from_query_v2(request.GET["pos_tags"])
-    neg_tags = parse_tag_set_from_query_v2(request.GET.get("neg_tags"))
+def train_svm(request, dataset_name):
+    model_output_id = request.GET["model_output_id"]
+    pos_tags = parse_tag_set_from_query(request.GET["pos_tags"])
+    neg_tags = parse_tag_set_from_query(request.GET.get("neg_tags"))
     augment_negs = bool(
         distutils.util.strtobool(request.GET.get("augment_negs", "false"))
     )
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
+    model_output = ModelOutput.objects.get(
+        pk=model_output_id, embeddings_path__isnull=False
+    )
 
     pos_dataset_items = DatasetItem.objects.filter(
         tag_sets_to_query(pos_tags),
         dataset=dataset,
         is_val=False,
     )
-    pos_dataset_item_pks = list(pos_dataset_items.values_list("pk", flat=True))
+    neg_dataset_items = DatasetItem.objects.filter(
+        tag_sets_to_query(neg_tags),
+        dataset=dataset,
+        is_val=False,
+    ).difference(pos_dataset_items)
 
-    if neg_tags:
-        neg_dataset_items = DatasetItem.objects.filter(
-            tag_sets_to_query(neg_tags),
-            dataset=dataset,
-            is_val=False,
-        ).difference(pos_dataset_items)
-        neg_dataset_item_pks = list(neg_dataset_items.values_list("pk", flat=True))
-    else:
-        neg_dataset_item_pks = []
+    pos_dataset_item_pks = list(pos_dataset_items.values_list("pk", flat=True))
+    neg_dataset_item_pks = list(neg_dataset_items.values_list("pk", flat=True))
 
     # Augment with randomly sampled negatives if requested
     num_extra_negs = settings.SVM_NUM_NEGS_MULTIPLIER * len(pos_dataset_item_pks) - len(
@@ -725,7 +725,7 @@ def train_svm_v2(request, dataset_name):
     )
     if augment_negs and num_extra_negs > 0:
         # Uses "include" and "exclude" category sets from GET request
-        all_eligible_pks = filtered_images_v2(
+        all_eligible_pks = filtered_images(
             request, dataset, exclude_pks=pos_dataset_item_pks + neg_dataset_item_pks
         )
         sampled_pks = random.sample(
@@ -745,13 +745,13 @@ def train_svm_v2(request, dataset_name):
     )
 
     params = {
-        "index_id": index_id,
+        "embeddings_path": model_output.embeddings_path,
+        "image_list_path": model_output.image_list_path,
         "pos_identifiers": pos_dataset_item_internal_identifiers,
         "neg_identifiers": neg_dataset_item_internal_identifiers,
-        "model": model,
     }
     r = requests.post(
-        settings.EMBEDDING_SERVER_ADDRESS + "/train_svm_v2",
+        settings.EMBEDDING_SERVER_ADDRESS + "/train_svm",
         json=params,
     )
     return JsonResponse(r.json())  # {"svm_vector": base64-encoded string}
@@ -759,25 +759,27 @@ def train_svm_v2(request, dataset_name):
 
 @api_view(["POST"])
 @csrf_exempt
-def query_svm_v2(request, dataset_name):
+def query_svm(request, dataset_name):
     payload = json.loads(request.body)
-    index_id = payload["index_id"]
+    model_output_id = request.GET["model_output_id"]
     svm_vector = payload["svm_vector"]
     score_min = float(payload.get("score_min", 0.0))
     score_max = float(payload.get("score_max", 1.0))
-    model = payload.get("model", "imagenet")
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
+    model_output = ModelOutput.objects.get(
+        pk=model_output_id, embeddings_path__isnull=False
+    )
 
     params = {
-        "index_id": index_id,
+        "embeddings_path": model_output.embeddings_path,
+        "image_list_path": model_output.image_list_path,
         "svm_vector": svm_vector,
         "score_min": score_min,
         "score_max": score_max,
-        "model": model,
     }
     r = requests.post(
-        settings.EMBEDDING_SERVER_ADDRESS + "/query_svm_v2",
+        settings.EMBEDDING_SERVER_ADDRESS + "/query_svm",
         json=params,
     )
     response_data = r.json()
@@ -785,33 +787,35 @@ def query_svm_v2(request, dataset_name):
     # TODO(mihirg, jeremye): Consider some smarter pagination/filtering scheme to avoid
     # running a separate query over the index every single time the user adjusts score
     # thresholds
-    results = process_image_query_results_v2(
+    results = process_image_query_results(
         request,
         dataset,
         response_data,
     )
-    return JsonResponse(create_result_set_v2(results, "svm"))
+    return JsonResponse(create_result_set(results, "svm"))
 
 
 @api_view(["POST"])
 @csrf_exempt
-def query_ranking_v2(request, dataset_name):
+def query_ranking(request, dataset_name):
     payload = json.loads(request.body)
-    index_id = payload["index_id"]
+    model_output_id = request.GET["model_output_id"]
     score_min = float(payload.get("score_min", 0.0))
     score_max = float(payload.get("score_max", 1.0))
-    model = payload["model"]
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
+    model_output = ModelOutput.objects.get(
+        pk=model_output_id, scores_path__isnull=False
+    )
 
     params = {
-        "index_id": index_id,
+        "scores_path": model_output.scores_path,
+        "image_list_path": model_output.image_list_path,
         "score_min": score_min,
         "score_max": score_max,
-        "model": model,
     }
     r = requests.post(
-        settings.EMBEDDING_SERVER_ADDRESS + "/query_ranking_v2",
+        settings.EMBEDDING_SERVER_ADDRESS + "/query_ranking",
         json=params,
     )
     response_data = r.json()
@@ -819,17 +823,17 @@ def query_ranking_v2(request, dataset_name):
     # TODO(mihirg, jeremye): Consider some smarter pagination/filtering scheme to avoid
     # running a separate query over the index every single time the user adjusts score
     # thresholds
-    results = process_image_query_results_v2(
+    results = process_image_query_results(
         request,
         dataset,
         response_data,
     )
-    return JsonResponse(create_result_set_v2(results, "ranking", model=model))
+    return JsonResponse(create_result_set(results, "ranking"))
 
 
 @api_view(["POST"])
 @csrf_exempt
-def query_images_v2(request, dataset_name):
+def query_images(request, dataset_name):
     query_start = time.time()
 
     dataset = get_object_or_404(Dataset, name=dataset_name)
@@ -837,7 +841,7 @@ def query_images_v2(request, dataset_name):
     order = payload.get("order", "id")
 
     filter_start = time.time()
-    result_pks = filtered_images_v2(request, dataset)
+    result_pks = filtered_images(request, dataset)
     filter_end = time.time()
 
     if order == "random":
@@ -845,11 +849,11 @@ def query_images_v2(request, dataset_name):
     elif order == "id":
         result_pks.sort()
     results = {"pks": result_pks, "distances": [-1 for _ in result_pks]}
-    resp = JsonResponse(create_result_set_v2(results, "query"))
+    resp = JsonResponse(create_result_set(results, "query"))
 
     query_end = time.time()
     print(
-        f"query_images_v2: tot: {query_end-query_start}, "
+        f"query_images: tot: {query_end-query_start}, "
         f"filter: {filter_end-filter_start}"
     )
     return resp
@@ -857,21 +861,23 @@ def query_images_v2(request, dataset_name):
 
 #
 # ACTIVE VALIDATION
+# Note(mihirg): These functions are out of date as of 6/25 and may need to be
+# fixed/removed. However, their counterparts on the index server are up to date.
 #
 
 
 VAL_NEGATIVE_TYPE = "model_val_negative"
 
 
-def get_val_examples_v2(dataset, model_id):
+def get_val_examples(dataset, model_id):
     # Get positive and negative categories
     model = get_object_or_404(DNNModel, model_id=model_id)
 
-    pos_tags = parse_tag_set_from_query_v2(model.category_spec["pos_tags"])
-    neg_tags = parse_tag_set_from_query_v2(model.category_spec["neg_tags"])
+    pos_tags = parse_tag_set_from_query(model.category_spec["pos_tags"])
+    neg_tags = parse_tag_set_from_query(model.category_spec["neg_tags"])
     augment_negs = model.category_spec.get("augment_negs", False)
     augment_negs_include = (
-        parse_tag_set_from_query_v2(model.category_spec.get("augment_negs_include", []))
+        parse_tag_set_from_query(model.category_spec.get("augment_negs_include", []))
         if augment_negs
         else set()
     )
@@ -890,7 +896,7 @@ def get_val_examples_v2(dataset, model_id):
         dataset_item__in=eligible_dataset_items,
         category__in=categories,
     )
-    tags_by_pk = get_tags_from_annotations_v2(annotations)
+    tags_by_pk = get_tags_from_annotations(annotations)
 
     pos_dataset_item_pks = []
     neg_dataset_item_pks = []
@@ -913,14 +919,14 @@ def get_val_examples_v2(dataset, model_id):
 
 
 @api_view(["POST"])
-def query_metrics_v2(request, dataset_name):
+def query_metrics(request, dataset_name):
     dataset = get_object_or_404(Dataset, name=dataset_name)
     payload = json.loads(request.body)
     model_id = payload["model"]
     index_id = payload["index_id"]
     internal_identifiers_to_weights = payload["weights"]  # type: Dict[str, int]
 
-    pos_dataset_item_pks, neg_dataset_item_pks = get_val_examples_v2(dataset, model_id)
+    pos_dataset_item_pks, neg_dataset_item_pks = get_val_examples(dataset, model_id)
 
     # Construct identifiers, labels, and weights
     dataset_items_by_pk = DatasetItem.objects.in_bulk(
@@ -960,7 +966,7 @@ def query_metrics_v2(request, dataset_name):
 
 
 @api_view(["POST"])
-def query_active_validation_v2(request, dataset_name):
+def query_active_validation(request, dataset_name):
     dataset = get_object_or_404(Dataset, name=dataset_name)
     payload = json.loads(request.body)
     model_id = payload["model"]
@@ -969,7 +975,7 @@ def query_active_validation_v2(request, dataset_name):
     if current_f1 is None:
         current_f1 = 0.5
 
-    pos_dataset_item_pks, neg_dataset_item_pks = get_val_examples_v2(dataset, model_id)
+    pos_dataset_item_pks, neg_dataset_item_pks = get_val_examples(dataset, model_id)
 
     # Construct paths, identifiers, and labels
     dataset_items_by_pk = DatasetItem.objects.in_bulk(
@@ -1025,7 +1031,7 @@ def query_active_validation_v2(request, dataset_name):
 
 
 @api_view(["POST"])
-def add_val_annotations_v2(request):
+def add_val_annotations(request):
     payload = json.loads(request.body)
     annotations = payload["annotations"]
     user_email = payload["user"]
@@ -1074,7 +1080,7 @@ def add_val_annotations_v2(request):
 
 @api_view(["GET"])
 @csrf_exempt
-def get_datasets_v2(request):
+def get_datasets(request):
     datasets = Dataset.objects.filter(hidden=False)
     dataset_names = list(datasets.values_list("name", flat=True))
     return JsonResponse({"dataset_names": dataset_names})
@@ -1082,23 +1088,68 @@ def get_datasets_v2(request):
 
 @api_view(["GET"])
 @csrf_exempt
-def get_dataset_info_v2(request, dataset_name):
+def get_dataset_info(request, dataset_name):
     dataset = get_object_or_404(Dataset, name=dataset_name)
     num_train = dataset.datasetitem_set.filter(is_val=False).count()
     num_val = dataset.datasetitem_set.filter(is_val=True).count()
 
     return JsonResponse(
         {
-            "index_id": dataset.index_id,
             "num_train": num_train,
             "num_val": num_val,
         }
     )
 
 
+@api_view(["POST"])
+def add_model_output(request, dataset_name):
+    dataset = get_object_or_404(Dataset, name=dataset_name)
+
+    payload = json.loads(request.body)
+    name = payload["name"]
+    embeddings_path = payload.get("embeddings_path")
+    scores_path = payload.get("scores_path")
+    image_list_path = payload["image_list_path"]
+
+    model_output = ModelOutput(
+        dataset=dataset,
+        name=name,
+        embeddings_path=embeddings_path,
+        scores_path=scores_path,
+        image_list_path=image_list_path,
+    )
+    model_output.save()
+    return JsonResponse({"status": "success"})
+
+
+@api_view(["GET"])
+def get_model_outputs(request, dataset_name):
+    dataset = get_object_or_404(Dataset, name=dataset_name)
+    model_output_objs = ModelOutput.objects.filter(dataset=dataset)
+    return JsonResponse(
+        {"model_outputs": list(map(model_output_info, model_output_objs))}
+    )
+
+
+def model_output_info(model_output):
+    return {
+        "id": model_output.pk,
+        "name": model_output.name,
+        "has_embeddings": model_output.embeddings_path is not None,
+        "has_scores": model_output.scores_path is not None,
+    }
+
+
+@api_view(["DELETE"])
+def delete_model_output(request, model_output_id):
+    model_output = ModelOutput.object.get(pk=model_output_id)
+    model_output.delete()
+    return JsonResponse({"status": "success"})
+
+
 @api_view(["GET"])
 @csrf_exempt
-def get_models_v2(request, dataset_name):
+def get_models(request, dataset_name):
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
     model_objs = DNNModel.objects.filter(
@@ -1131,9 +1182,9 @@ def model_info(model):
     if model is None:
         return None
 
-    pos_tags = parse_tag_set_from_query_v2(model.category_spec.get("pos_tags", []))
-    neg_tags = parse_tag_set_from_query_v2(model.category_spec.get("neg_tags", []))
-    augment_negs_include = parse_tag_set_from_query_v2(
+    pos_tags = parse_tag_set_from_query(model.category_spec.get("pos_tags", []))
+    neg_tags = parse_tag_set_from_query(model.category_spec.get("neg_tags", []))
+    augment_negs_include = parse_tag_set_from_query(
         model.category_spec.get("augment_negs_include", [])
     )
     return {
@@ -1141,21 +1192,21 @@ def model_info(model):
         "timestamp": model.last_updated,
         "has_checkpoint": model.checkpoint_path is not None,
         "has_output": model.output_directory is not None,
-        "pos_tags": serialize_tag_set_for_client_v2(pos_tags),
-        "neg_tags": serialize_tag_set_for_client_v2(neg_tags | augment_negs_include),
+        "pos_tags": serialize_tag_set_for_client(pos_tags),
+        "neg_tags": serialize_tag_set_for_client(neg_tags | augment_negs_include),
         "augment_negs": model.category_spec.get("augment_negs", False),
         "epoch": model.epoch,
     }
 
 
+# NOTE(mihirg): Broken; needs to be re-done for local server setup
 @api_view(["POST"])
 @csrf_exempt
-def create_dataset_v2(request):
+def create_dataset(request):
     payload = json.loads(request.body)
     name = payload["dataset"]
     train_directory = payload["train_path"]
     val_directory = payload["val_path"]
-    index_id = payload["index_id"]
 
     assert all(d.startswith("gs://") for d in (train_directory, val_directory))
 
@@ -1209,7 +1260,7 @@ def create_dataset_v2(request):
 
 @api_view(["POST"])
 @csrf_exempt
-def get_annotations_v2(request):
+def get_annotations(request):
     payload = json.loads(request.body)
     image_pks = [i for i in payload["identifiers"] if i]
     if not image_pks:
@@ -1218,37 +1269,37 @@ def get_annotations_v2(request):
     annotations = Annotation.objects.filter(
         dataset_item__in=DatasetItem.objects.filter(pk__in=image_pks),
     )
-    tags_by_pk = get_tags_from_annotations_v2(annotations)
-    boxes_by_pk = get_boxes_from_annotations_v2(annotations)
+    tags_by_pk = get_tags_from_annotations(annotations)
+    boxes_by_pk = get_boxes_from_annotations(annotations)
     annotations_by_pk = defaultdict(lambda: {"tags": [], "boxes": []})
     for pk, tags in tags_by_pk.items():
-        annotations_by_pk[pk]["tags"] = serialize_tag_set_for_client_v2(tags)
+        annotations_by_pk[pk]["tags"] = serialize_tag_set_for_client(tags)
     for pk, boxes in boxes_by_pk.items():
-        annotations_by_pk[pk]["boxes"] = serialize_boxes_for_client_v2(boxes)
+        annotations_by_pk[pk]["boxes"] = serialize_boxes_for_client(boxes)
     return JsonResponse(annotations_by_pk)
 
 
 @api_view(["POST"])
 @csrf_exempt
-def add_annotations_v2(request):
+def add_annotations(request):
     payload = json.loads(request.body)
     image_pks = payload["identifiers"]
     images = DatasetItem.objects.filter(pk__in=image_pks)
-    num_created = bulk_add_single_tag_annotations_v2(payload, images)
+    num_created = bulk_add_single_tag_annotations(payload, images)
     return JsonResponse({"created": num_created})
 
 
 @api_view(["POST"])
 @csrf_exempt
-def add_annotations_multi_v2(request):
+def add_annotations_multi(request):
     payload = json.loads(request.body)
-    num_created = bulk_add_multi_annotations_v2(payload)
+    num_created = bulk_add_multi_annotations(payload)
     return JsonResponse({"created": num_created})
 
 
 @api_view(["POST"])
 @csrf_exempt
-def add_annotations_by_internal_identifiers_v2(request, dataset_name):
+def add_annotations_by_internal_identifiers(request, dataset_name):
     dataset = get_object_or_404(Dataset, name=dataset_name)
 
     payload = json.loads(request.body)
@@ -1256,13 +1307,13 @@ def add_annotations_by_internal_identifiers_v2(request, dataset_name):
     images = DatasetItem.objects.filter(
         dataset=dataset, identifier__in=image_identifiers
     )
-    num_created = bulk_add_single_tag_annotations_v2(payload, images)
+    num_created = bulk_add_single_tag_annotations(payload, images)
     return JsonResponse({"created": num_created})
 
 
 @api_view(["POST"])
 @csrf_exempt
-def add_annotations_to_result_set_v2(request):
+def add_annotations_to_result_set(request):
     payload = json.loads(request.body)
     result_set_id = payload["result_set_id"]
     lower_bound = float(payload["from"])
@@ -1276,11 +1327,11 @@ def add_annotations_to_result_set_v2(request):
     image_pks = result_ranking[start_index:end_index]
 
     images = DatasetItem.objects.filter(pk__in=image_pks)
-    num_created = bulk_add_single_tag_annotations_v2(payload, images)
+    num_created = bulk_add_single_tag_annotations(payload, images)
     return JsonResponse({"created": num_created})
 
 
-def bulk_add_single_tag_annotations_v2(payload, images):
+def bulk_add_single_tag_annotations(payload, images):
     """Adds annotations for a single tag to many dataset items"""
     if not images:
         return 0
@@ -1290,9 +1341,7 @@ def bulk_add_single_tag_annotations_v2(payload, images):
     mode_name = payload["mode"]
     created_by = payload.get("created_by", "tag" if len(images) == 1 else "tag-bulk")
 
-    dataset = None
-    if len(images) > 0:
-        dataset = images[0].dataset
+    dataset = images[0].dataset
 
     user, _ = User.objects.get_or_create(email=user_email)
     category, _ = Category.objects.get_or_create(name=category_name)
@@ -1319,12 +1368,12 @@ def bulk_add_single_tag_annotations_v2(payload, images):
         )
         for di in images
     ]
-    bulk_add_annotations_v2(dataset, annotations)
+    bulk_add_annotations(dataset, annotations)
 
     return len(annotations)
 
 
-def bulk_add_multi_annotations_v2(payload: Dict):
+def bulk_add_multi_annotations(payload: Dict):
     """Adds multiple annotations for the same dataset and user to the database
     at once"""
     dataset_name = payload["dataset"]
@@ -1362,9 +1411,9 @@ def bulk_add_multi_annotations_v2(payload: Dict):
         if not is_box:
             to_delete[cats[category_name]].add(pk)
 
-        # HACK(mihirg): We don't have an actual endpoint to delete annotations, so deletion
-        # is currently signalled by the frontend sending an "add annotation" request with
-        # the mode "TOMBSTOME"
+        # HACK(mihirg): We don't have an actual endpoint to delete annotations, so
+        # deletion is currently signalled by the frontend sending an "add annotation"
+        # request with the mode "TOMBSTOME"
         if mode_name == "TOMBSTONE":
             continue
 
@@ -1393,12 +1442,12 @@ def bulk_add_multi_annotations_v2(payload: Dict):
             category=cat, dataset_item_id__in=pks, is_box=False
         ).delete()
 
-    bulk_add_annotations_v2(dataset, annotations)
+    bulk_add_annotations(dataset, annotations)
 
     return len(annotations)
 
 
-def bulk_add_annotations_v2(dataset, annotations):
+def bulk_add_annotations(dataset, annotations):
     """Handles book keeping for adding many annotations at once"""
     Annotation.objects.bulk_create(annotations)
     counts = defaultdict(int)
@@ -1415,7 +1464,7 @@ def bulk_add_annotations_v2(dataset, annotations):
 
 @api_view(["POST"])
 @csrf_exempt
-def delete_category_v2(request):
+def delete_category(request):
     payload = json.loads(request.body)
     category = payload["category"]
 
@@ -1427,7 +1476,7 @@ def delete_category_v2(request):
 
 @api_view(["POST"])
 @csrf_exempt
-def update_category_v2(request):
+def update_category(request):
     payload = json.loads(request.body)
 
     old_category_name = payload["oldCategory"]
@@ -1442,7 +1491,7 @@ def update_category_v2(request):
 
 @api_view(["GET"])
 @csrf_exempt
-def get_category_counts_v2(request, dataset_name):
+def get_category_counts(request, dataset_name):
     dataset = get_object_or_404(Dataset, name=dataset_name)
     counts = CategoryCount.objects.filter(dataset=dataset).values(
         "category__name", "mode__name", "count"
