@@ -88,16 +88,16 @@ const modes = [
 ];
 
 const endpoints = fromPairs(toPairs({
-  getDatasetInfo: "get_dataset_info_v2",
-  getCategoryCounts: "get_category_counts_v2",
-  getResults: "get_results_v2",
-  trainSvm: "train_svm_v2",
-  queryImages: "query_images_v2",
-  querySvm: "query_svm_v2",
-  queryKnn: "query_knn_v2",
-  queryRanking: "query_ranking_v2",
-  generateEmbedding: 'generate_embedding_v2',
-  keepAlive: 'keep_alive_v2',
+  getDatasetInfo: "get_dataset_info",
+  getCategoryCounts: "get_category_counts",
+  getResults: "get_results",
+  trainSvm: "train_svm",
+  queryImages: "query_images",
+  querySvm: "query_svm",
+  queryKnn: "query_knn",
+  queryRanking: "query_ranking",
+  generateEmbedding: 'generate_embedding',
+  keepAlive: 'keep_alive',
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
 const KEEP_ALIVE_INTERVAL = 60000; // ms

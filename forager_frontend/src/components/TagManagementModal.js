@@ -27,8 +27,8 @@ import toPairs from "lodash/toPairs";
 import { ConfirmModal } from "../components";
 
 const endpoints = fromPairs(toPairs({
-  updateCategory: 'update_category_v2',
-  deleteCategory: 'delete_category_v2',
+  updateCategory: 'update_category',
+  deleteCategory: 'delete_category',
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
 // TODO(mihirg): Combine with this same constant in other places

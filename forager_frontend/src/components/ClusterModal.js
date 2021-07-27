@@ -25,8 +25,8 @@ import CategoryInput from "./CategoryInput";
 import AnnotatedImage from "./AnnotatedImage";
 
 const endpoints = fromPairs(toPairs({
-  getAnnotations: 'get_annotations_v2',
-  addAnnotations: 'add_annotations_v2',
+  getAnnotations: 'get_annotations',
+  addAnnotations: 'add_annotations',
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
 const imageGridSizes = [

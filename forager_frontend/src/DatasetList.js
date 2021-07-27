@@ -6,7 +6,7 @@ import fromPairs from "lodash/fromPairs";
 import toPairs from "lodash/toPairs";
 
 const endpoints = fromPairs(toPairs({
-  getDatasets: "get_datasets_v2",
+  getDatasets: "get_datasets",
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
 const DatasetList = () => {

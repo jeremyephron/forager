@@ -11,7 +11,7 @@ import fromPairs from "lodash/fromPairs";
 import toPairs from "lodash/toPairs";
 
 const endpoints = fromPairs(toPairs({
-  generateTextEmbedding: 'generate_text_embedding_v2',
+  generateTextEmbedding: 'generate_text_embedding',
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
 const CaptionSearchPopover = ({ canBeOpen, text, setText, textEmbedding, setTextEmbedding }) => {

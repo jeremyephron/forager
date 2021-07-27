@@ -27,12 +27,12 @@ const dnns = [
 ];
 
 const endpoints = fromPairs(toPairs({
-  getModels: "get_models_v2",
-  trainModel: "train_model_v2",
-  modelStatus: "model_v2",
-  modelInference: "model_inference_v2",
-  modelInferenceStatus: "model_inference_status_v2",
-  stopModelInference: "stop_model_inference_v2",
+  getModels: "get_models",
+  trainModel: "train_model",
+  modelStatus: "model",
+  modelInference: "model_inference",
+  modelInferenceStatus: "model_inference_status",
+  stopModelInference: "stop_model_inference",
   startCluster: "start_cluster",
   clusterStatus: "cluster",
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));

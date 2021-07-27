@@ -27,9 +27,9 @@ import toPairs from "lodash/toPairs";
 import { ConfirmModal } from "../components";
 
 const endpoints = fromPairs(toPairs({
-  updateModel: 'update_model_v2',
-  deleteModel: 'delete_model_v2',
-  getModels: "get_models_v2",
+  updateModel: 'update_model',
+  deleteModel: 'delete_model',
+  getModels: "get_models",
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
 const TableContainer = styled.div`

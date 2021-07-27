@@ -16,9 +16,9 @@ import FeatureInput from "./FeatureInput";
 const LABEL_STACK_SIZE = 10;
 
 const endpoints = fromPairs(toPairs({
-  queryMetrics: 'query_metrics_v2',
-  queryActiveValidation: 'query_active_validation_v2',
-  addValAnnotations: 'add_val_annotations_v2',
+  queryMetrics: 'query_metrics',
+  queryActiveValidation: 'query_active_validation',
+  addValAnnotations: 'add_val_annotations',
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
 // https://reactjs.org/docs/hooks-faq.html

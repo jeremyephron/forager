@@ -25,7 +25,7 @@ const LABEL_VALUES = [
 ];
 
 const endpoints = fromPairs(toPairs({
-  addAnnotationsToResultSet: 'add_annotations_to_result_set_v2',
+  addAnnotationsToResultSet: 'add_annotations_to_result_set',
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
 
 const BulkTagModal = ({
