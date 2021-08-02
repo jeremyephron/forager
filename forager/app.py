@@ -1,5 +1,9 @@
+import os
 import subprocess
-from multiprocessing import Process
+import sys
+from multiprocessing import Process, Queue
+from pathlib import Path
+from typing import Tuple
 
 # Services:
 # 1. Start db (or not if sqlite?)
@@ -7,23 +11,49 @@ from multiprocessing import Process
 # 2. Start embedding server
 # 3. Serve react static files -- sanic?
 
-
-def run_server():
-    import uvicorn
-
-    uvicorn.run("forager_server.asgi:application", host="0.0.0.0", port=8000)
+LOG_DIR = Path("~/.forager/logs").expanduser()
+os.environ.setdefault("FORAGER_LOG_DIR", str(LOG_DIR))
 
 
-def run_embedding_server():
-    from forager_embedding_server import app
+def run_server(q):
+    # Run migrations if needed
+    try:
+        import django
+        import uvicorn
+        from django.core.management import call_command
 
-    app.app.run(host="0.0.0.0", port=5000)
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "forager_server.settings")
+        django.setup()
+        call_command("makemigrations")
+        call_command("migrate")
+
+        print("Running django server...")
+        q.put([True])
+        uvicorn.run("forager_server.asgi:application", host="0.0.0.0", port=8000)
+    finally:
+        q.put([False])
 
 
-def run_frontend():
-    import uvicorn
+def run_embedding_server(q):
+    try:
+        from forager_embedding_server import app
 
-    uvicorn.run("forager_frontend.app:app", host="0.0.0.0", port=4000)
+        print("Running embedding server...")
+        q.put([True])
+        app.app.run(host="0.0.0.0", port=5000)
+    finally:
+        q.put([False])
+
+
+def run_frontend(q):
+    try:
+        import uvicorn
+
+        print("Running frontend...")
+        q.put([True])
+        uvicorn.run("forager_frontend.app:app", host="0.0.0.0", port=4000)
+    finally:
+        q.put([False])
 
 
 class ForagerApp(object):
@@ -31,23 +61,46 @@ class ForagerApp(object):
     embedding_server: Process
     file_server: Process
 
+    web_server_q: Queue
+    embedding_server_q: Queue
+    file_server_q: Queue
+
     def __init__(self):
         pass
 
-    def _run_server(self, fn) -> Process:
-        p = Process(target=fn, daemon=True)
+    def _run_server(self, fn) -> Tuple[Process, Queue]:
+        q = Queue()
+        p = Process(target=fn, args=(q,), daemon=True)
         p.start()
-        return p
+        return p, q
 
     def run(self):
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
+
         web_server_wd = ""
-        self.web_server = self._run_server(run_server)
+        self.web_server, self.web_server_q = self._run_server(run_server)
 
         embedding_server_wd = ""
-        self.embedding_server = self._run_server(run_embedding_server)
+        self.embedding_server, self.embedding_server_q = self._run_server(
+            run_embedding_server
+        )
 
         file_server_wd = ""
-        self.file_server = self._run_server(run_frontend)
+        self.file_server, self.file_server_q = self._run_server(run_frontend)
+
+        for name, q in [
+            ("web", self.web_server_q),
+            ("embedding", self.embedding_server_q),
+            ("file", self.file_server_q),
+        ]:
+            started = q.get()
+            if started:
+                print(f"{name} server started")
+            if not started:
+                print(f"{name} server failed to start, aborting..")
+                sys.exit(1)
+
+        print("@@@ Ready to Forage! @@@")
 
     def join(self):
         self.web_server.join()

@@ -11,7 +11,8 @@ import time
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional
+from pathlib import Path
+from typing import Dict, List
 
 import fastcluster
 import numpy as np
@@ -23,239 +24,129 @@ from scipy.spatial.distance import cdist
 from sklearn import svm
 from sklearn.metrics import precision_score, recall_score
 
-import forager_embedding_server.config as config
+import forager_embedding_server.models as models
 from forager_embedding_server.ais import ais_singleiter, get_fscore
-from forager_embedding_server.utils import (CleanupDict, make_identifier,
-                                            sha_encode)
+from forager_embedding_server.config import CONFIG
+from forager_embedding_server.embedding_jobs import EmbeddingInferenceJob
+from forager_embedding_server.jobs_data import (ImageList, load_embedding_set,
+                                                load_score_set)
+from forager_embedding_server.utils import CleanupDict, sha_encode
 
 BUILD_WITH_KUBE = False
 
 if BUILD_WITH_KUBE:
     from forager_knn.clusters import TerraformModule
 
-    import forager_embedding_server.models as models
     from forager_embedding_server.bgsplit_jobs import (BGSplitInferenceJob,
                                                        BGSplitTrainingJob,
                                                        Trainer)
 
 # Create a logger for the server
-logger = logging.getLogger("index_server")
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-# Create a file handler for the log
-log_fh = logging.FileHandler("index_server.log")
-log_fh.setLevel(logging.DEBUG)
-
-# Create a console handler to print errors to console
-log_ch = logging.StreamHandler()
-log_ch.setLevel(logging.DEBUG)
 
 # create formatter and add it to the handlers
 formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-log_fh.setFormatter(formatter)
-log_ch.setFormatter(formatter)
 
 # Attach handlers
-logger.addHandler(log_fh)
-logger.addHandler(log_ch)
+# Create a file handler for the log
+if os.environ.get("FORAGER_LOG_DIR"):
+    log_fh = logging.FileHandler(
+        os.path.join(os.environ["FORAGER_LOG_DIR"], "embedding_server.log")
+    )
+    log_fh.setLevel(logging.DEBUG)
+    log_fh.setFormatter(formatter)
+    logger.addHandler(log_fh)
+
+
+if os.environ.get("FORAGER_LOG_CONSOLE") == "1":
+    # Create a console handler to print errors to console
+    log_ch = logging.StreamHandler()
+    log_ch.setLevel(logging.DEBUG)
+    log_ch.setFormatter(formatter)
+    logger.addHandler(log_ch)
 
 
 # GLOBALS
 
 # Start web server
 app = Sanic(__name__)
-app.update_config({"RESPONSE_TIMEOUT": config.SANIC_RESPONSE_TIMEOUT})
+app.update_config({"RESPONSE_TIMEOUT": CONFIG.SANIC_RESPONSE_TIMEOUT})
 
 
-if BUILD_WITH_KUBE:
-    BUILTIN_MODELS = {
-        "clip": models.CLIP(),
-        "resnet": models.ResNet(),
+BUILTIN_MODELS = {
+    "clip": models.CLIP(),
+    "resnet": models.ResNet(),
+}
+
+#
+# INDEX
+#
+
+FORAGER_EMBEDDINGS_DIR = Path("~/.forager/embeddings").expanduser()
+FORAGER_SCORES_DIR = Path("~/.forager/scores").expanduser()
+FORAGER_IMAGE_LISTS_DIR = Path("~/.forager/image_lists").expanduser()
+
+current_embedding_jobs: CleanupDict[str, EmbeddingInferenceJob] = CleanupDict(
+    lambda job: job.stop()
+)
+
+
+@app.route("/start_embedding_job", methods=["POST"])
+async def start_embedding_job(request):
+    """
+    request["model_output_name"] - name of the model output
+    request["splits_to_image_paths"] = {"split_name": ["list of image paths"]}
+    request["embedding_type"] - one of ['resnet', 'clip']"""
+
+    model_output_name = request.json["model_output_name"]
+    splits_to_image_paths = request.json["splits_to_image_paths"]
+    embedding_type = request.json["embedding_type"]
+
+    model_uuid = str(uuid.uuid4())
+
+    FORAGER_EMBEDDINGS_DIR.mkdir(parents=True, exist_ok=True)
+    FORAGER_IMAGE_LISTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    embeddings_path = FORAGER_EMBEDDINGS_DIR / model_uuid
+    image_lists_path = FORAGER_IMAGE_LISTS_DIR / model_uuid
+
+    # Create image list
+    with open(image_lists_path, "w") as f:
+        ImageList.write_from_image_paths(splits_to_image_paths, f)
+
+    # Create embedding job
+    job_id = str(uuid.uuid4())
+    embedding_job = EmbeddingInferenceJob(
+        job_id=job_id,
+        image_list_path=str(image_lists_path),
+        embedding_type=embedding_type,
+        output_path=str(embeddings_path),
+    )
+
+    # Run job
+    embedding_job.start()
+
+    current_embedding_jobs[job_id] = embedding_job
+
+    return resp.json({"job_id": job_id})
+
+
+@app.route("/embedding_job_status", methods=["GET"])
+async def embedding_job_status(request):
+    job_id = request.args["job_id"][0]
+    job = current_embedding_jobs.get(job_id)
+
+    status = {
+        "has_job": job is not None,
+        "finished": job.status["finished"] if job else False,
+        "failed": job.status["failed"] if job else False,
+        "failure_reason": job.status["failure_reason"] if job else "",
+        "status": job.status if job else None,
+        "image_list_path": job.image_list_path if job else "",
+        "embeddings_path": job.embeddings_path if job else "",
     }
-else:
-    BUILTIN_MODELS = {}
-
-
-@functools.lru_cache(maxsize=32)
-def load_image_list(path: str):
-    return ImageList(path)
-
-
-@functools.lru_cache(maxsize=32)
-def load_score_set(path: str, image_list_path: str):
-    images = load_image_list(image_list_path)
-    return ScoreSet(path, images)
-
-
-@functools.lru_cache(maxsize=32)
-def load_embedding_set(path: str, image_list_path: str, dtype=np.float32):
-    images = load_image_list(image_list_path)
-    return EmbeddingSet(path, images, dtype)
-
-
-@dataclass_json
-@dataclass
-class QueryResult:
-    id: int
-    dist: float = 0.0
-    identifier: str = ""
-
-
-class ImageList:
-    def __init__(self, path: str):
-        self.identifiers_to_inds = {}
-        self.inds_to_identifiers = {}
-        self.splits_to_ind_sets = defaultdict(set)
-        with open(path) as f:
-            for ind, line in enumerate(f):
-                separator = line.find(" ")
-                split = (
-                    line[:separator] if separator >= 0 else config.DEFAULT_SPLIT_NAME
-                )
-                identifier = make_identifier(line[separator + 1 :].strip())
-
-                self.identifiers_to_inds[identifier] = ind
-                self.inds_to_identifiers[ind] = identifier
-                self.splits_to_ind_sets[split].add(ind)
-
-    def __len__(self) -> int:
-        return len(self.identifiers_to_inds)
-
-    def get_ind(self, identifier: str) -> int:
-        return self.identifiers_to_inds[identifier]
-
-    def get_inds(self, identifiers: Iterable[str]) -> List[int]:
-        return list(map(self.get_ind, identifiers))
-
-    def get_identifier(self, ind: int) -> str:
-        return self.inds_to_identifiers[ind]
-
-    def get_identifiers(self, inds: Iterable[int]) -> List[str]:
-        return list(map(self.get_identifier, inds))
-
-    def get_inds_for_split(self, split: str) -> List[int]:
-        return list(self.splits_to_ind_sets[split])
-
-
-class ScoreSet:
-    def __init__(self, path: str, images: ImageList):
-        self.scores = np.load(path)
-        self.images = images
-        self.logger = logging.getLogger(
-            f"index_server.ScoreSet({sha_encode(path)[:6]})"
-        )
-
-    # NOTE(mihirg): We don't normalize scores here because we expect model outputs in
-    # [0, 1] anyway; consider adding as a param in the future
-    def rank_brute_force(
-        self, min_s: float = 0.0, max_s: float = 1.0
-    ) -> List[QueryResult]:
-        start = time.perf_counter()
-
-        ranking = np.argsort(self.scores)[::-1]
-        sorted_results = []
-        for i in ranking:
-            i = int(i)
-            s = float(self.scores[i])
-            if min_s <= s <= max_s:
-                sorted_results.append(QueryResult(i, s, self.images.get_identifier(i)))
-
-        end = time.perf_counter()
-        self.logger.debug(
-            f"Ranking query on {len(self.images)} vectors with score range ({min_s}, "
-            f"{max_s}) took {end-start:.3f}s and found {len(sorted_results)} results."
-        )
-
-        return sorted_results
-
-    def get_scores(
-        self, identifiers: Optional[List[str]] = None, inds: Optional[List[int]] = None
-    ) -> np.ndarray:
-        if identifiers is None and inds is None:
-            return self.scores
-        if inds is None:
-            inds = self.images.get_inds(identifiers)  # type: ignore
-        return self.scores[inds]
-
-
-class EmbeddingSet:
-    def __init__(self, path: str, images: ImageList, dtype=np.float32):
-        dim = os.path.getsize(path) / dtype.itemsize / len(images)
-        self.embeddings = np.memmap(
-            path,
-            dtype=dtype,
-            mode="r",
-            shape=(len(images), dim),
-        )
-        self.images = images
-        self.logger = logging.getLogger(
-            f"index_server.EmbeddingSet({sha_encode(path)[:6]})"
-        )
-
-    def query_brute_force(
-        self,
-        query_vector: np.ndarray,
-        dot_product: bool = False,
-        min_d: float = 0.0,
-        max_d: float = 1.0,
-        chunk_size: int = config.BRUTE_FORCE_QUERY_CHUNK_SIZE,  # unused
-    ) -> List[QueryResult]:
-        start = time.perf_counter()
-
-        # TODO(mihirg): Process CHUNK_SIZE rows at a time for large datasets
-        if dot_product:
-            dists = self.embeddings @ query_vector
-        else:
-            dists = cdist(np.expand_dims(query_vector, axis=0), self.embeddings)
-            dists = np.squeeze(dists, axis=0)
-
-        sorted_results = []
-        lowest_dist = np.min(dists)
-        highest_dist = np.max(dists)
-
-        for i, d in enumerate(dists):
-            d = float(d)
-            d = (d - lowest_dist) / (highest_dist - lowest_dist)  # normalize
-            if min_d <= d <= max_d:
-                sorted_results.append(QueryResult(i, d, self.images.get_identifier(i)))
-
-        sorted_results.sort(key=operator.attrgetter("dist"), reverse=dot_product)
-
-        end = time.perf_counter()
-        self.logger.debug(
-            f"Search query on {len(self.images)} vectors (n_dim={len(query_vector)}, "
-            f"dot_product={dot_product}) with distance range ({min_d}, {max_d}) took "
-            f"{end-start:.3f}s and found {len(sorted_results)} results."
-        )
-
-        return sorted_results
-
-    def get_embeddings(
-        self, identifiers: List[str] = None, inds: Optional[List[int]] = None
-    ) -> np.ndarray:
-        if identifiers is None and inds is None:
-            return self.embeddings
-        if inds is None:
-            inds = self.images.get_inds(identifiers)  # type: ignore
-        return self.embeddings[inds]
-
-    def cluster_identifiers(self, identifiers: List[str]) -> List[List[float]]:
-        embeddings = self.get_embeddings(identifiers)
-        return self._cluster(embeddings)
-
-    def _cluster(self, embeddings: np.ndarray) -> List[List[float]]:
-        # Perform hierarchical clustering
-        result = fastcluster.linkage(embeddings, method="ward", preserve_input=False)
-        max_dist = result[-1, 2]
-
-        # Simplify dendogram matrix by using original cluster indexes
-        simplified = []
-        clusters = list(range(len(embeddings)))
-        for a, b, dist, _ in result:
-            a, b = int(a), int(b)
-            simplified.append([clusters[a], clusters[b], dist / max_dist])
-            clusters.append(clusters[a])
-        return simplified
+    return resp.json(status)
 
 
 #
@@ -270,7 +161,7 @@ async def _start_cluster(cluster):
     await cluster.apply()
 
     # Mount NFS
-    cluster.mount_parent_dir = config.CLUSTER_MOUNT_DIR / cluster.id
+    cluster.mount_parent_dir = CONFIG.CLUSTER.MOUNT_DIR / cluster.id
     cluster.mount_parent_dir.mkdir(parents=True, exist_ok=False)
 
     cluster.mount_dir = cluster.mount_parent_dir / cluster.output[
@@ -302,14 +193,14 @@ async def _stop_cluster(cluster):
         pass
 
     # Destroy cluster
-    if not config.CLUSTER_REUSE_EXISTING:
+    if not CONFIG.CLUSTER.REUSE_EXISTING:
         await cluster.destroy()
 
 
 # TODO(mihirg): Automatically clean up inactive clusters
 if BUILD_WITH_KUBE:
     current_clusters: CleanupDict[str, TerraformModule] = CleanupDict(
-        _stop_cluster, app.add_task, config.CLUSTER_CLEANUP_TIME
+        _stop_cluster, app.add_task, CONFIG.CLUSTER.CLEANUP_TIME
     )
 else:
     current_clusters = {}
@@ -321,7 +212,7 @@ async def start_cluster(request):
         return resp.json({"success": False}, status=400)
 
     cluster = TerraformModule(
-        config.CLUSTER_TERRAFORM_MODULE_PATH, copy=not config.CLUSTER_REUSE_EXISTING
+        CONFIG.CLUSTER.TERRAFORM_MODULE_PATH, copy=not CONFIG.CLUSTER.REUSE_EXISTING
     )
     app.add_task(_start_cluster(cluster))
     cluster_id = cluster.id
@@ -398,7 +289,7 @@ async def start_bgsplit_job(request):
     index = await get_index(index_id)
 
     # Get image paths from index
-    gcs_root_path = os.path.join(config.GCS_PUBLIC_ROOT_URL, bucket)
+    gcs_root_path = os.path.join(CONFIG.GCS_PUBLIC_ROOT_URL, bucket)
     pos_paths = [
         os.path.join(gcs_root_path, index.labels[index.train_identifiers[i]])
         for i in pos_identifiers
@@ -453,7 +344,7 @@ async def start_bgsplit_job(request):
     # 1. If aux labels have not been generated, then generate them
     # TODO(fpoms): Actually generate aux labels; and maybe move this to index build?
     alt = aux_labels_type
-    aux_labels_gcs_path = config.AUX_GCS_PUBLIC_TMPL.format(index_id, alt)
+    aux_labels_gcs_path = CONFIG.AUX.GCS_PUBLIC_TMPL.format(index_id, alt)
 
     # 2. Train BG Split model
     trainers = [Trainer(url) for url in cluster.output["bgsplit_trainer_urls"]]
@@ -493,7 +384,7 @@ async def start_bgsplit_job(request):
     return resp.json({"model_id": model_id})
 
 
-@app.route(config.BGSPLIT_TRAINER_STATUS_ENDPOINT, methods=["PUT"])
+@app.route(CONFIG.BGSPLIT.TRAINER_STATUS_ENDPOINT, methods=["PUT"])
 async def bgsplit_training_status(request):
     model_id = request.json["model_id"]
     if model_id in current_models:
@@ -543,7 +434,7 @@ async def start_bgsplit_inference_job(request):
     index = await get_index(index_id)
 
     # Get image paths from index
-    gcs_root_path = os.path.join(config.GCS_PUBLIC_ROOT_URL, bucket)
+    gcs_root_path = os.path.join(CONFIG.GCS_PUBLIC_ROOT_URL, bucket)
     all_paths = index.labels
 
     http_session = utils.create_unlimited_aiohttp_session()
@@ -659,8 +550,8 @@ async def train_svm(request):
     # HACK(mihirg): sometimes we get empty identifiers (i.e., "") from the server that
     # would otherwise cause a crash here; we should probably figure out why this is, but
     # just filtering out for now.
-    pos_identifiers = list(filter(bool, request.json["pos_identifiers"]))
-    neg_identifiers = list(filter(bool, request.json["neg_identifiers"]))
+    pos_identifiers: List[str] = list(filter(bool, request.json["pos_identifiers"]))
+    neg_identifiers: List[str] = list(filter(bool, request.json["neg_identifiers"]))
     image_list_path = request.json["image_list_path"]
     embedding_set_path = request.json["embedding_set_path"]
 
@@ -741,7 +632,7 @@ async def query_metrics(request):
     score_set = load_score_set(score_set_path, image_list_path)
 
     prob_pos = score_set.get_scores(identifiers)
-    y_pred = prob_pos > config.DNN_SCORE_CLASSIFICATION_THRESHOLD
+    y_pred = prob_pos > CONFIG.DNN_SCORE_CLASSIFICATION_THRESHOLD
     y_test = np.array(labels)
     rows = np.arange(num_labeled)
     weights = np.array(weights)
@@ -759,9 +650,9 @@ async def query_metrics(request):
             result = QueryResult(
                 score_set.images.get_ind(identifier), float(score), identifier
             )
-            if score > config.DNN_SCORE_CLASSIFICATION_THRESHOLD and not label:
+            if score > CONFIG.DNN_SCORE_CLASSIFICATION_THRESHOLD and not label:
                 false_positives.append(result)
-            elif score <= config.DNN_SCORE_CLASSIFICATION_THRESHOLD and label:
+            elif score <= CONFIG.DNN_SCORE_CLASSIFICATION_THRESHOLD and label:
                 false_negatives.append(result)
 
     false_positives.sort(key=operator.attrgetter("dist"), reverse=True)  # descending
@@ -802,8 +693,8 @@ async def query_active_validation(request):
     all_val_inds = score_set.images.get_inds_for_split("val")
     all_val_identifiers = score_set.images.get_identifiers(all_val_inds)
     prob_pos = score_set.get_scores(inds=all_val_inds)
-    y_pred = prob_pos > config.DNN_SCORE_CLASSIFICATION_THRESHOLD
-    sample_budget = max(2 * len(labels), config.ACTIVE_VAL_STARTING_BUDGET)
+    y_pred = prob_pos > CONFIG.DNN_SCORE_CLASSIFICATION_THRESHOLD
+    sample_budget = max(2 * len(labels), CONFIG.ACTIVE_VAL_STARTING_BUDGET)
     g = current_f1
     alpha = 0.5
 
@@ -843,10 +734,10 @@ async def query_active_validation(request):
 
     old_identifiers = set(identifiers)
     new_identifiers = []
-    identifiers_to_weights = {}  # type: Dict[str, float]
+    identifiers_to_weights: Dict[str, float] = {}
     for ind_in_val, weight in zip(rows, weights):
         ind = all_val_inds[ind_in_val]
-        identifier = score_set.get_identifier(ind)
+        identifier = score_set.images.get_identifier(ind)
         identifiers_to_weights[identifier] = weight
         if identifier not in old_identifiers:
             new_identifiers.append(identifier)

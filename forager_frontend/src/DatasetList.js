@@ -11,12 +11,16 @@ const endpoints = fromPairs(toPairs({
 
 const DatasetList = () => {
   const [datasets, setDatasets] = useState([]);
-  useEffect(async () => {
-    const url = new URL(endpoints.getDatasets);
-    let _datasets = await fetch(url, {
-      method: "GET",
-    }).then(r => r.json());
-    setDatasets(_datasets.dataset_names);
+  useEffect(() => {
+    async function getDatasetList() {
+      const url = new URL(endpoints.getDatasets);
+      let _datasets = await fetch(url, {
+        method: "GET",
+      }).then(r => r.json());
+      setDatasets(_datasets.dataset_names);
+    }
+
+    getDatasetList();
   }, []);
 
   return (

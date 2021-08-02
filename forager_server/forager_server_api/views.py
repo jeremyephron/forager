@@ -13,7 +13,7 @@ import uuid
 from collections import defaultdict, namedtuple
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, NamedTuple
+from typing import Dict, List, NamedTuple, Tuple
 
 import requests
 from django.conf import settings
@@ -1205,36 +1205,33 @@ def model_info(model):
 def create_dataset(request):
     payload = json.loads(request.body)
     name = payload["dataset"]
-    train_directory = payload["train_path"]
-    val_directory = payload["val_path"]
+    train_directory = payload["train_images_directory"]
+    val_directory = payload["val_images_directory"]
 
-    assert all(d.startswith("gs://") for d in (train_directory, val_directory))
+    # Get all paths for train and val
+    paths: List[Tuple[str, str, bool]] = []
+    for directory, is_val in [(train_directory, False), (val_directory, True)]:
+        for root, dirs, files in os.walk(os.path.expanduser(directory)):
+            image_paths = [
+                (os.path.abspath(os.path.join(root, path)), str(uuid.uuid4()), is_val)
+                for path in files
+                if (
+                    path.endswith(".jpg")
+                    or path.endswith(".JPG")
+                    or path.endswith(".jpeg")
+                    or path.endswith(".JPEG")
+                    or path.endswith(".png")
+                    or path.endswith(".PNG")
+                )
+            ]
+            paths += image_paths
 
-    # Download index on index server
-    params = {"index_id": index_id}
-    requests.post(
-        settings.EMBEDDING_SERVER_ADDRESS + "/download_index",
-        json=params,
-    )
-
-    client = storage.Client()
-    all_blobs = []
-
-    for d, is_val in ((train_directory, False), (val_directory, True)):
-        split_dir = d[len("gs://") :].split("/")
-        bucket_name = split_dir[0]
-        bucket_path = "/".join(split_dir[1:])
-
-        all_blobs.extend(
-            (blob, is_val)
-            for blob in client.list_blobs(bucket_name, prefix=bucket_path)
-        )
-
+    # Add dataset to db
     dataset = Dataset(
         name=name,
         train_directory=train_directory,
         val_directory=val_directory,
-        index_id=index_id,
+        index_id="",
     )
     dataset.save()
 
@@ -1242,18 +1239,80 @@ def create_dataset(request):
     items = [
         DatasetItem(
             dataset=dataset,
-            identifier=os.path.splitext(os.path.basename(blob.name))[0],
-            path=blob.name,
+            identifier=ident,
+            path=path,
             is_val=is_val,
         )
-        for blob, is_val in all_blobs
-        if (
-            blob.name.endswith(".jpg")
-            or blob.name.endswith(".jpeg")
-            or blob.name.endswith(".png")
-        )
+        for path, ident, is_val in paths
     ]
     DatasetItem.objects.bulk_create(items, batch_size=10000)
+
+    # Compute resnet and clip model outputs if requested
+    splits_to_image_paths = {"train": [], "val": []}
+    for path, ident, is_val in paths:
+        splits_to_image_paths["val" if is_val else "train"].append((path, ident))
+
+    r = requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/start_embedding_job",
+        json={
+            "model_output_name": "resnet",
+            "splits_to_image_paths": splits_to_image_paths,
+            "embedding_type": "resnet",
+        },
+    )
+    response_data = r.json()
+    resnet_job_id = response_data["job_id"]
+
+    r = requests.post(
+        settings.EMBEDDING_SERVER_ADDRESS + "/start_embedding_job",
+        json={
+            "model_output_name": "clip",
+            "splits_to_image_paths": splits_to_image_paths,
+            "embedding_type": "clip",
+        },
+    )
+    response_data = r.json()
+    clip_job_id = response_data["job_id"]
+
+    job_ids_left = [("resnet", resnet_job_id), ("clip", clip_job_id)]
+    while len(job_ids_left) > 0:
+        next_jobs = []
+        for name, job_id in job_ids_left:
+            r = requests.get(
+                settings.EMBEDDING_SERVER_ADDRESS + "/embedding_job_status",
+                params={"job_id": job_id},
+            )
+            response_data = r.json()
+            if not response_data["has_job"]:
+                dataset.delete()
+                return JsonResponse(
+                    {
+                        "status": "failure",
+                        "failure_reason": "Embedding server did not receive embedding job",
+                    },
+                    status_code=500,
+                )
+
+            if not response_data["finished"]:
+                next_jobs.append((name, job_id))
+            else:
+                if response_data["failed"]:
+                    failure_reason = response_data["failure_reason"]
+                    dataset.delete()
+                    return JsonResponse(
+                        {"status": "failure", "failure_reason": failure_reason},
+                        status_code=500,
+                    )
+                ModelOutput(
+                    dataset=dataset,
+                    name=name,
+                    image_list_path=response_data["image_list_path"],
+                    embeddings_path=response_data["embeddings_path"],
+                ).save()
+        time.sleep(3)
+        job_ids_left = next_jobs
+
+    # Add model outputs to db
 
     return JsonResponse({"status": "success"})
 

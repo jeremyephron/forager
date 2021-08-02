@@ -23,7 +23,10 @@ def read_poetry_deps(path):
         if package_name == "python":
             continue
         if isinstance(version, dict):
-            continue
+            if "url" in version:
+                ver_str = f" @ {version['url']}"
+            else:
+                continue
         elif version == "*":
             ver_str = ""
         elif version[0] == "^":
@@ -55,8 +58,15 @@ def build_frontend(cmd):
             # Build react frontend
             if (FRONTEND_DIR / "package.json").exists():
                 # Don't build if we are inside an sdist
-                subprocess.run(args=["npm", "install"], cwd=FRONTEND_DIR)
-                subprocess.run(args=["npm", "run", "build"], cwd=FRONTEND_DIR)
+                npm_env = os.environ.copy()
+                npm_env.update({"REACT_APP_SERVER_URL": "http://localhost:8000"})
+                subprocess.run(args=["npm", "install"], cwd=FRONTEND_DIR, check=True)
+                subprocess.run(
+                    args=["npm", "run", "build"],
+                    cwd=FRONTEND_DIR,
+                    env=npm_env,
+                    check=True,
+                )
                 # Regen package data after build
                 self.distribution.package_data = find_package_data()
             cmd.run(self)
@@ -109,7 +119,7 @@ def find_package_data():
     data["forager_frontend"] += package_files("forager_frontend/build")
     for name, path in PACKAGES:
         data[name] += ["pyproject.toml"]
-    # print("package_data", data)
+    print("package_data", data)
     return data
 
 

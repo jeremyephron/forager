@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/3.1/ref/settings/
 """
 
 import json
+import os
 import os.path
 import tempfile
 from pathlib import Path
@@ -22,7 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.1/howto/deployment/checklist/
 
-django_settings_path = os.path.expanduser("~/forager/django_settings.json")
+django_settings_path = os.path.expanduser("~/.forager/django_settings.json")
 if os.path.exists(django_settings_path):
     with open(django_settings_path, "r") as f:
         django_settings = json.load(f)
@@ -121,34 +122,35 @@ AUTH_PASSWORD_VALIDATORS = [
 # Logging
 
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'formatters': {
-        'simple': {
-            'format': '{asctime} - {name} - {levelname} - {message}',
-            'style': '{',
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "simple": {
+            "format": "{asctime} - {name} - {levelname} - {message}",
+            "style": "{",
         },
     },
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'level': 'DEBUG',
-            'formatter': 'simple',
-        },
-        'file': {
-            'class': 'logging.FileHandler',
-            'filename': 'django_server.log',
-            'level': 'DEBUG',
-            'formatter': 'simple',
-        }
-    },
-    'loggers': {
-        'django': {
-            'handlers': ['console', 'file'],
-            'propagate': True
-        }
-    }
+    "handlers": {},
+    "loggers": {"django": {"handlers": [], "propagate": True}},
 }
+
+if os.environ.get("FORAGER_LOG_DIR"):
+    path = os.environ["FORAGER_LOG_DIR"]
+    LOGGING["handlers"]["file"] = {
+        "class": "logging.FileHandler",
+        "filename": os.path.join(path, "web_server.log"),
+        "level": "DEBUG",
+        "formatter": "simple",
+    }
+    LOGGING["loggers"]["django"]["handlers"].append("file")
+
+if os.environ.get("FORAGER_LOG_CONSOLE") == "1":
+    LOGGING["handers"]["console"] = {
+        "class": "logging.StreamHandler",
+        "level": "DEBUG",
+        "formatter": "simple",
+    }
+    LOGGING["loggers"]["django"]["handlers"].append("console")
 
 
 # Internationalization
@@ -173,9 +175,9 @@ STATIC_URL = "/static/"
 # source of the frontend requests
 frontend_port = django_settings.get("frontend_port", 4000)
 CORS_ALLOW_CREDENTIALS = True
-CORS_ORIGIN_WHITELIST = ["http://127.0.0.1:3000", "http://localhost:3000"] + [
+CORS_ORIGIN_WHITELIST = [
     "http://" + h + ((":" + str(frontend_port)) if frontend_port != 80 else "")
-    for h in django_settings["allowed_hosts"]
+    for h in django_settings["allowed_hosts"] + ["127.0.0.1", "localhost"]
 ]
 CSRF_TRUSTED_ORIGINS = ["127.0.0.1", "localhost"] + ALLOWED_HOSTS
 SESSION_COOKIE_SAMESITE = "None"  # as a string
