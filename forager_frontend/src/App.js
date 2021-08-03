@@ -50,6 +50,7 @@ import {
   SignInModal,
   TagManagementModal,
   ModelManagementModal,
+  ModelOutputManagementModal,
   CategoryInput,
   FeatureInput,
   NewModeInput,
@@ -132,6 +133,9 @@ function MainHeader(props) {
   const [modelManagementIsOpen, setModelManagementIsOpen] = useState(false);
   const toggleModelManagement = () => setModelManagementIsOpen(!modelManagementIsOpen);
 
+  const [modelOutputManagementIsOpen, setModelOutputManagementIsOpen] = useState(false);
+  const toggleModelOutputManagement = () => setModelOutputManagementIsOpen(!modelOutputManagementIsOpen);
+
   const [popoverOpen, setPopoverOpen] = useState(false);
 
   let datasetName = props.datasetName;
@@ -142,6 +146,9 @@ function MainHeader(props) {
 
   let modelInfo = props.modelInfo;
   let setModelInfo = props.setModelInfo;
+
+  let modelOutputInfo = props.modelOutputInfo;
+  let setModelOutputInfo = props.setModelOutputInfo;
 
   let clusterIsOpen = props.clusterIsOpen;
   let setClusterIsOpen = props.setClusterIsOpen;
@@ -182,6 +189,15 @@ function MainHeader(props) {
       datasetName={datasetName}
       modelInfo={modelInfo}
       setModelInfo={setModelInfo}
+      username={username}
+      isReadOnly={!!!(username)}
+    />
+    <ModelOutputManagementModal
+      isOpen={modelOutputManagementIsOpen}
+      toggle={toggleModelOutputManagement}
+      datasetName={datasetName}
+      modelOutputInfo={modelOutputInfo}
+      setModelOutputInfo={setModelOutputInfo}
       username={username}
       isReadOnly={!!!(username)}
     />
@@ -288,11 +304,14 @@ function ClusteringControls(props) {
   let setClusteringModel = props.setClusteringModel;
   let username = props.username;
   let modelInfo = props.modelInfo;
+  let modelOutputInfo = props.modelOutputInfo;
 
-  let clusteringModels = (
-    ["imagenet", "clip", "imagenet_early",
-     "imagenet_full", "imagenet_full_early"]).concat(
-       modelInfo.filter(m => m.with_output).map(m => m.name));
+  let clusteringModels = modelOutputInfo.map(m => m.name);
+  useEffect(() => {
+    if (clusteringModel === null && modelOutputInfo.length > 0) {
+      setClusteringModel(modelOutputInfo[0]["name"]);
+    }
+  }, [modelOutputInfo])
   return (
     <div className="d-flex flex-row align-items-center">
       <div className="custom-switch custom-control mr-4">
@@ -427,6 +446,7 @@ function QueryBar(p) {
             toggleBulkTag={props.toggleBulkTag}
             username={props.username}
             modelInfo={props.modelInfo}
+            modelOutputInfo={props.modelOutputInfo}
           />
           {(queryResultSet.type === "svm" || queryResultSet.type === "ranking") && <div className="d-flex flex-row align-items-center">
             <label className="mb-0 mr-2 text-nowrap">Score range:</label>
@@ -917,7 +937,7 @@ const App = () => {
   const [orderingMode, setOrderingMode] = useState(orderingModes[0].id);
   const [orderByClusterSize, setOrderByClusterSize] = useState(true);
   const [clusteringStrength, setClusteringStrength] = useState(20);
-  const [clusteringModel, setClusteringModel] = useState("imagenet");
+  const [clusteringModel, setClusteringModel] = useState(null);
 
   const [scoreRange, setScoreRange] = useState([0, 100]);
 
@@ -1041,13 +1061,10 @@ const App = () => {
 
     let url = new URL(`${endpoints.getResults}/${datasetName}`);
     let params =  {
-      index_id: datasetInfo.index_id,
+      clustering_model_output_id: modelOutputInfo[0]["id"],
       result_set_id: queryResultSet.id,
       offset: page * PAGE_SIZE,
       num: PAGE_SIZE,
-    }
-    if (clusteringModel) {
-      params.clustering_model = clusteringModel
     }
     url.search = new URLSearchParams(params).toString();
     const results = await fetch(url, {
@@ -1061,7 +1078,7 @@ const App = () => {
         name: filename,
         src: path,
         id: results.identifiers[i],
-        thumb: `https://storage.googleapis.com/foragerml/thumbnails/${datasetInfo.index_id}/${id}.jpg`,
+        thumb: path,
         distance: results.distances[i],
       };
     });
@@ -1098,8 +1115,10 @@ const App = () => {
   }, [isLoading]);
 
   useEffect(() => {
-    setPageIsLoading(true);
-    getPage().finally(() => setPageIsLoading(false));
+    if (clusteringModel !== null) {
+      setPageIsLoading(true);
+      getPage().finally(() => setPageIsLoading(false));
+    }
   }, [page, queryResultSet, clusteringModel]);
 
   const setSubset = (subset) => {
@@ -1142,8 +1161,8 @@ const App = () => {
   };
 
   const [labelModeCategory, setLabelModeCategory] = useState(null);  // label mode
-  const [modelInfo, setModelInfo] = useState([]);  // train mode
-
+  const [modelInfo, setModelInfo] = useState([]);
+  const [modelOutputInfo, setModelOutputInfo] = useState([]);
    //
    // BULK TAG MODAL
    //
@@ -1163,6 +1182,8 @@ const App = () => {
     categoryDispatch: categoryDispatch,
     modelInfo: modelInfo,
     setModelInfo: setModelInfo,
+    modelOutputInfo: modelOutputInfo,
+    setModelOutputInfo: setModelOutputInfo,
     clusterIsOpen: clusterIsOpen,
     setClusterIsOpen: setClusterIsOpen,
     clusteringStrength: clusteringStrength,
@@ -1214,6 +1235,7 @@ const App = () => {
     toggleBulkTag: toggleBulkTag,
     username: username,
     modelInfo: modelInfo,
+    modelOutputInfo: modelOutputInfo,
   };
   let orderingModeProps = {
     datasetInfo: datasetInfo,

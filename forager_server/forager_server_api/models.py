@@ -20,6 +20,7 @@ class Dataset(models.Model):
 class ModelOutput(models.Model):
     dataset = models.ForeignKey(Dataset, on_delete=models.CASCADE)
     name = models.SlugField()
+    last_updated = models.DateTimeField(auto_now=True)
 
     embeddings_path = models.CharField(max_length=LONG_STRING_LENGTH, blank=True)
     scores_path = models.CharField(max_length=LONG_STRING_LENGTH, blank=True)

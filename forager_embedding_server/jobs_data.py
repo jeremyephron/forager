@@ -135,7 +135,7 @@ class ScoreSet:
 
 class EmbeddingSet:
     def __init__(self, path: str, images: ImageList, dtype=np.float32):
-        dim = os.path.getsize(path) / dtype.itemsize / len(images)
+        dim = int(os.path.getsize(path) / int(np.dtype(dtype).itemsize) / len(images))
         self.embeddings = np.memmap(
             path,
             dtype=dtype,

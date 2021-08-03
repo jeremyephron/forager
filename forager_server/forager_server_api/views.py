@@ -589,7 +589,7 @@ def get_results(request, dataset_name):
         elif directory.startswith("http"):
             path = di.path
         else:  # local path
-            path = (Path(directory) / di.path).as_uri()
+            path = "/files" + str((Path(directory) / di.path))
         dataset_item_paths.append(path)
 
     # Perform clustering
@@ -597,7 +597,7 @@ def get_results(request, dataset_name):
         pk=clustering_model_output_id, embeddings_path__isnull=False
     )
     params = {
-        "embeddings_path": clustering_model_output.embeddings_path,
+        "embedding_set_path": clustering_model_output.embeddings_path,
         "image_list_path": clustering_model_output.image_list_path,
         "identifiers": internal_identifiers,
     }
@@ -1137,6 +1137,7 @@ def model_output_info(model_output):
         "name": model_output.name,
         "has_embeddings": model_output.embeddings_path is not None,
         "has_scores": model_output.scores_path is not None,
+        "timestamp": model_output.last_updated,
     }
 
 
@@ -1231,7 +1232,6 @@ def create_dataset(request):
         name=name,
         train_directory=train_directory,
         val_directory=val_directory,
-        index_id="",
     )
     dataset.save()
 

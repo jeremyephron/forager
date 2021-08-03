@@ -34,6 +34,7 @@ if os.environ.get("FORAGER_LOG_CONSOLE") == "1":
 FILE_DIR = os.path.realpath(os.path.join(__file__, ".."))
 
 app = Sanic(__name__, log_config=None)
+app.static("/files", "/")
 app.static("/", os.path.join(FILE_DIR, "build"))
 
 
