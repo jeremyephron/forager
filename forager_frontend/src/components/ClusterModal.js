@@ -181,10 +181,13 @@ const ClusterModal = ({
 
     let newAnnotations = {...annotations};
     for (const id of imageIds) {
-      const minusDeleted = differenceWith(annotations[id], deleted, isEqual);
+      const minusDeleted = differenceWith(annotations[id] && annotations[id]['tags'] || [], deleted, isEqual);
       let plusAdded = unionWith(minusDeleted, added, isEqual);
       let deduplicated = uniqWith(plusAdded.reverse(), (a, b) => a.category === b.category);
-      newAnnotations[id] = deduplicated.reverse();
+      if (!(id in newAnnotations)) {
+        newAnnotations[id] = {'tags': [], 'boxes': []}
+      }
+      newAnnotations[id]['tags'] = deduplicated.reverse();
     }
     setIsLoading(true);
     setAnnotations(newAnnotations);
@@ -245,7 +248,7 @@ const ClusterModal = ({
     } else if (key === "ArrowUp") {
       // Close modal
       setIsOpen(false);
-    } else if (mode === "label" && !!(labelCategory) && !isNaN(keyAsNumber)) {
+    } else if (!isReadOnly && mode === "label" && !!(labelCategory) && !isNaN(keyAsNumber)) {
       // Label mode
       let boundValue;
       if (keyAsNumber >= 1 && keyAsNumber <= BUILT_IN_MODES.length) {

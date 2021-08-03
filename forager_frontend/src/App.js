@@ -84,8 +84,6 @@ const orderingModes = [
 const modes = [
   {id: "explore", label: "Explore"},
   {id: "label", label: "Label"},
-  {id: "train", label: "Train"},
-  {id: "validate", label: "Validate"},
 ];
 
 const endpoints = fromPairs(toPairs({

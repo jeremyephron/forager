@@ -1200,7 +1200,6 @@ def model_info(model):
     }
 
 
-# NOTE(mihirg): Broken; needs to be re-done for local server setup
 @api_view(["POST"])
 @csrf_exempt
 def create_dataset(request):
@@ -1313,6 +1312,18 @@ def create_dataset(request):
         job_ids_left = next_jobs
 
     # Add model outputs to db
+
+    return JsonResponse({"status": "success"})
+
+
+@api_view(["POST"])
+@csrf_exempt
+def delete_dataset(request):
+    payload = json.loads(request.body)
+    dataset_name = payload["dataset"]
+
+    dataset = get_object_or_404(Dataset, name=dataset_name)
+    dataset.delete()
 
     return JsonResponse({"status": "success"})
 
