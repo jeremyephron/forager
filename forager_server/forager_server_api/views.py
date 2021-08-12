@@ -30,6 +30,10 @@ from .models import (Annotation, Category, CategoryCount, Dataset, DatasetItem,
 
 BUILTIN_MODES = ["POSITIVE", "NEGATIVE", "HARD_NEGATIVE", "UNSURE"]
 
+FORAGER_EMBEDDINGS_DIR = Path("~/.forager/embeddings").expanduser()
+FORAGER_SCORES_DIR = Path("~/.forager/scores").expanduser()
+FORAGER_IMAGE_LISTS_DIR = Path("~/.forager/image_lists").expanduser()
+
 logger = logging.getLogger(__name__)
 
 #
@@ -1107,9 +1111,38 @@ def add_model_output(request, dataset_name):
 
     payload = json.loads(request.body)
     name = payload["name"]
+    if "paths" in payload:
+        path_to_di = {
+            di["path"]: di
+            for di in DatasetItem.objects.filter(
+                dataset=dataset, path__in=payload["paths"]
+            )
+        }
+
+        FORAGER_IMAGE_LISTS_DIR.mkdir(parents=True, exist_ok=True)
+
+        model_uuid = str(uuid.uuid4())
+
+        image_lists_path = FORAGER_IMAGE_LISTS_DIR / model_uuid
+        with open(image_lists_path, "w") as f:
+            for path in payload["paths"]:
+                di = path_to_di[path]
+                split = "val" if di["is_val"] else "train"
+                f.write(f"{split} {di['identifier']} {path}")
+
+    elif "image_list_path" in payload:
+        image_list_path = payload["image_list_path"]
+    else:
+        return JsonResponse(
+            {
+                "status": "failed",
+                "reason": "Must supply one of 'paths', or 'image_list_path'.",
+            },
+            code=400,
+        )
+    image_list_path = payload["image_list_path"]
     embeddings_path = payload.get("embeddings_path")
     scores_path = payload.get("scores_path")
-    image_list_path = payload["image_list_path"]
 
     model_output = ModelOutput(
         dataset=dataset,
@@ -1332,13 +1365,24 @@ def delete_dataset(request):
 @csrf_exempt
 def get_annotations(request):
     payload = json.loads(request.body)
-    image_pks = [i for i in payload["identifiers"] if i]
-    if not image_pks:
-        return JsonResponse({})
 
-    annotations = Annotation.objects.filter(
-        dataset_item__in=DatasetItem.objects.filter(pk__in=image_pks),
-    )
+    annotations = Annotation.objects.all()
+    if "identifiers" in payload:
+        image_pks = [i for i in payload["identifiers"] if i]
+        annotations = Annotation.objects.filter(
+            dataset_item__in=DatasetItem.objects.filter(pk__in=image_pks),
+        )
+
+    if "tags" in payload:
+        annotations = Annotation.objects.filter(
+            category__in=Category.objects.filter(name__in=payload["tags"])
+        )
+
+    if "modes" in payload:
+        annotations = Annotation.objects.filter(
+            mode__in=Mode.objects.filter(name__in=payload["modes"])
+        )
+
     tags_by_pk = get_tags_from_annotations(annotations)
     boxes_by_pk = get_boxes_from_annotations(annotations)
     annotations_by_pk = defaultdict(lambda: {"tags": [], "boxes": []})
@@ -1346,7 +1390,19 @@ def get_annotations(request):
         annotations_by_pk[pk]["tags"] = serialize_tag_set_for_client(tags)
     for pk, boxes in boxes_by_pk.items():
         annotations_by_pk[pk]["boxes"] = serialize_boxes_for_client(boxes)
-    return JsonResponse(annotations_by_pk)
+    if "by_path" in payload and payload["by_path"]:
+        pk_to_path = {
+            a["pk"]: a["path"]
+            for a in DatasetItem.objects.filter(
+                pk__in=list(annotations_by_pk.keys())
+            ).values("pk", "path")
+        }
+        annotations_by_path = {
+            pk_to_path[pk]: v["tags"] for pk, v in annotations_by_pk.items()
+        }
+        return JsonResponse(annotations_by_path)
+    else:
+        return JsonResponse(annotations_by_pk)
 
 
 @api_view(["POST"])
@@ -1465,6 +1521,14 @@ def bulk_add_multi_annotations(payload: Dict):
     )
     ident_to_pk = {ident: pk for pk, ident in di_pks}
 
+    paths = [ann["path"] for ann in payload["annotations"] if "path" in ann]
+    di_pks = list(
+        DatasetItem.objects.filter(dataset=dataset, path__in=paths).values_list(
+            "pk", "path"
+        )
+    )
+    path_to_pk = {path: pk for pk, path in di_pks}
+
     cats = {}
     modes = {}
     to_delete = defaultdict(set)
@@ -1474,7 +1538,16 @@ def bulk_add_multi_annotations(payload: Dict):
         category_name = ann["category"]
         mode_name = ann["mode"]
         is_box = ann.get("is_box", False)
-        pk = ident_to_pk[ann["identifier"]] if "identifier" in ann else ann["pk"]
+        if "identifier" in ann:
+            pk = ident_to_pk[ann["identifier"]]
+        elif "pk" in ann:
+            pk = ann["pk"]
+        elif "path" in ann:
+            pk = path_to_pk[ann["identifier"]]
+        else:
+            raise ValueError(
+                "All annotations must have one of 'identifier', 'pk', or 'path'."
+            )
 
         if category_name not in cats:
             cats[category_name] = Category.objects.get_or_create(name=category_name)[0]
