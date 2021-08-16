@@ -82,7 +82,11 @@ urlpatterns = [
     path("api/get_models/<slug:dataset_name>", views.get_models, name="get_models"),
     path("api/update_model", views.update_model, name="update_model"),
     path("api/delete_model", views.delete_model, name="delete_model"),
-    path("api/get_annotations", views.get_annotations, name="get_annotations"),
+    path(
+        "api/get_annotations",
+        views.get_annotations,
+        name="get_annotations",
+    ),
     path("api/add_annotations", views.add_annotations, name="add_annotations"),
     path(
         "api/add_annotations_multi",

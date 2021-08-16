@@ -1284,65 +1284,73 @@ def create_dataset(request):
     for path, ident, is_val in paths:
         splits_to_image_paths["val" if is_val else "train"].append((path, ident))
 
-    r = requests.post(
-        settings.EMBEDDING_SERVER_ADDRESS + "/start_embedding_job",
-        json={
-            "model_output_name": "resnet",
-            "splits_to_image_paths": splits_to_image_paths,
-            "embedding_type": "resnet",
-        },
-    )
-    response_data = r.json()
-    resnet_job_id = response_data["job_id"]
+    try:
+        r = requests.post(
+            settings.EMBEDDING_SERVER_ADDRESS + "/start_embedding_job",
+            json={
+                "model_output_name": "resnet",
+                "splits_to_image_paths": splits_to_image_paths,
+                "embedding_type": "resnet",
+            },
+        )
+        response_data = r.json()
+        resnet_job_id = response_data["job_id"]
 
-    r = requests.post(
-        settings.EMBEDDING_SERVER_ADDRESS + "/start_embedding_job",
-        json={
-            "model_output_name": "clip",
-            "splits_to_image_paths": splits_to_image_paths,
-            "embedding_type": "clip",
-        },
-    )
-    response_data = r.json()
-    clip_job_id = response_data["job_id"]
+        r = requests.post(
+            settings.EMBEDDING_SERVER_ADDRESS + "/start_embedding_job",
+            json={
+                "model_output_name": "clip",
+                "splits_to_image_paths": splits_to_image_paths,
+                "embedding_type": "clip",
+            },
+        )
+        response_data = r.json()
+        clip_job_id = response_data["job_id"]
 
-    job_ids_left = [("resnet", resnet_job_id), ("clip", clip_job_id)]
-    while len(job_ids_left) > 0:
-        next_jobs = []
-        for name, job_id in job_ids_left:
-            r = requests.get(
-                settings.EMBEDDING_SERVER_ADDRESS + "/embedding_job_status",
-                params={"job_id": job_id},
-            )
-            response_data = r.json()
-            if not response_data["has_job"]:
-                dataset.delete()
-                return JsonResponse(
-                    {
-                        "status": "failure",
-                        "failure_reason": "Embedding server did not receive embedding job",
-                    },
-                    status_code=500,
+        job_ids_left = [("resnet", resnet_job_id), ("clip", clip_job_id)]
+        while len(job_ids_left) > 0:
+            next_jobs = []
+            for name, job_id in job_ids_left:
+                r = requests.get(
+                    settings.EMBEDDING_SERVER_ADDRESS + "/embedding_job_status",
+                    params={"job_id": job_id},
                 )
-
-            if not response_data["finished"]:
-                next_jobs.append((name, job_id))
-            else:
-                if response_data["failed"]:
-                    failure_reason = response_data["failure_reason"]
+                response_data = r.json()
+                if not response_data["has_job"]:
                     dataset.delete()
                     return JsonResponse(
-                        {"status": "failure", "failure_reason": failure_reason},
+                        {
+                            "status": "failure",
+                            "failure_reason": "Embedding server did not receive embedding job",
+                        },
                         status_code=500,
                     )
-                ModelOutput(
-                    dataset=dataset,
-                    name=name,
-                    image_list_path=response_data["image_list_path"],
-                    embeddings_path=response_data["embeddings_path"],
-                ).save()
-        time.sleep(3)
-        job_ids_left = next_jobs
+
+                if not response_data["finished"]:
+                    next_jobs.append((name, job_id))
+                else:
+                    if response_data["failed"]:
+                        failure_reason = response_data["failure_reason"]
+                        dataset.delete()
+                        return JsonResponse(
+                            {"status": "failure", "failure_reason": failure_reason},
+                            status_code=500,
+                        )
+                    ModelOutput(
+                        dataset=dataset,
+                        name=name,
+                        image_list_path=response_data["image_list_path"],
+                        embeddings_path=response_data["embeddings_path"],
+                    ).save()
+            time.sleep(3)
+            job_ids_left = next_jobs
+
+    except requests.exceptions.RequestException as e:  # This is the correct syntax
+        dataset.delete()
+        return JsonResponse(
+            {"status": "failure", "reason": "Failed to create embeddings for dataset."},
+            code=500,
+        )
 
     # Add model outputs to db
 
@@ -1367,19 +1375,25 @@ def get_annotations(request):
     payload = json.loads(request.body)
 
     annotations = Annotation.objects.all()
+    if "dataset_name" in payload:
+        dataset = get_object_or_404(Dataset, name=payload["dataset_name"])
+        annotations = annotations.filter(
+            dataset_item__in=DatasetItem.objects.filter(dataset=dataset)
+        )
+
     if "identifiers" in payload:
         image_pks = [i for i in payload["identifiers"] if i]
-        annotations = Annotation.objects.filter(
+        annotations = annotations.filter(
             dataset_item__in=DatasetItem.objects.filter(pk__in=image_pks),
         )
 
     if "tags" in payload:
-        annotations = Annotation.objects.filter(
+        annotations = annotations.filter(
             category__in=Category.objects.filter(name__in=payload["tags"])
         )
 
     if "modes" in payload:
-        annotations = Annotation.objects.filter(
+        annotations = annotations.filter(
             mode__in=Mode.objects.filter(name__in=payload["modes"])
         )
 
@@ -1398,7 +1412,10 @@ def get_annotations(request):
             ).values("pk", "path")
         }
         annotations_by_path = {
-            pk_to_path[pk]: v["tags"] for pk, v in annotations_by_pk.items()
+            pk_to_path[pk]: [
+                {"category": tag["category"], "mode": tag["value"]} for tag in v["tags"]
+            ]
+            for pk, v in annotations_by_pk.items()
         }
         return JsonResponse(annotations_by_path)
     else:
@@ -1543,7 +1560,7 @@ def bulk_add_multi_annotations(payload: Dict):
         elif "pk" in ann:
             pk = ann["pk"]
         elif "path" in ann:
-            pk = path_to_pk[ann["identifier"]]
+            pk = path_to_pk[ann["path"]]
         else:
             raise ValueError(
                 "All annotations must have one of 'identifier', 'pk', or 'path'."
