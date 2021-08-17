@@ -5,7 +5,7 @@ A rapid data exploration engine.
 
 First, install Forager:
 ```bash
-git clone forager-research/forager
+git clone --single-branch --branch selfserve git@github.com:jeremyephron/forager.git
 pushd forager
 pip3 install torch>=1.9 torchvision>=0.10.0 foragerpy
 python3 -m build
@@ -25,7 +25,7 @@ Note that the index page for Forager is empty. That's because we haven't loaded 
 To do so, install the Python Forager client, foragerpy:
 
 ```bash
-git clone forager-research/foragerpy
+git clone git@github.com:Forager-Research/foragerpy.git
 pushd foragerpy
 poetry build
 pip3 install dist/*.whl
