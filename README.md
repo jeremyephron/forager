@@ -4,7 +4,7 @@ A rapid data exploration engine.
 ## Getting started
 
 First, install Forager:
-```
+```bash
 git clone forager-research/forager
 pushd forager
 pip3 install torch>=1.9 torchvision>=0.10.0 foragerpy
@@ -14,7 +14,7 @@ popd
 ```
 
 Now you can start up the Forager server by running:
-```
+```bash
 forager-server
 ```
 
@@ -24,7 +24,7 @@ Note that the index page for Forager is empty. That's because we haven't loaded 
 
 To do so, install the Python Forager client, foragerpy:
 
-```
+```bash
 git clone forager-research/foragerpy
 puhsd foragerpy
 poetry build
