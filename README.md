@@ -26,7 +26,7 @@ To do so, install the Python Forager client, foragerpy:
 
 ```bash
 git clone forager-research/foragerpy
-puhsd foragerpy
+pushd foragerpy
 poetry build
 pip3 install dist/*.whl
 popd
