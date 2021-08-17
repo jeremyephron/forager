@@ -1,39 +1,19 @@
 import argparse
 import logging
+import logging.config
 import os
 import os.path
+import sys
 
 from sanic import Sanic, response
 
-# Create a logger for the server
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+from forager_frontend.log import LOGGING, init_logging
 
-# create formatter and add it to the handlers
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-
-# Attach handlers
-# Create a file handler for the log
-if os.environ.get("FORAGER_LOG_DIR"):
-    log_fh = logging.FileHandler(
-        os.path.join(os.environ["FORAGER_LOG_DIR"], "embedding_server.log")
-    )
-    log_fh.setLevel(logging.DEBUG)
-    log_fh.setFormatter(formatter)
-    logger.addHandler(log_fh)
-
-
-if os.environ.get("FORAGER_LOG_CONSOLE") == "1":
-    # Create a console handler to print errors to console
-    log_ch = logging.StreamHandler()
-    log_ch.setLevel(logging.DEBUG)
-    log_ch.setFormatter(formatter)
-    logger.addHandler(log_ch)
-
+init_logging()
 
 FILE_DIR = os.path.realpath(os.path.join(__file__, ".."))
 
-app = Sanic(__name__, log_config=None)
+app = Sanic(__name__, log_config=LOGGING)
 app.static("/files", "/")
 app.static("/", os.path.join(FILE_DIR, "build"))
 

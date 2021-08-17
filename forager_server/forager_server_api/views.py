@@ -1111,9 +1111,21 @@ def add_model_output(request, dataset_name):
 
     payload = json.loads(request.body)
     name = payload["name"]
+
+    embeddings_path = payload.get("embeddings_path", "")
+    scores_path = payload.get("scores_path", "")
+
+    if embeddings_path == "" and scores_path == "":
+        return JsonResponse(
+            {
+                "status": "failed",
+                "reason": "Must supply one of 'embeddings_path' or 'scores_path'",
+            }
+        )
+
     if "paths" in payload:
         path_to_di = {
-            di["path"]: di
+            di.path: di
             for di in DatasetItem.objects.filter(
                 dataset=dataset, path__in=payload["paths"]
             )
@@ -1123,12 +1135,12 @@ def add_model_output(request, dataset_name):
 
         model_uuid = str(uuid.uuid4())
 
-        image_lists_path = FORAGER_IMAGE_LISTS_DIR / model_uuid
-        with open(image_lists_path, "w") as f:
+        image_list_path = FORAGER_IMAGE_LISTS_DIR / model_uuid
+        with open(image_list_path, "w") as f:
             for path in payload["paths"]:
                 di = path_to_di[path]
-                split = "val" if di["is_val"] else "train"
-                f.write(f"{split} {di['identifier']} {path}")
+                split = "val" if di.is_val else "train"
+                f.write(f"{split} {di.identifier} {path}\n")
 
     elif "image_list_path" in payload:
         image_list_path = payload["image_list_path"]
@@ -1140,9 +1152,6 @@ def add_model_output(request, dataset_name):
             },
             code=400,
         )
-    image_list_path = payload["image_list_path"]
-    embeddings_path = payload.get("embeddings_path")
-    scores_path = payload.get("scores_path")
 
     model_output = ModelOutput(
         dataset=dataset,
@@ -1168,8 +1177,8 @@ def model_output_info(model_output):
     return {
         "id": model_output.pk,
         "name": model_output.name,
-        "has_embeddings": model_output.embeddings_path is not None,
-        "has_scores": model_output.scores_path is not None,
+        "has_embeddings": model_output.embeddings_path != "",
+        "has_scores": model_output.scores_path != "",
         "timestamp": model_output.last_updated,
     }
 

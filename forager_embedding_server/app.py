@@ -24,6 +24,7 @@ from scipy.spatial.distance import cdist
 from sklearn import svm
 from sklearn.metrics import precision_score, recall_score
 
+import forager_embedding_server.log
 import forager_embedding_server.models as models
 from forager_embedding_server.ais import ais_singleiter, get_fscore
 from forager_embedding_server.config import CONFIG
@@ -42,35 +43,15 @@ if BUILD_WITH_KUBE:
                                                        Trainer)
 
 # Create a logger for the server
+
+forager_embedding_server.log.init_logging()
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
-# create formatter and add it to the handlers
-formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-
-# Attach handlers
-# Create a file handler for the log
-if os.environ.get("FORAGER_LOG_DIR"):
-    log_fh = logging.FileHandler(
-        os.path.join(os.environ["FORAGER_LOG_DIR"], "embedding_server.log")
-    )
-    log_fh.setLevel(logging.DEBUG)
-    log_fh.setFormatter(formatter)
-    logger.addHandler(log_fh)
-
-
-if os.environ.get("FORAGER_LOG_CONSOLE") == "1":
-    # Create a console handler to print errors to console
-    log_ch = logging.StreamHandler()
-    log_ch.setLevel(logging.DEBUG)
-    log_ch.setFormatter(formatter)
-    logger.addHandler(log_ch)
 
 
 # GLOBALS
 
 # Start web server
-app = Sanic(__name__)
+app = Sanic(__name__, log_config=forager_embedding_server.log.LOGGING)
 app.update_config({"RESPONSE_TIMEOUT": CONFIG.SANIC_RESPONSE_TIMEOUT})
 
 
@@ -761,9 +742,10 @@ async def cleanup(app, loop):
 
 @utils.log_exception_from_coro_but_return_none
 async def _cleanup_clusters():
-    n = len(current_clusters)
-    await current_clusters.clear_async()
-    print(f"- killed {n} clusters")
+    if BUILD_WITH_KUBE:
+        n = len(current_clusters)
+        await current_clusters.clear_async()
+        print(f"- killed {n} clusters")
 
 
 if __name__ == "__main__":

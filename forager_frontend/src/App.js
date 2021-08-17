@@ -1057,9 +1057,16 @@ const App = () => {
       return;
     };
 
+    let modelOutputId = modelOutputInfo[0]["id"];
+    for (const m of modelOutputInfo) {
+      if (m["name"] == clusteringModel) {
+        modelOutputId = m["id"];
+      }
+    }
+
     let url = new URL(`${endpoints.getResults}/${datasetName}`);
     let params =  {
-      clustering_model_output_id: modelOutputInfo[0]["id"],
+      clustering_model_output_id: modelOutputId,
       result_set_id: queryResultSet.id,
       offset: page * PAGE_SIZE,
       num: PAGE_SIZE,

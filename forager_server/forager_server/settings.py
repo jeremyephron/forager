@@ -131,7 +131,11 @@ LOGGING = {
         },
     },
     "handlers": {},
-    "loggers": {"django": {"handlers": [], "propagate": True}},
+    "root": {"handlers": [], "level": "DEBUG"},
+    "loggers": {
+        "django": {"handlers": [], "propagate": True},
+        "forager_server": {"handlers": [], "propagate": True},
+    },
 }
 
 if os.environ.get("FORAGER_LOG_DIR"):
@@ -142,7 +146,7 @@ if os.environ.get("FORAGER_LOG_DIR"):
         "level": "DEBUG",
         "formatter": "simple",
     }
-    LOGGING["loggers"]["django"]["handlers"].append("file")
+    LOGGING["root"]["handlers"].append("file")
 
 if os.environ.get("FORAGER_LOG_CONSOLE") == "1":
     LOGGING["handers"]["console"] = {
@@ -150,7 +154,7 @@ if os.environ.get("FORAGER_LOG_CONSOLE") == "1":
         "level": "DEBUG",
         "formatter": "simple",
     }
-    LOGGING["loggers"]["django"]["handlers"].append("console")
+    LOGGING["root"]["handlers"].append("console")
 
 
 # Internationalization
