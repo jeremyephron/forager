@@ -7,7 +7,7 @@ First, install Forager:
 ```bash
 git clone --single-branch --branch selfserve git@github.com:jeremyephron/forager.git
 pushd forager
-pip3 install torch>=1.9 torchvision>=0.10.0 foragerpy
+pip3 install torch>=1.9 torchvision>=0.10.0
 python3 -m build
 pip3 install dist/*.whl
 popd 
