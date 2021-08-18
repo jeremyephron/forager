@@ -11,10 +11,10 @@ packages = [
 aiohttp = "*"
 aiostream = "*"
 dataclasses-json = "*"
-gcloud-aio-auth = "*"
-kubernetes_asyncio = "*"
 numpy = "*"
 runstats = "*"
+#gcloud-aio-auth = "*"
+#kubernetes_asyncio = "*"
 
 [tool.poetry.dev-dependencies]
 

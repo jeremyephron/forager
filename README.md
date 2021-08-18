@@ -51,3 +51,4 @@ await client.add_dataset('<DATASET_NAME>', '/path/to/train/images/directory, '/p
 
 Now refresh the Forager web page and you should see your new dataset.
 
+NOTE: Forager sessions are currently ephemeral--the database is stored as a temporary file which may be cleared on reboot.
