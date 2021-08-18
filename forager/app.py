@@ -51,7 +51,8 @@ def run_server(q):
             sys.stdout = LoggerWriter(logger.debug)
             sys.stderr = LoggerWriter(logger.warning)
 
-        call_command("makemigrations --initial")
+        call_command("makemigrations", "--initial", "forager_server_api")
+        call_command("makemigrations", "--initial")
         call_command("migrate")
 
         print("Running django server...")
