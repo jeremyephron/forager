@@ -146,7 +146,7 @@ class ForagerApp(object):
                 sys.exit(1)
 
         print("Forager is ready at: http://localhost:4000")
-        print("(Logs are in {LOG_DIR})")
+        print(f"(Logs are in {LOG_DIR})")
 
     def join(self):
         self.web_server.join()

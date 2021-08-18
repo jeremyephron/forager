@@ -1,13 +1,21 @@
 # Forager
 A rapid data exploration engine.
 
+
+## Requirements
+Forager runtime requires:
+- Python >= 3.8
+
+Forager build requires:
+- npm >= 7.19.1
+
 ## Getting started
 
 First, install Forager:
 ```bash
-git clone --single-branch --branch selfserve git@github.com:jeremyephron/forager.git
+git clone --single-branch --branch selfserve https://github.com/jeremyephron/forager.git
 pushd forager
-pip3 install torch>=1.9 torchvision>=0.10.0
+pip3 install "torch>=1.9" "torchvision>=0.10.0" build
 python3 -m build
 pip3 install dist/*.whl
 popd 
@@ -25,7 +33,7 @@ Note that the index page for Forager is empty. That's because we haven't loaded 
 To do so, install the Python Forager client, foragerpy:
 
 ```bash
-git clone git@github.com:Forager-Research/foragerpy.git
+git clone https://github.com/Forager-Research/foragerpy.git
 pushd foragerpy
 poetry install
 poetry build
@@ -42,3 +50,4 @@ await client.add_dataset('<DATASET_NAME>', '/path/to/train/images/directory, '/p
 ```
 
 Now refresh the Forager web page and you should see your new dataset.
+
