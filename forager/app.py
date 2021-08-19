@@ -1,12 +1,15 @@
 import logging
 import os
+import queue
+import shutil
 import subprocess
 import sys
+import time
 import traceback
 from io import IOBase
 from multiprocessing import Process, Queue
 from pathlib import Path
-from typing import Tuple
+from typing import List, Tuple
 
 # Services:
 # 1. Start db (or not if sqlite?)
@@ -51,8 +54,19 @@ def run_server(q):
             sys.stdout = LoggerWriter(logger.debug)
             sys.stderr = LoggerWriter(logger.warning)
 
-        call_command("makemigrations", "--initial", "forager_server_api")
-        call_command("makemigrations", "--initial")
+        import forager_server_api.migrations
+
+        # Clear old migrations and recreate
+        migrations_path = os.path.dirname(
+            os.path.abspath(forager_server_api.migrations.__file__)
+        )
+        shutil.rmtree(migrations_path, ignore_errors=True)
+        os.makedirs(migrations_path)
+        with open(os.path.join(migrations_path, "__init__.py"), "w") as f:
+            f.write(" ")
+
+        call_command("makemigrations", "forager_server_api")
+        call_command("makemigrations")
         call_command("migrate")
 
         print("Running django server...")
@@ -131,16 +145,16 @@ class ForagerApp(object):
         file_server_wd = ""
         self.file_server, self.file_server_q = self._run_server(run_frontend)
 
-        services = [
+        self.services: List[Tuple[str, Queue]] = [
             ("Backend", self.web_server_q),
             ("Compute", self.embedding_server_q),
             ("Frontend", self.file_server_q),
         ]
 
-        for idx, (name, q) in enumerate(services):
+        for idx, (name, q) in enumerate(self.services):
             started = q.get()
             if started:
-                print(f"({idx+1}/{len(services)}) {name} started.")
+                print(f"({idx+1}/{len(self.services)}) {name} started.")
                 pass
             if not started:
                 print(f"{name} failed to start, aborting...")
@@ -150,6 +164,25 @@ class ForagerApp(object):
         print(f"(Logs are in {LOG_DIR})")
 
     def join(self):
+        aborting = False
+        self.service_running = [True for _ in self.services]
+        self.services_left = len(self.services)
+        while self.services_left > 0:
+            for idx, (name, q) in enumerate(self.services):
+                if not self.service_running[idx]:
+                    continue
+                try:
+                    still_running = q.get_nowait()
+                    if not still_running:
+                        self.service_running[idx] = False
+                        self.services_left -= 1
+                        if not aborting:
+                            print(f"{name} failed, aborting...")
+                            aborting = True
+                except queue.Empty:
+                    pass
+            time.sleep(1)
+
         self.web_server.join()
         self.embedding_server.join()
         self.file_server.join()

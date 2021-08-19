@@ -5,7 +5,8 @@ import os
 import os.path
 import sys
 
-from sanic import Sanic, response
+from sanic import Sanic, request, response
+from sanic.exceptions import FileNotFound
 
 from forager_frontend.log import LOGGING, init_logging
 
@@ -15,11 +16,17 @@ FILE_DIR = os.path.realpath(os.path.join(__file__, ".."))
 
 app = Sanic(__name__, log_config=LOGGING)
 app.static("/files", "/")
-app.static("/", os.path.join(FILE_DIR, "build"))
+app.static("/static", os.path.join(FILE_DIR, "build", "static"))
+app.static("/manifest.json", os.path.join(FILE_DIR, "build", "manifest.json"))
+app.static("/favicon.ico", os.path.join(FILE_DIR, "build", "favicon.ico"))
+app.static("/robots.txt", os.path.join(FILE_DIR, "build", "robotx.txt"))
+app.static("/logo192.png", os.path.join(FILE_DIR, "build", "logo192.png"))
+app.static("/logo512.png", os.path.join(FILE_DIR, "build", "logo512.png"))
 
 
 @app.route("/")
-async def index(request):
+@app.exception(FileNotFound)
+async def index(request, param=""):
     return await response.file(os.path.join(FILE_DIR, "build/index.html"))
 
 
