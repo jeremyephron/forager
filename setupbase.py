@@ -63,7 +63,8 @@ def build_frontend(cmd):
     class CommandWrapper(cmd):
         def run(self):
             # Build react frontend
-            if not DEBUG_FRONTEND and (FRONTEND_DIR / "package.json").exists():
+            inside_sdist = (FRONTEND_DIR / "package.json").exists()
+            if not DEBUG_FRONTEND and inside_sdist:
                 # Don't build if we are inside an sdist
                 npm_env = os.environ.copy()
                 npm_env.update({"REACT_APP_SERVER_URL": "http://localhost:8000"})
@@ -75,7 +76,10 @@ def build_frontend(cmd):
                     check=True,
                 )
                 # Regen package data after build
-                self.distribution.package_data = find_package_data()
+                self.distribution.package_data = find_package_data(sdist=True)
+
+            if not inside_sdist:
+                self.distribution.package_data = find_package_data(sdist=False)
             cmd.run(self)
 
     return CommandWrapper
@@ -88,7 +92,7 @@ PACKAGES = [
     ("forager_server", "forager_server/forager_server"),
     ("forager_embedding_server", "forager_embedding_server"),
     ("forager_knn", "forager_knn/src/forager_knn"),
-    ("clip", "3rdparty/CLIP"),
+    ("clip", "3rdparty/CLIP/clip"),
 ]
 
 
@@ -121,12 +125,14 @@ def package_files(root):
     return paths
 
 
-def find_package_data():
+def find_package_data(sdist=True):
     data = defaultdict(list)
     data["forager_frontend"] += package_files("forager_frontend/build")
     for name, path in PACKAGES:
         data[name] += ["pyproject.toml"]
-    data["clip"] += ["clip/bpe_simple_vocab_16e6.txt.gz", "requirements.txt"]
+    data["clip"] += ["bpe_simple_vocab_16e6.txt.gz"]
+    if sdist:
+        data["clip"] += ["../requirements.txt"]
     print("package_data", data)
     return data
 

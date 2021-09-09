@@ -6,7 +6,7 @@ import os.path
 import sys
 
 from sanic import Sanic, request, response
-from sanic.exceptions import FileNotFound
+from sanic.exceptions import NotFound
 
 from forager_frontend.log import LOGGING, init_logging
 
@@ -25,7 +25,7 @@ app.static("/logo512.png", os.path.join(FILE_DIR, "build", "logo512.png"))
 
 
 @app.route("/")
-@app.exception(FileNotFound)
+@app.exception(NotFound)
 async def index(request, param=""):
     return await response.file(os.path.join(FILE_DIR, "build/index.html"))
 
