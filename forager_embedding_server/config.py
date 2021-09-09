@@ -131,13 +131,7 @@ class ClipConfig:
 
 @dataclass
 class ResnetConfig:
-    from detectron2.config.config import \
-        get_cfg as get_default_detectron_config
-
-    CONFIG = get_default_detectron_config()
-    MODEL_URL = (
-        "https://dl.fbaipublicfiles.com/detectron/ImageNetPretrained/MSRA/R-50.pkl"
-    )
+    pass
 
 
 @dataclass

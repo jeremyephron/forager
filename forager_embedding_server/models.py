@@ -4,10 +4,8 @@ from typing import List, Optional, Tuple
 import clip
 import numpy as np
 import torch
+import torchvision.models.resnet
 import torchvision.transforms
-from detectron2.checkpoint.detection_checkpoint import DetectionCheckpointer
-from detectron2.layers import ShapeSpec
-from detectron2.modeling.backbone.resnet import build_resnet_backbone
 from PIL import Image
 
 from forager_embedding_server.config import CONFIG
@@ -52,27 +50,43 @@ class CLIP(EmbeddingModel):
         return image_features.numpy()
 
 
+class TorchvisionResNetFeatureModel(torchvision.models.resnet.ResNet):
+    def _forward_impl(self, x):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+
+        x = self.layer1(x)
+        x = self.layer2(x)
+        res4 = self.layer3(x)
+        res5 = self.layer4(res4)
+
+        x = self.avgpool(res5)
+        x = torch.flatten(x, 1)
+        linear = self.fc(x)
+
+        return {"res4": res4, "res5": res5, "linear": linear}
+
+
 class ResNet(EmbeddingModel):
     def __init__(self):
         # Create model
-        shape = ShapeSpec(channels=3)
-        self.model = torch.nn.Sequential(
-            build_resnet_backbone(CONFIG.MODELS.RESNET.CONFIG, shape)
-        )
+        block = torchvision.models.resnet.Bottleneck
+        layers = [3, 4, 6, 3]
+        self.model = TorchvisionResNetFeatureModel(block, layers)
 
         # Load model weights
-        checkpointer = DetectionCheckpointer(self.model, save_to_disk=False)
-        checkpointer.load(load_remote_file(CONFIG.MODELS.RESNET.MODEL_URL))
+        state_dict = torchvision.models.utils.load_state_dict_from_url(
+            torchvision.models.resnet.model_urls["resnet50"]
+        )
+        self.model.load_state_dict(state_dict)
         self.model.eval()
 
-        # Store relevant attributes of config
-        self.pixel_mean = torch.tensor(
-            CONFIG.MODELS.RESNET.CONFIG.MODEL.PIXEL_MEAN
-        ).view(-1, 1, 1)
-        self.pixel_std = torch.tensor(CONFIG.MODELS.RESNET.CONFIG.MODEL.PIXEL_STD).view(
-            -1, 1, 1
-        )
-        self.input_format = CONFIG.MODELS.RESNET.CONFIG.INPUT.FORMAT
+        # Setup input pipeline
+        self.pixel_mean = torch.tensor([0.485, 0.456, 0.406])[:, None, None]
+        self.pixel_std = torch.tensor([0.229, 0.224, 0.225])[:, None, None]
+        self.input_format = "RGB"
 
     def output_dim(self, layer: str = "res4"):
         return {"res4": 1024, "res5": 2048, "linear": 1000}[layer]

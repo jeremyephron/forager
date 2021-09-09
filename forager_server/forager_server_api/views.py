@@ -22,7 +22,6 @@ from django.http import JsonResponse
 from django.shortcuts import get_list_or_404, get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from expiringdict import ExpiringDict
-from google.cloud import storage
 from rest_framework.decorators import api_view
 
 from .models import (Annotation, Category, CategoryCount, Dataset, DatasetItem,
@@ -1150,7 +1149,7 @@ def add_model_output(request, dataset_name):
                 "status": "failed",
                 "reason": "Must supply one of 'paths', or 'image_list_path'.",
             },
-            code=400,
+            status=400,
         )
 
     model_output = ModelOutput(
@@ -1332,7 +1331,7 @@ def create_dataset(request):
                             "status": "failure",
                             "failure_reason": "Embedding server did not receive embedding job",
                         },
-                        status_code=500,
+                        status=500,
                     )
 
                 if not response_data["finished"]:
@@ -1343,7 +1342,7 @@ def create_dataset(request):
                         dataset.delete()
                         return JsonResponse(
                             {"status": "failure", "failure_reason": failure_reason},
-                            status_code=500,
+                            status=500,
                         )
                     ModelOutput(
                         dataset=dataset,
@@ -1358,7 +1357,7 @@ def create_dataset(request):
         dataset.delete()
         return JsonResponse(
             {"status": "failure", "reason": "Failed to create embeddings for dataset."},
-            code=500,
+            status=500,
         )
 
     # Add model outputs to db

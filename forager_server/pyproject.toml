@@ -17,6 +17,7 @@ django-sslserver = "^0.22"
 pycocotools = "^2.0.2"
 expiringdict = "*"
 #google-cloud-storage = "^1.33.0"
+requests = "^2.26.0"
 
 [tool.poetry.dev-dependencies]
 responses = "^0.13.4"

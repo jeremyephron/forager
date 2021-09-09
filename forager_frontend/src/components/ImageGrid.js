@@ -19,7 +19,7 @@ const ImageGrid = ({ images, annotations, onClick, minRowHeight, imageAspectRati
   const imageHeight = Math.floor(minRowHeight * imagesPerRowFloat / imagesPerRow);
   const imageWidth = Math.floor(imageAspectRatio * imageHeight);
 
-  useEffect(forceCheck, [images]);
+  useEffect(() => forceCheck(), [images]);
 
   return (
     <div className="image-grid" ref={ref}>
@@ -29,12 +29,13 @@ const ImageGrid = ({ images, annotations, onClick, minRowHeight, imageAspectRati
             style={{width: imageWidth, marginBottom: MARGIN, marginRight: MARGIN}}
           >
             <div className="image-container">
+              <div className={"image " + (selectedPred(i) ? "selected" : "")}>
+                <AnnotatedImage
+                  url={imageHeight > THUMBNAIL_HEIGHT ? im.src : im.thumb}
+                  boxes={(annotations[im.id] && annotations[im.id]["boxes"]) || []}>
+                </AnnotatedImage>
+              </div>
               <LazyLoad scrollContainer=".modal" height={imageHeight}>
-                <div className={"image " + (selectedPred(i) ? "selected" : "")}>
-                  <AnnotatedImage
-                    url={imageHeight > THUMBNAIL_HEIGHT ? im.src : im.thumb}
-                    boxes={(annotations[im.id] && annotations[im.id]["boxes"]) || []}/>
-                </div>
               </LazyLoad>
               {im.distance >= 0 && <div className="image-distance">{im.distance.toFixed(3)}</div>}
             </div>

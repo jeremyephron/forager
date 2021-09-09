@@ -15,7 +15,7 @@ First, install Forager:
 ```bash
 git clone --single-branch --branch selfserve https://github.com/jeremyephron/forager.git
 pushd forager
-pip3 install "torch>=1.9" "torchvision>=0.10.0" build
+pip3 install build
 python3 -m build
 pip3 install dist/*.whl
 popd 
@@ -52,3 +52,4 @@ await client.add_dataset('<DATASET_NAME>', '/path/to/train/images/directory, '/p
 Now refresh the Forager web page and you should see your new dataset.
 
 NOTE: Forager sessions are currently ephemeral--the database is stored as a temporary file which may be cleared on reboot.
+

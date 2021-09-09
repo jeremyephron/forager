@@ -858,7 +858,7 @@ const App = () => {
     setIsLoading(true);
   }
 
-  useEffect(getDatasetInfo, [datasetName]);
+  useEffect(() => getDatasetInfo(), [datasetName]);
 
   const refreshCategoryCounts = async () => {
     const url = new URL(`${endpoints.getCategoryCounts}/${datasetName}`);
@@ -870,7 +870,7 @@ const App = () => {
       data,
     });
   }
-  useEffect(refreshCategoryCounts, []);  // TODO(mihirg): figure out when to refresh!
+  useEffect(() => refreshCategoryCounts(), []);  // TODO(mihirg): figure out when to refresh!
 
   // KNN queries
   const generateEmbedding = async (req, uuid) => {

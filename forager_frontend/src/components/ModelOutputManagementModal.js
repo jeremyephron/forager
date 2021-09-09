@@ -114,15 +114,18 @@ const ModelOutputManagementModal = ({
     getModelOutputs();
   }, []);
 
-  useEffect(async () => {
-    setModelOutputs(sortModelOutputs(modelOutputInfo.map(
-      (modelOutput, i) => ({modelOutput, srcIdx: i})
-    ).map((obj, i) => {
-      if (!(obj.modelOutput.timestamp instanceof Date)) {
-        obj.modelOutput.timestamp = new Date(obj.modelOutput.timestamp);
-      }
-      return obj;
-    })));
+  useEffect(() => {
+    const fn = async () => {
+      setModelOutputs(sortModelOutputs(modelOutputInfo.map(
+        (modelOutput, i) => ({modelOutput, srcIdx: i})
+      ).map((obj, i) => {
+        if (!(obj.modelOutput.timestamp instanceof Date)) {
+          obj.modelOutput.timestamp = new Date(obj.modelOutput.timestamp);
+        }
+        return obj;
+      })))
+    };
+    fn();
   }, [modelOutputInfo]);
 
   useEffect(() => {

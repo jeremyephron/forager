@@ -7,7 +7,6 @@ import {
   ModalHeader,
   ModalBody,
 } from "reactstrap";
-import ProgressiveImage from "react-progressive-image";
 import { faMousePointer } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
@@ -92,17 +91,20 @@ const ClusterModal = ({
   };
 
   // Reload annotations whenever there's a new result set
-  useEffect(async () => {
-    if (clusters.length === 0) return;
-    let annotationsUrl = new URL(endpoints.getAnnotations);
-    let body = {
-      identifiers: clusters.map(cl => cl.map(im => im.id)).flat()
-    }
-    setAnnotations(await fetch(annotationsUrl, {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(body),
-    }).then(r => r.json()));
+  useEffect(() => {
+    const fn = async () => {
+      if (clusters.length === 0) return;
+      let annotationsUrl = new URL(endpoints.getAnnotations);
+      let body = {
+        identifiers: clusters.map(cl => cl.map(im => im.id)).flat()
+      }
+      setAnnotations(await fetch(annotationsUrl, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(body),
+      }).then(r => r.json()));
+    };
+    fn();
   }, [clusters]);
 
   //
@@ -390,43 +392,36 @@ const ClusterModal = ({
             </FormGroup>
           </Form>
           {selectedImage !== undefined ?
-            <ProgressiveImage
-              src={selectedImage.src}
-              placeholder={selectedImage.thumb}
-            >
-              {src => {
-                if (isImageView) {
-                  const selected = !!!(excludedImageIndexes[selection.image]);
-                  return (
-                    <a href="#" onClick={(e) => toggleImageSelection(selection.image, e)} className="selectable-image">
-                      <div className={"image " + (selected ? "selected" : "")}>
-                        <AnnotatedImage url={src} boxes={showBoxes ? selectedBoxes : []}/>
-                      </div>
-                    </a>);
-                } else {
-                  return <AnnotatedImage url={src} boxes={showBoxes ? selectedBoxes : []}/>;
-                }
-              }}
-            </ProgressiveImage> :
-            <>
-              <div className="mb-1 text-small text-secondary font-weight-normal">
-                Selected {selectedCluster.length - Object.values(excludedImageIndexes).filter(Boolean).length}{" "}
-                of {selectedCluster.length} images (thumbnails: {imageGridSizes.map((size, i) =>
-                  <>
-                    <a key={i} href="#" className="text-secondary" onClick={(e) => setImageGridSize(size, e)}>{size.label}</a>
-                    {(i < imageGridSizes.length - 1) ? ", " : ""}
-                  </>
-                )})
-              </div>
-              <ImageGrid
-                images={selectedCluster}
-                annotations={showBoxes ? annotations : {}}
-                onClick={handleGalleryClick}
-                selectedPred={i => !!!(excludedImageIndexes[i])}
-                minRowHeight={imageGridSize.size}
-                imageAspectRatio={3/2}
-              />
-            </>
+           <>{isImageView ?
+              <a href="#" onClick={(e) => toggleImageSelection(selection.image, e)} className="selectable-image">
+                <div className={"image " + (
+                  !!!(excludedImageIndexes[selection.image]) ? "selected" : "")}>
+                  <AnnotatedImage url={selectedImage.src} boxes={showBoxes ? selectedBoxes : []}/>
+                </div>
+              </a>
+             :
+              <AnnotatedImage url={selectedImage.src} boxes={showBoxes ? selectedBoxes : []}/>
+           }</>
+          :
+           <>
+             <div className="mb-1 text-small text-secondary font-weight-normal">
+               Selected {selectedCluster.length - Object.values(excludedImageIndexes).filter(Boolean).length}{" "}
+               of {selectedCluster.length} images (thumbnails: {imageGridSizes.map((size, i) =>
+                 <>
+                   <a key={i} href="#" className="text-secondary" onClick={(e) => setImageGridSize(size, e)}>{size.label}</a>
+                   {(i < imageGridSizes.length - 1) ? ", " : ""}
+                 </>
+                 )})
+             </div>
+             <ImageGrid
+               images={selectedCluster}
+               annotations={showBoxes ? annotations : {}}
+               onClick={handleGalleryClick}
+               selectedPred={i => !!!(excludedImageIndexes[i])}
+               minRowHeight={imageGridSize.size}
+               imageAspectRatio={3/2}
+             />
+           </>
           }
         </ModalBody>
       </>}

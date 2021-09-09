@@ -20,6 +20,9 @@ from typing import List, Tuple
 LOG_DIR = Path("~/.forager/logs").expanduser()
 os.environ.setdefault("FORAGER_LOG_DIR", str(LOG_DIR))
 os.environ.setdefault("FORAGER_LOG_STD", "1")
+os.environ.setdefault("DEBUG_FRONTEND", "0")
+
+DEBUG_FRONTEND = os.environ.get("DEBUG_FRONTEND") == "1"
 
 
 def run_server(q):
@@ -134,22 +137,22 @@ class ForagerApp(object):
         LOG_DIR.mkdir(parents=True, exist_ok=True)
         print("Starting up Forager...")
 
+        self.services: List[Tuple[str, Queue]] = []
+
         web_server_wd = ""
         self.web_server, self.web_server_q = self._run_server(run_server)
+        self.services.append(("Backend", self.web_server_q))
 
         embedding_server_wd = ""
         self.embedding_server, self.embedding_server_q = self._run_server(
             run_embedding_server
         )
+        self.services.append(("Compute", self.embedding_server_q))
 
-        file_server_wd = ""
-        self.file_server, self.file_server_q = self._run_server(run_frontend)
-
-        self.services: List[Tuple[str, Queue]] = [
-            ("Backend", self.web_server_q),
-            ("Compute", self.embedding_server_q),
-            ("Frontend", self.file_server_q),
-        ]
+        if not DEBUG_FRONTEND:
+            file_server_wd = ""
+            self.file_server, self.file_server_q = self._run_server(run_frontend)
+            self.services.append(("Frontend", self.file_server_q))
 
         for idx, (name, q) in enumerate(self.services):
             started = q.get()

@@ -13,6 +13,10 @@ FRONTEND_DIR = Path("./forager_frontend")
 BACKEND_DIR = Path("./forager_server")
 EMBEDDING_SERVER_DIR = Path("./forager_embedding_server")
 KNN_DIR = Path("./forager_knn")
+CLIP_DIR = Path("./3rdparty/CLIP")
+
+DEBUG_FRONTEND = False
+UPLOAD = True
 
 
 def read_poetry_deps(path):
@@ -23,10 +27,13 @@ def read_poetry_deps(path):
         if package_name == "python":
             continue
         if isinstance(version, dict):
+            # No direct references for uploaded packages
+            if UPLOAD:
+                continue
             if "url" in version:
                 ver_str = f" @ {version['url']}"
-            else:
-                continue
+            elif "path" in version:
+                ver_str = f" @ file:///{version['path']}"
         elif version == "*":
             ver_str = ""
         elif version[0] == "^":
@@ -56,7 +63,7 @@ def build_frontend(cmd):
     class CommandWrapper(cmd):
         def run(self):
             # Build react frontend
-            if (FRONTEND_DIR / "package.json").exists():
+            if not DEBUG_FRONTEND and (FRONTEND_DIR / "package.json").exists():
                 # Don't build if we are inside an sdist
                 npm_env = os.environ.copy()
                 npm_env.update({"REACT_APP_SERVER_URL": "http://localhost:8000"})
@@ -81,6 +88,7 @@ PACKAGES = [
     ("forager_server", "forager_server/forager_server"),
     ("forager_embedding_server", "forager_embedding_server"),
     ("forager_knn", "forager_knn/src/forager_knn"),
+    ("clip", "3rdparty/CLIP"),
 ]
 
 
@@ -114,11 +122,11 @@ def package_files(root):
 
 
 def find_package_data():
-    print(package_files("forager_frontend/build"))
     data = defaultdict(list)
     data["forager_frontend"] += package_files("forager_frontend/build")
     for name, path in PACKAGES:
         data[name] += ["pyproject.toml"]
+    data["clip"] += ["clip/bpe_simple_vocab_16e6.txt.gz", "requirements.txt"]
     print("package_data", data)
     return data
 
@@ -132,5 +140,7 @@ def find_package_deps():
         FRONTEND_DIR,
     ]:
         install_deps += read_poetry_deps(package_path / "pyproject.toml")
+    with open(str(CLIP_DIR / "requirements.txt"), "r") as f:
+        install_deps += [x.strip() for x in f.readlines()]
     print("Install deps:", install_deps)
     return install_deps

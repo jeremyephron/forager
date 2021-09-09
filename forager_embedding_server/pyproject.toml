@@ -17,8 +17,8 @@ bidict = "^0.21.2"
 scipy = "^1.6.0"
 fastcluster = "==1.1.28"
 torch = "^1.9"
-clip = { url = "https://github.com/openAI/CLIP/tarball/8cad3a736a833bc4c9b4dd34ef12b52ec0e68856"}
-detectron2 = { url = "https://github.com/facebookresearch/detectron2/tarball/v0.5"}
+torchvision = "^0.10"
+# clip = { path = "../3rdparty/CLIP" }
 #gcloud-aio-storage = "^5.7.0"
 
 

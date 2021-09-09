@@ -141,15 +141,18 @@ const ModelManagementModal = ({
     setModelInfo(newModelInfo);
   };
 
-  useEffect(async () => {
-    setModels(sortModels(modelInfo.map(
-      (model, i) => ({model, srcIdx: i})
-    ).map((obj, i) => {
-      if (!(obj.model.latest.timestamp instanceof Date)) {
-        obj.model.latest.timestamp = new Date(obj.model.latest.timestamp);
-      }
-      return obj;
-    })));
+  useEffect(() => {
+    const fn = async () => {
+      setModels(sortModels(modelInfo.map(
+        (model, i) => ({model, srcIdx: i})
+      ).map((obj, i) => {
+        if (!(obj.model.latest.timestamp instanceof Date)) {
+          obj.model.latest.timestamp = new Date(obj.model.latest.timestamp);
+        }
+        return obj;
+      })));
+    };
+    fn();
   }, [modelInfo]);
 
   useEffect(() => {

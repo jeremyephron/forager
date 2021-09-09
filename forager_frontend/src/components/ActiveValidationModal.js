@@ -8,7 +8,6 @@ import {
   ModalBody,
   ModalFooter,
 } from "reactstrap";
-import ProgressiveImage from "react-progressive-image";
 
 import isEqual from "lodash/isEqual";
 import remove from "lodash/remove";
@@ -202,12 +201,7 @@ const ActiveValidationModal = ({
               </a>
             </>}
           </p>
-          <ProgressiveImage
-            src={selectedImage.src}
-            placeholder={selectedImage.thumb}
-          >
-            {src => <img className="main w-100" src={src} />}
-          </ProgressiveImage>
+          <img className="main w-100" src={selectedImage.src} />
         </ModalBody>
         <ModalFooter>
           <Button
