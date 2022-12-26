@@ -111,8 +111,7 @@ const ActiveValidationModal = ({
     if (caught) {
       e.preventDefault();
     }
-  // LUBOS I this adding setIsOpen to dependency array is safe to not change the behaviour.
-  }, [index, images, submittable, model, toggleLabel]);
+  }, [index, images, submittable, model, toggleLabel, setIsOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
