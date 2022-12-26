@@ -4,7 +4,6 @@ import {Stage, Layer, Image, Line, Text} from "react-konva";
 import Konva from "konva";
 import useImage from "use-image";
 
-
 const AnnotatedImage = ({ url, boxes, onClick, containerWidth, containerHeight }) => {
   const [image] = useImage(url);
 

@@ -92,7 +92,8 @@ const ClusterModal = ({
   };
 
   // Reload annotations whenever there's a new result set
-  useEffect(async () => {
+  useEffect(() => {
+    (async () => {
     if (clusters.length === 0) return;
     let annotationsUrl = new URL(endpoints.getAnnotations);
     let body = {
@@ -103,6 +104,7 @@ const ClusterModal = ({
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(body),
     }).then(r => r.json()));
+  })();
   }, [clusters]);
 
   //
@@ -205,71 +207,32 @@ const ClusterModal = ({
     const keyAsNumber = parseInt(key);
 
     let caught = true;
+
     if (isClusterView && key === "ArrowDown") {
-      // Switch to image view
-      setSelection({
-        cluster: selection.cluster,
-        image: 0
-      });
+      switchToImageView();
     } else if (isImageView && key === "ArrowUp") {
-      // Switch to cluster view
-      setSelection({
-        cluster: selection.cluster,
-      });
+      switchToClusterView();
     } else if (isImageView && key === "ArrowLeft") {
-      // Previous image
-      setSelection({
-        cluster: selection.cluster,
-        image: Math.max(selection.image - 1, 0)
-      });
+      goToPreviousImage();
     } else if (isImageView && key === "ArrowRight") {
-      // Next image
-      setSelection({
-        cluster: selection.cluster,
-        image: Math.min(selection.image + 1, clusters[selection.cluster].length - 1)
-      });
+      goToNextImage();
     } else if (key === "ArrowLeft") {
-      // Previous cluster
-      setSelection({
-        cluster: Math.max(selection.cluster - 1, 0),
-        image: selection.image && 0
-      });
+      goToPreviousCluster();
     } else if (key === "ArrowRight") {
-      // Next cluster
-      setSelection({
-        cluster: Math.min(selection.cluster + 1, clusters.length - 1),
-      });
+      goToNextCluster();
     } else if (isImageView && key === "s") {
-      // Toggle selection
       toggleImageSelection(selection.image);
     } else if (key === "ArrowUp") {
-      // Close modal
       setIsOpen(false);
     } else if (mode === "label" && !!(labelCategory) && !isNaN(keyAsNumber)) {
-      // Label mode
-      let boundValue;
-      if (keyAsNumber >= 1 && keyAsNumber <= BUILT_IN_MODES.length) {
-        boundValue = BUILT_IN_MODES[keyAsNumber - 1][0];
-        caught = true;
-      } else {
-        const customIndex = (keyAsNumber === 0 ? 10 : keyAsNumber) - BUILT_IN_MODES.length - 1;
-        boundValue = (customModesByCategory.get(labelCategory) || [])[customIndex];
-      }
-      if (boundValue !== undefined) {
-        onTagsChanged([...selectedTags, {category: labelCategory, value: boundValue}]);
-      } else {
-        caught = false;
-      }
+      labelMode();
     } else if (isClusterView && key === "s") {
       // Select all
       setExcludedImageIndexes({});
     } else if (isClusterView && key === "i") {
-      // Invert selection
-      setExcludedImageIndexes(fromPairs(selectedCluster.flatMap((_, i) =>
-        !!!(excludedImageIndexes[i]) ? [[i, true]] : [])));
+      invertSelection();
     } else if (isClusterView && key === "d") {
-      // Deselect all
-      setExcludedImageIndexes(fromPairs(selectedCluster.map((_, i) => [i, true])));
+      deselectAll();
     } else if (key === "b") {
       toggleShowBoxes();
     } else if (key === "ArrowDown") { } else {
@@ -279,6 +242,70 @@ const ClusterModal = ({
       e.preventDefault();
       typeaheadRef.current.blur();
       typeaheadRef.current.hideMenu();
+    }
+
+    function deselectAll() {
+      setExcludedImageIndexes(fromPairs(selectedCluster.map((_, i) => [i, true])));
+    }
+
+    function invertSelection() {
+      setExcludedImageIndexes(fromPairs(selectedCluster.flatMap((_, i) => !!!(excludedImageIndexes[i]) ? [[i, true]] : [])));
+    }
+
+    function labelMode() {
+      let boundValue;
+      if (keyAsNumber >= 1 && keyAsNumber <= BUILT_IN_MODES.length) {
+        boundValue = BUILT_IN_MODES[keyAsNumber - 1][0];
+        caught = true;
+      } else {
+        const customIndex = (keyAsNumber === 0 ? 10 : keyAsNumber) - BUILT_IN_MODES.length - 1;
+        boundValue = (customModesByCategory.get(labelCategory) || [])[customIndex];
+      }
+      if (boundValue !== undefined) {
+        onTagsChanged([...selectedTags, { category: labelCategory, value: boundValue }]);
+      } else {
+        caught = false;
+      }
+    }
+
+    function goToNextCluster() {
+      setSelection({
+        cluster: Math.min(selection.cluster + 1, clusters.length - 1),
+      });
+    }
+
+    function goToPreviousCluster() {
+      setSelection({
+        cluster: Math.max(selection.cluster - 1, 0),
+        image: selection.image && 0
+      });
+    }
+
+    function goToNextImage() {
+      setSelection({
+        cluster: selection.cluster,
+        image: Math.min(selection.image + 1, clusters[selection.cluster].length - 1)
+      });
+    }
+
+    function goToPreviousImage() {
+      setSelection({
+        cluster: selection.cluster,
+        image: Math.max(selection.image - 1, 0)
+      });
+    }
+
+    function switchToClusterView() {
+      setSelection({
+        cluster: selection.cluster,
+      });
+    }
+
+    function switchToImageView() {
+      setSelection({
+        cluster: selection.cluster,
+        image: 0
+      });
     }
   }, [isClusterView, isImageView, clusters, selection, setSelection, typeaheadRef, excludedImageIndexes, selectedTags, annotations]);
 
@@ -410,7 +437,9 @@ const ClusterModal = ({
                 Selected {selectedCluster.length - Object.values(excludedImageIndexes).filter(Boolean).length}{" "}
                 of {selectedCluster.length} images (thumbnails: {imageGridSizes.map((size, i) =>
                   <>
-                    <a key={i} href="#" className="text-secondary" onClick={(e) => setImageGridSize(size, e)}>{size.label}</a>
+                    <a key={size.label} href="#" className="text-secondary" onClick={(e) => setImageGridSize(size, e)}>
+                      {size.label}
+                    </a>
                     {(i < imageGridSizes.length - 1) ? ", " : ""}
                   </>
                 )})

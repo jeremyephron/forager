@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useReducer, useRef } from "react";
+import { useState, useEffect, useMemo, useReducer, useRef } from "react";
 import useInterval from "react-useinterval";
 import {
   Container,
@@ -10,21 +10,13 @@ import {
   NavItem,
   NavLink,
   NavbarBrand,
-  Form,
   FormGroup,
-  Label,
   Input,
-  CustomInput,
-  InputGroup,
-  Modal,
-  ModalBody,
   Popover,
   PopoverBody,
-  Spinner,
 } from "reactstrap";
 import { ReactSVG } from "react-svg";
 import Slider, { Range } from "rc-slider";
-import Emoji from "react-emoji-render";
 import ReactTimeAgo from "react-time-ago";
 import { v4 as uuidv4 } from "uuid";
 import { faTags } from "@fortawesome/free-solid-svg-icons";
@@ -52,7 +44,6 @@ import {
   ModelManagementModal,
   CategoryInput,
   FeatureInput,
-  NewModeInput,
   KnnPopover,
   ModelRankingPopover,
   CaptionSearchPopover,
@@ -110,12 +101,34 @@ const BUILT_IN_MODES = [
   ["UNSURE", "Unsure"],
 ];
 
-function MainHeader(props) {
+const MainHeader = ({
+  username,
+  setUsername,
+  datasetName,
+  datasetInfo,
+  categoryCounts,
+  customModesByCategory,
+  categoryDispatch,
+  modelInfo,
+  setModelInfo,
+  clusterIsOpen,
+  setClusterIsOpen,
+  clusteringStrength,
+  selection,
+  setSelection,
+  clusters,
+  knnImagesDispatch,
+  setOrderingMode,
+  generateEmbedding,
+  setSubset,
+  mode,
+  setMode,
+  labelModeCategory,
+  ...props }) => {
+
   const [loginIsOpen, setLoginIsOpen] = useState(false);
   const [loginUsername, setLoginUsername] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
-  let username = props.username;
-  let setUsername = props.setUsername;
 
   const login = (e) => {
     if (loginUsername !== undefined && loginPassword === "forager") setUsername(loginUsername.trim());
@@ -133,29 +146,6 @@ function MainHeader(props) {
   const toggleModelManagement = () => setModelManagementIsOpen(!modelManagementIsOpen);
 
   const [popoverOpen, setPopoverOpen] = useState(false);
-
-  let datasetName = props.datasetName;
-  let datasetInfo = props.datasetInfo;
-  let categoryCounts = props.categoryCounts;
-  let customModesByCategory = props.customModesByCategory;
-  let categoryDispatch = props.categoryDispatch;
-
-  let modelInfo = props.modelInfo;
-  let setModelInfo = props.setModelInfo;
-
-  let clusterIsOpen = props.clusterIsOpen;
-  let setClusterIsOpen = props.setClusterIsOpen;
-  let clusteringStrength = props.clusteringStrength;
-  let selection = props.selection;
-  let setSelection = props.setSelection;
-  let clusters = props.clusters;
-  let knnImagesDispatch = props.knnImagesDispatch;
-  let setOrderingMode = props.setOrderingMode;
-  let generateEmbedding = props.generateEmbedding;
-  let setSubset = props.setSubset;
-  let mode = props.mode;
-  let setMode = props.setMode;
-  let labelModeCategory = props.labelModeCategory;
 
   return (<>
     <SignInModal
@@ -337,7 +327,6 @@ function ClusteringControls(props) {
       </Button>
     </div>);
 };
-
 
 function QueryBar(p) {
   let props = p;

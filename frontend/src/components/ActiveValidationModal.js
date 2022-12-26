@@ -1,8 +1,6 @@
 import React, { useState, useCallback, useEffect } from "react";
 import {
   Button,
-  Form,
-  FormGroup,
   Modal,
   ModalHeader,
   ModalBody,
@@ -111,7 +109,7 @@ const ActiveValidationModal = ({
     if (caught) {
       e.preventDefault();
     }
-  }, [index, images, submittable, model, toggleLabel]);
+  }, [index, images, submittable, model, toggleLabel, setIsOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -193,7 +191,8 @@ const ActiveValidationModal = ({
               );
             })}
             {model.augment_negs && <>
-              <kbd>n</kbd> <a
+              <kbd>n</kbd>
+              <a
                 href="#"
                 onClick={e => toggleLabel({is_other_negative: true}, "other", e)}
                 className={`rbt-token CUSTOM ${otherNegIsSelected ? "rbt-token-active" : ""}`}

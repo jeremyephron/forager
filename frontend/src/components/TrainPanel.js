@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import useInterval from 'react-useinterval';
 import {
   Button,
@@ -7,7 +7,6 @@ import {
   Spinner,
   Collapse,
   Label,
-  Form,
   CustomInput
 } from "reactstrap";
 import { ReactSVG } from "react-svg";
@@ -145,11 +144,12 @@ const TrainPanel = ({
 
   const handleDnnKwargsChange = (e) => {
     var param = e.target.name;
+    let value;
     if (e.target.type === "checkbox" ||
         e.target.type === "switch") {
-      var value = e.target.checked;
+      value = e.target.checked;
     } else {
-      var value = parseFloat(e.target.value);
+      value = parseFloat(e.target.value);
     }
     updateDnnKwargs(param, value);
   };
