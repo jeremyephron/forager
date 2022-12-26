@@ -89,6 +89,7 @@ const TrainPanel = ({
     setClusterReady(false);
   };
 
+  // LUBOS investigate this further. there is state set in useInterval. Is this ok?
   useInterval(
     getClusterStatus,
     clusterId && !clusterReady ? STATUS_POLL_INTERVAL : null);
@@ -143,6 +144,10 @@ const TrainPanel = ({
     });
   };
 
+  // LUBOS minor: use const/let instead of var.
+  // Here it is really "needed" as car declared in "else branch" had
+  // already been declared in "if branch". It's strange behavior of var.
+  // Better use let and decalre it at the beginning of the function
   const handleDnnKwargsChange = (e) => {
     var param = e.target.name;
     if (e.target.type === "checkbox" ||

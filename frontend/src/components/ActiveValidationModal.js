@@ -111,6 +111,7 @@ const ActiveValidationModal = ({
     if (caught) {
       e.preventDefault();
     }
+  // LUBOS I this adding setIsOpen to dependency array is safe to not change the behaviour.
   }, [index, images, submittable, model, toggleLabel]);
 
   useEffect(() => {
@@ -193,7 +194,8 @@ const ActiveValidationModal = ({
               );
             })}
             {model.augment_negs && <>
-              <kbd>n</kbd> <a
+              <kbd>n</kbd>
+              <a
                 href="#"
                 onClick={e => toggleLabel({is_other_negative: true}, "other", e)}
                 className={`rbt-token CUSTOM ${otherNegIsSelected ? "rbt-token-active" : ""}`}

@@ -91,6 +91,7 @@ const ClusterModal = ({
     setShowBoxes(prev => !prev);
   };
 
+  // LUBOS put async function inside a sync one in useEffect
   // Reload annotations whenever there's a new result set
   useEffect(async () => {
     if (clusters.length === 0) return;
@@ -205,6 +206,8 @@ const ClusterModal = ({
     const keyAsNumber = parseInt(key);
 
     let caught = true;
+
+    // LUBOS make functions with the same name as comments
     if (isClusterView && key === "ArrowDown") {
       // Switch to image view
       setSelection({
@@ -410,6 +413,7 @@ const ClusterModal = ({
                 Selected {selectedCluster.length - Object.values(excludedImageIndexes).filter(Boolean).length}{" "}
                 of {selectedCluster.length} images (thumbnails: {imageGridSizes.map((size, i) =>
                   <>
+                    { /* // LUBOS use label as key here assuming (!!!) that the labels are unique */} 
                     <a key={i} href="#" className="text-secondary" onClick={(e) => setImageGridSize(size, e)}>{size.label}</a>
                     {(i < imageGridSizes.length - 1) ? ", " : ""}
                   </>

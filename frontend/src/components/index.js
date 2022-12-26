@@ -1,3 +1,5 @@
+// LUBOS add everything or investigate if the components are used.
+// LUBOS also check if they are even imported using this file
 export { default as ClusterModal } from "./ClusterModal.js";
 export { default as ConfirmModal } from "./ConfirmModal.js";
 export { default as ImageGrid } from "./ImageGrid.js";

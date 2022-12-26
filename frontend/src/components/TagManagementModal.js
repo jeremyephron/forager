@@ -182,6 +182,10 @@ const TagManagementModal = ({
   }, [categoryCounts, orderBy, orderAscending]);
 
   /* useEffect(async () => {
+   *   // TODO: It is a bit dangerous to pass async function into useEffect
+   *   // It's better to call sync function that calls async function
+   *   // https://ultimatecourses.com/blog/using-async-await-inside-react-use-effect-hook
+   *   
    *   const url = new URL(endpoints.getCategoryCounts + `/${datasetName}`);
    *   const body = {
    *     user: username,
