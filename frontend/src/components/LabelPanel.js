@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, {  } from "react";
 import { Typeahead } from "react-bootstrap-typeahead";
-
-import sortBy from "lodash/sortBy";
 
 import NewModeInput from "./NewModeInput";
 

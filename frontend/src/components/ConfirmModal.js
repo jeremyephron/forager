@@ -8,7 +8,6 @@ import {
 
 const ConfirmModal = ({
   isOpen,
-  toggle,
   message,
   confirmBtn,
   cancelBtn,

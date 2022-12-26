@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import useInterval from 'react-useinterval';
 import {
   Button,
@@ -7,7 +7,6 @@ import {
   Spinner,
   Collapse,
   Label,
-  Form,
   CustomInput
 } from "reactstrap";
 import { ReactSVG } from "react-svg";

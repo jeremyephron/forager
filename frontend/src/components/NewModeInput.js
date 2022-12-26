@@ -3,8 +3,6 @@ import {
   Input,
 } from "reactstrap";
 
-import uniq from "lodash/uniq";
-
 const MAX_CUSTOM_CATEGORIES = 6;
 
 const NewModeInput = ({category, customModesByCategory, categoryDispatch}) => {

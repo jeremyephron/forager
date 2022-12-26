@@ -1,16 +1,13 @@
-import React, { forwardRef, useState, useMemo } from "react";
+import React, { forwardRef, useState } from "react";
 import {
   Popover,
   PopoverBody,
 } from "reactstrap";
-
 import { Typeahead, useToken, ClearButton } from "react-bootstrap-typeahead";
 import cx from "classnames";
 
 import isEqual from "lodash/isEqual";
-import sortBy from "lodash/sortBy";
 import uniqWith from "lodash/uniqWith";
-import union from "lodash/union";
 
 import NewModeInput from "./NewModeInput";
 

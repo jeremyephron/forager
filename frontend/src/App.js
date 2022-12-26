@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useReducer, useRef } from "react";
+import { useState, useEffect, useMemo, useReducer, useRef } from "react";
 import useInterval from "react-useinterval";
 import {
   Container,
@@ -10,21 +10,13 @@ import {
   NavItem,
   NavLink,
   NavbarBrand,
-  Form,
   FormGroup,
-  Label,
   Input,
-  CustomInput,
-  InputGroup,
-  Modal,
-  ModalBody,
   Popover,
   PopoverBody,
-  Spinner,
 } from "reactstrap";
 import { ReactSVG } from "react-svg";
 import Slider, { Range } from "rc-slider";
-import Emoji from "react-emoji-render";
 import ReactTimeAgo from "react-time-ago";
 import { v4 as uuidv4 } from "uuid";
 import { faTags } from "@fortawesome/free-solid-svg-icons";
@@ -52,7 +44,6 @@ import {
   ModelManagementModal,
   CategoryInput,
   FeatureInput,
-  NewModeInput,
   KnnPopover,
   ModelRankingPopover,
   CaptionSearchPopover,
