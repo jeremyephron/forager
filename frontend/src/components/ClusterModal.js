@@ -413,8 +413,9 @@ const ClusterModal = ({
                 Selected {selectedCluster.length - Object.values(excludedImageIndexes).filter(Boolean).length}{" "}
                 of {selectedCluster.length} images (thumbnails: {imageGridSizes.map((size, i) =>
                   <>
-                    { /* // LUBOS use label as key here assuming (!!!) that the labels are unique */} 
-                    <a key={i} href="#" className="text-secondary" onClick={(e) => setImageGridSize(size, e)}>{size.label}</a>
+                    <a key={size.label} href="#" className="text-secondary" onClick={(e) => setImageGridSize(size, e)}>
+                      {size.label}
+                    </a>
                     {(i < imageGridSizes.length - 1) ? ", " : ""}
                   </>
                 )})
