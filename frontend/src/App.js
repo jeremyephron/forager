@@ -328,8 +328,6 @@ function ClusteringControls(props) {
     </div>);
 };
 
-
-// LUBOS: DECONSTRUCT PROPS
 function QueryBar(p) {
   let props = p;
   let datasetInfo = props.datasetInfo;

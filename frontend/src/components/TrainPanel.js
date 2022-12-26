@@ -88,7 +88,6 @@ const TrainPanel = ({
     setClusterReady(false);
   };
 
-  // LUBOS investigate this further. there is state set in useInterval. Is this ok?
   useInterval(
     getClusterStatus,
     clusterId && !clusterReady ? STATUS_POLL_INTERVAL : null);
