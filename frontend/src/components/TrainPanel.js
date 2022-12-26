@@ -144,17 +144,14 @@ const TrainPanel = ({
     });
   };
 
-  // LUBOS minor: use const/let instead of var.
-  // Here it is really "needed" as car declared in "else branch" had
-  // already been declared in "if branch". It's strange behavior of var.
-  // Better use let and decalre it at the beginning of the function
   const handleDnnKwargsChange = (e) => {
     var param = e.target.name;
+    let value;
     if (e.target.type === "checkbox" ||
         e.target.type === "switch") {
-      var value = e.target.checked;
+      value = e.target.checked;
     } else {
-      var value = parseFloat(e.target.value);
+      value = parseFloat(e.target.value);
     }
     updateDnnKwargs(param, value);
   };
