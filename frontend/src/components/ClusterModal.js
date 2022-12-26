@@ -91,9 +91,9 @@ const ClusterModal = ({
     setShowBoxes(prev => !prev);
   };
 
-  // LUBOS put async function inside a sync one in useEffect
   // Reload annotations whenever there's a new result set
-  useEffect(async () => {
+  useEffect(() => {
+    (async () => {
     if (clusters.length === 0) return;
     let annotationsUrl = new URL(endpoints.getAnnotations);
     let body = {
@@ -104,6 +104,7 @@ const ClusterModal = ({
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(body),
     }).then(r => r.json()));
+  })();
   }, [clusters]);
 
   //
