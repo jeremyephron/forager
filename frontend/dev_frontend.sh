@@ -7,7 +7,7 @@ else
     config_user=$USER
 fi
 
-export REACT_APP_SERVER_URL=http://$ip_addr:8000
+export REACT_APP_SERVER_URL=http://localhost:8000
 export PORT=$(jq ".frontend_port//4000" $(eval echo ~$config_user)/forager/django_settings.json)
 
 npm run start

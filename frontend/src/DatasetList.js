@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import fromPairs from "lodash/fromPairs";
 import toPairs from "lodash/toPairs";
 
+console.log('process.env.REACT_APP_SERVER_URL', process.env.REACT_APP_SERVER_URL);
 const endpoints = fromPairs(toPairs({
   getDatasets: "get_datasets_v2",
 }).map(([name, endpoint]) => [name, `${process.env.REACT_APP_SERVER_URL}/api/${endpoint}`]));
