@@ -177,7 +177,7 @@ CORS_ORIGIN_WHITELIST = (
     ['http://' + h + ((':' + str(frontend_port))
                       if frontend_port != 80 else "")
      for h in django_settings['allowed_hosts']])
-CSRF_TRUSTED_ORIGINS  = ['127.0.0.1', 'localhost'] + ALLOWED_HOSTS
+CSRF_TRUSTED_ORIGINS  = ['http://127.0.0.1', 'http://localhost'] + ALLOWED_HOSTS
 SESSION_COOKIE_SAMESITE = 'None' # as a string
 SESSION_COOKIE_SECURE = True
 
